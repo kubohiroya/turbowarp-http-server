@@ -1,4 +1,5 @@
 import {serve} from '@hono/node-server';
+import {getConnInfo} from '@hono/node-server/conninfo';
 import type {ServerType} from '@hono/node-server';
 import {Hono} from 'hono';
 import type {Context} from 'hono';
@@ -23,6 +24,7 @@ export interface ServerOptions {
   port: number;
   resources?: ResourceCapability;
   maxResourceBodyBytes?: number;
+  maxRequestBodyBytes?: number;
   logger?: ResourceLogger;
   authorizeResource?: ResourceAuthorizer;
   requestTimeoutMs?: number;
@@ -100,6 +102,7 @@ export type ResourceAuthorizer = (
 export interface ServerAppOptions {
   resources?: ResourceCapability;
   maxResourceBodyBytes?: number;
+  maxRequestBodyBytes?: number;
   logger?: ResourceLogger;
   authorizeResource?: ResourceAuthorizer;
   bridge?: HttpRequestBridge;
@@ -107,6 +110,7 @@ export interface ServerAppOptions {
 }
 
 const DEFAULT_MAX_RESOURCE_BODY_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 const TEXT_BODY_TYPES = [
   'application/json',
@@ -146,7 +150,14 @@ export function createApp(options: ServerAppOptions = {}): Hono {
     if (resourceResponse) return resourceResponse;
 
     if (options.bridge) {
-      return options.bridge.forward(await createBridgeRequestMessage(c.req.raw, options.routes ?? []), c.req.method);
+      return options.bridge.forward(
+        await createBridgeRequestMessage(c.req.raw, {
+          routes: options.routes ?? [],
+          maxBodyBytes: options.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES,
+          clientAddress: readClientAddress(c)
+        }),
+        c.req.method
+      );
     }
 
     return c.json(
@@ -173,7 +184,7 @@ export function startServer(options: ServerOptions): RunningServer {
   });
 
   server.on('upgrade', (request, socket, head) => {
-    if (request.url !== '/ws') {
+    if (new URL(request.url ?? '/', 'http://127.0.0.1').pathname !== '/ws') {
       socket.destroy();
       return;
     }
@@ -238,15 +249,24 @@ class WebSocketHttpRequestBridge implements HttpRequestBridge {
   public constructor(private readonly requestTimeoutMs: number) {}
 
   public attach(socket: WebSocket): void {
+    const previousSocket = this.socket;
     this.socket = socket;
+    if (previousSocket && previousSocket !== socket) {
+      this.failPending('bridge_replaced');
+      if (previousSocket.readyState === previousSocket.OPEN) previousSocket.close();
+    }
   }
 
   public detach(socket: WebSocket): void {
     if (this.socket !== socket) return;
     this.socket = null;
+    this.failPending('bridge_disconnected');
+  }
+
+  private failPending(error: string): void {
     for (const [id, pending] of this.pending) {
       clearTimeout(pending.timeout);
-      pending.resolve(jsonResponse({error: 'bridge_disconnected'}, 502));
+      pending.resolve(jsonResponse({error}, 502));
       this.pending.delete(id);
     }
   }
@@ -267,7 +287,13 @@ class WebSocketHttpRequestBridge implements HttpRequestBridge {
       }, this.requestTimeoutMs);
 
       this.pending.set(id, {method, resolve, timeout});
-      this.socket?.send(JSON.stringify(requestMessage));
+      try {
+        this.socket?.send(JSON.stringify(requestMessage));
+      } catch {
+        clearTimeout(timeout);
+        this.pending.delete(id);
+        resolve(jsonResponse({error: 'bridge_send_failed'}, 502));
+      }
     });
   }
 
@@ -304,12 +330,15 @@ function closeSocket(socket: WebSocket): Promise<void> {
   });
 }
 
-async function createBridgeRequestMessage(
-  request: Request,
-  routes: readonly string[]
-): Promise<BridgeRequestMessage> {
+interface BridgeRequestOptions {
+  routes: readonly string[];
+  maxBodyBytes: number;
+  clientAddress: string;
+}
+
+async function createBridgeRequestMessage(request: Request, options: BridgeRequestOptions): Promise<BridgeRequestMessage> {
   const url = new URL(request.url);
-  const routeMatch = matchRoute(url.pathname, routes);
+  const routeMatch = matchRoute(url.pathname, options.routes);
   return {
     type: 'request',
     protocol: HTTP_BRIDGE_PROTOCOL,
@@ -322,8 +351,8 @@ async function createBridgeRequestMessage(
     pathParams: routeMatch.pathParams,
     query: collectQuery(url.searchParams),
     headers: collectHeaders(request.headers),
-    body: await readTextBridgeBody(request),
-    clientAddress: ''
+    body: await readTextBridgeBody(request, options.maxBodyBytes),
+    clientAddress: options.clientAddress
   };
 }
 
@@ -378,16 +407,60 @@ function collectHeaders(headers: Headers): Record<string, string[]> {
   return result;
 }
 
-async function readTextBridgeBody(request: Request): Promise<BridgeBody> {
+async function readTextBridgeBody(request: Request, maxBytes: number): Promise<BridgeBody> {
   if (request.method.toUpperCase() === 'GET' || request.method.toUpperCase() === 'HEAD') {
     return {kind: 'empty'};
+  }
+  const contentLength = parseContentLength(request.headers.get('content-length'));
+  if (contentLength !== null && contentLength > maxBytes) {
+    return {kind: 'unsupported', reason: 'request_body_too_large'};
   }
   const contentType = request.headers.get('content-type') ?? '';
   const lowerContentType = contentType.toLowerCase();
   if (!TEXT_BODY_TYPES.some((type) => lowerContentType.startsWith(type))) {
     return {kind: 'unsupported', reason: 'non_text_body'};
   }
-  return {kind: 'text', text: await request.text()};
+  const text = await readTextWithLimit(request, maxBytes);
+  return text === null ? {kind: 'unsupported', reason: 'request_body_too_large'} : {kind: 'text', text};
+}
+
+async function readTextWithLimit(request: Request, maxBytes: number): Promise<string | null> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let bytesRead = 0;
+  let text = '';
+
+  try {
+    for (;;) {
+      const result = await reader.read();
+      if (result.done) break;
+      bytesRead += result.value.byteLength;
+      if (bytesRead > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      text += decoder.decode(result.value, {stream: true});
+    }
+    text += decoder.decode();
+    return text;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function parseContentLength(value: string | null): number | null {
+  if (value === null) return null;
+  const length = Number.parseInt(value, 10);
+  return Number.isSafeInteger(length) && length >= 0 ? length : null;
+}
+
+function readClientAddress(c: Context): string {
+  try {
+    return getConnInfo(c).remote.address ?? '';
+  } catch {
+    return '';
+  }
 }
 
 interface RouteMatch {

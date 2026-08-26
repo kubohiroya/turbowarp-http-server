@@ -5,6 +5,7 @@ export interface ServerOptions {
     port: number;
     resources?: ResourceCapability;
     maxResourceBodyBytes?: number;
+    maxRequestBodyBytes?: number;
     logger?: ResourceLogger;
     authorizeResource?: ResourceAuthorizer;
     requestTimeoutMs?: number;
@@ -67,6 +68,7 @@ export type ResourceAuthorizer = (request: Request, operation: 'get' | 'head' | 
 export interface ServerAppOptions {
     resources?: ResourceCapability;
     maxResourceBodyBytes?: number;
+    maxRequestBodyBytes?: number;
     logger?: ResourceLogger;
     authorizeResource?: ResourceAuthorizer;
     bridge?: HttpRequestBridge;

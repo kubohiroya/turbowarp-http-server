@@ -16,7 +16,7 @@ A companion package with both a CLI HTTP bridge server and a TurboWarp extension
 
 - TurboWarp Desktop, TurboWarp Web, or TurboWarp Packager with custom extensions enabled.
 - Node.js 22 or newer for the CLI bridge server.
-- The current extension is sandbox-compatible and does not require unsandboxed mode.
+- The extension requires unsandboxed mode so incoming HTTP requests can start TurboWarp hat threads.
 
 ## Installation
 

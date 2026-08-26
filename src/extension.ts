@@ -71,8 +71,10 @@ const ALLOWED_HTML_TAGS = new Set([
 const VOID_HTML_TAGS = new Set(['img', 'input']);
 const VALID_ATTRIBUTE = /^[a-zA-Z_:][a-zA-Z0-9:_.-]*$/;
 const VALID_MARKDOWN_LANGUAGE = /^[a-zA-Z0-9_+.-]*$/;
-const URL_ATTRIBUTES = new Set(['action', 'href', 'src']);
-const SAFE_URL_PATTERN = /^(#|\/(?!\/)|\.{0,2}\/|https?:|mailto:|tel:)/i;
+const HTTP_REQUEST_HAT_OPCODE = `${extensionConfig.id}_whenHttpRequestReceived`;
+const URL_ATTRIBUTES = new Set(['action', 'cite', 'formaction', 'href', 'poster', 'src', 'xlink:href']);
+const URL_LIST_ATTRIBUTES = new Set(['srcset']);
+const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
 
 type HtmlNode = HtmlElementNode | HtmlTextNode;
 
@@ -426,6 +428,7 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
       }
     });
     this.currentRequestContextId = request.id;
+    this.startRequestHat();
   }
 
   private currentContext(): RequestContext | undefined {
@@ -455,6 +458,10 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
   private recordLogMessage(message: string): void {
     const parsed = this.parseLogEntry(message);
     if (isLogLike(parsed)) this.httpLogs.push(parsed);
+  }
+
+  private startRequestHat(): void {
+    Scratch.vm?.runtime?.startHats?.(HTTP_REQUEST_HAT_OPCODE);
   }
 
   private parseLogEntry(value: string): unknown {
@@ -593,8 +600,34 @@ function normalizeHtmlTag(value: string): string {
 }
 
 function isSafeAttributeValue(name: string, value: string): boolean {
-  if (!URL_ATTRIBUTES.has(name)) return true;
-  return SAFE_URL_PATTERN.test(value.trim());
+  if (URL_LIST_ATTRIBUTES.has(name)) return isSafeUrlList(value);
+  if (URL_ATTRIBUTES.has(name)) return isSafeUrl(value);
+  return true;
+}
+
+function isSafeUrlList(value: string): boolean {
+  return value
+    .split(',')
+    .map((candidate) => candidate.trim().split(/\s+/, 1)[0] ?? '')
+    .every((url) => isSafeUrl(url));
+}
+
+function isSafeUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  const normalized = stripUrlSchemeSeparators(trimmed);
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(normalized)?.[1]?.toLowerCase();
+  return scheme === undefined || SAFE_URL_SCHEMES.has(scheme);
+}
+
+function stripUrlSchemeSeparators(value: string): string {
+  let result = '';
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f || /\s/.test(character)) continue;
+    result += character;
+  }
+  return result;
 }
 
 function escapeHtml(value: string): string {

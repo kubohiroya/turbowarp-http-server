@@ -1,9 +1,11 @@
 import { serve } from '@hono/node-server';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { WebSocketServer } from 'ws';
 import { HTTP_BRIDGE_PROTOCOL, HTTP_BRIDGE_PROTOCOL_VERSION, isBodyForbidden, isForbiddenResponseHeader, isValidHttpStatus, normalizeHeaderName, parseBridgeClientMessage, validateHeaderName, validateHeaderValue } from './protocol.js';
 const DEFAULT_MAX_RESOURCE_BODY_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 const TEXT_BODY_TYPES = [
     'application/json',
@@ -27,7 +29,11 @@ export function createApp(options = {}) {
         if (resourceResponse)
             return resourceResponse;
         if (options.bridge) {
-            return options.bridge.forward(await createBridgeRequestMessage(c.req.raw, options.routes ?? []), c.req.method);
+            return options.bridge.forward(await createBridgeRequestMessage(c.req.raw, {
+                routes: options.routes ?? [],
+                maxBodyBytes: options.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES,
+                clientAddress: readClientAddress(c)
+            }), c.req.method);
         }
         return c.json({
             error: 'not_connected',
@@ -47,7 +53,7 @@ export function startServer(options) {
         port: options.port
     });
     server.on('upgrade', (request, socket, head) => {
-        if (request.url !== '/ws') {
+        if (new URL(request.url ?? '/', 'http://127.0.0.1').pathname !== '/ws') {
             socket.destroy();
             return;
         }
@@ -104,15 +110,24 @@ class WebSocketHttpRequestBridge {
         this.pending = new Map();
     }
     attach(socket) {
+        const previousSocket = this.socket;
         this.socket = socket;
+        if (previousSocket && previousSocket !== socket) {
+            this.failPending('bridge_replaced');
+            if (previousSocket.readyState === previousSocket.OPEN)
+                previousSocket.close();
+        }
     }
     detach(socket) {
         if (this.socket !== socket)
             return;
         this.socket = null;
+        this.failPending('bridge_disconnected');
+    }
+    failPending(error) {
         for (const [id, pending] of this.pending) {
             clearTimeout(pending.timeout);
-            pending.resolve(jsonResponse({ error: 'bridge_disconnected' }, 502));
+            pending.resolve(jsonResponse({ error }, 502));
             this.pending.delete(id);
         }
     }
@@ -129,7 +144,14 @@ class WebSocketHttpRequestBridge {
                 resolve(jsonResponse({ error: 'gateway_timeout' }, 504));
             }, this.requestTimeoutMs);
             this.pending.set(id, { method, resolve, timeout });
-            this.socket?.send(JSON.stringify(requestMessage));
+            try {
+                this.socket?.send(JSON.stringify(requestMessage));
+            }
+            catch {
+                clearTimeout(timeout);
+                this.pending.delete(id);
+                resolve(jsonResponse({ error: 'bridge_send_failed' }, 502));
+            }
         });
     }
     receive(socket, message) {
@@ -167,9 +189,9 @@ function closeSocket(socket) {
         socket.terminate();
     });
 }
-async function createBridgeRequestMessage(request, routes) {
+async function createBridgeRequestMessage(request, options) {
     const url = new URL(request.url);
-    const routeMatch = matchRoute(url.pathname, routes);
+    const routeMatch = matchRoute(url.pathname, options.routes);
     return {
         type: 'request',
         protocol: HTTP_BRIDGE_PROTOCOL,
@@ -182,8 +204,8 @@ async function createBridgeRequestMessage(request, routes) {
         pathParams: routeMatch.pathParams,
         query: collectQuery(url.searchParams),
         headers: collectHeaders(request.headers),
-        body: await readTextBridgeBody(request),
-        clientAddress: ''
+        body: await readTextBridgeBody(request, options.maxBodyBytes),
+        clientAddress: options.clientAddress
     };
 }
 function toHttpResponse(message, method) {
@@ -230,16 +252,61 @@ function collectHeaders(headers) {
     });
     return result;
 }
-async function readTextBridgeBody(request) {
+async function readTextBridgeBody(request, maxBytes) {
     if (request.method.toUpperCase() === 'GET' || request.method.toUpperCase() === 'HEAD') {
         return { kind: 'empty' };
+    }
+    const contentLength = parseContentLength(request.headers.get('content-length'));
+    if (contentLength !== null && contentLength > maxBytes) {
+        return { kind: 'unsupported', reason: 'request_body_too_large' };
     }
     const contentType = request.headers.get('content-type') ?? '';
     const lowerContentType = contentType.toLowerCase();
     if (!TEXT_BODY_TYPES.some((type) => lowerContentType.startsWith(type))) {
         return { kind: 'unsupported', reason: 'non_text_body' };
     }
-    return { kind: 'text', text: await request.text() };
+    const text = await readTextWithLimit(request, maxBytes);
+    return text === null ? { kind: 'unsupported', reason: 'request_body_too_large' } : { kind: 'text', text };
+}
+async function readTextWithLimit(request, maxBytes) {
+    if (!request.body)
+        return '';
+    const reader = request.body.getReader();
+    const decoder = new TextDecoder();
+    let bytesRead = 0;
+    let text = '';
+    try {
+        for (;;) {
+            const result = await reader.read();
+            if (result.done)
+                break;
+            bytesRead += result.value.byteLength;
+            if (bytesRead > maxBytes) {
+                await reader.cancel();
+                return null;
+            }
+            text += decoder.decode(result.value, { stream: true });
+        }
+        text += decoder.decode();
+        return text;
+    }
+    finally {
+        reader.releaseLock();
+    }
+}
+function parseContentLength(value) {
+    if (value === null)
+        return null;
+    const length = Number.parseInt(value, 10);
+    return Number.isSafeInteger(length) && length >= 0 ? length : null;
+}
+function readClientAddress(c) {
+    try {
+        return getConnInfo(c).remote.address ?? '';
+    }
+    catch {
+        return '';
+    }
 }
 function matchRoute(pathname, routes) {
     for (const route of routes) {

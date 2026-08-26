@@ -4,6 +4,7 @@ import {createServer} from 'node:net';
 import {WebSocket} from 'ws';
 import {createApp, startServer} from '../src/server.js';
 import type {
+  HttpRequestBridge,
   ResourceCapability,
   ResourceLogEvent,
   ResourceMetadata,
@@ -396,6 +397,7 @@ describe('HTTP bridge server app', () => {
       query: {tag: ['a', 'b']},
       body: {kind: 'text', text: '{"hello":true}'}
     });
+    expect(request.clientAddress).toBe('127.0.0.1');
     expect(request.headers['content-type']).toEqual(['application/json']);
     expect(request.headers['x-test']).toEqual(['one']);
 
@@ -414,6 +416,30 @@ describe('HTTP bridge server app', () => {
     expect(response.headers.get('x-reply')).toBe('ok');
     expect(await response.text()).toBe('created');
     await server.close();
+  });
+
+  it('does not read text bridge request bodies over the configured limit', async () => {
+    const forwarded: BridgeRequestMessage[] = [];
+    const bridge: HttpRequestBridge = {
+      async forward(message) {
+        forwarded.push(message);
+        return new Response('accepted');
+      }
+    };
+    const app = createApp({bridge, maxRequestBodyBytes: 3});
+
+    const response = await app.request('/large-text', {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: 'abcd'
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('accepted');
+    expect(forwarded[0]?.body).toEqual({
+      kind: 'unsupported',
+      reason: 'request_body_too_large'
+    });
   });
 
   it('suppresses bridge response bodies for HEAD requests and no-content statuses', async () => {
@@ -493,6 +519,25 @@ describe('HTTP bridge server app', () => {
     const response = await responsePromise;
     expect(response.status).toBe(502);
     await expect(response.json()).resolves.toMatchObject({error: 'bridge_disconnected'});
+    await server.close();
+  });
+
+  it('fails pending bridge requests when a replacement bridge connects', async () => {
+    const port = await getFreePort();
+    const server = startServer({hostname: '127.0.0.1', port, requestTimeoutMs: 1000});
+    const firstSocket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(firstSocket);
+    const nextRequest = onceRequestMessage(firstSocket);
+
+    const responsePromise = fetch(`http://127.0.0.1:${port}/replace`);
+    await nextRequest;
+    const secondSocket = new WebSocket(`ws://127.0.0.1:${port}/ws?client=next`);
+    await onceOpen(secondSocket);
+
+    const response = await responsePromise;
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({error: 'bridge_replaced'});
+    secondSocket.close();
     await server.close();
   });
 });

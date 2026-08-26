@@ -9,6 +9,7 @@
 
   const extensionConfig = {
     id: "kubohiroyaturbowarphttpserver",
+    name: "TurboWarp-HTTP-Server",
     docsURI: "https://kubohiroya.github.io/turbowarp-http-server/",
     blockIconURI: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgNDggNDgiPjxyZWN0IHg9IjYiIHk9IjEwIiB3aWR0aD0iMzYiIGhlaWdodD0iMjgiIHJ4PSI0IiBmaWxsPSIjMjU2M0VCIi8+PHBhdGggZD0iTTEyIDE4aDI0TTExIDI0aDE0TTExIDMwaDIwIiBzdHJva2U9IiNGRkYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iMzQiIGN5PSIzMCIgcj0iMyIgZmlsbD0iIzIyQzU1RSIvPjwvc3ZnPg=="
   };
@@ -83,8 +84,10 @@
   const VOID_HTML_TAGS = /* @__PURE__ */ new Set(["img", "input"]);
   const VALID_ATTRIBUTE = /^[a-zA-Z_:][a-zA-Z0-9:_.-]*$/;
   const VALID_MARKDOWN_LANGUAGE = /^[a-zA-Z0-9_+.-]*$/;
-  const URL_ATTRIBUTES = /* @__PURE__ */ new Set(["action", "href", "src"]);
-  const SAFE_URL_PATTERN = /^(#|\/(?!\/)|\.{0,2}\/|https?:|mailto:|tel:)/i;
+  const HTTP_REQUEST_HAT_OPCODE = `${extensionConfig.id}_whenHttpRequestReceived`;
+  const URL_ATTRIBUTES = /* @__PURE__ */ new Set(["action", "cite", "formaction", "href", "poster", "src", "xlink:href"]);
+  const URL_LIST_ATTRIBUTES = /* @__PURE__ */ new Set(["srcset"]);
+  const SAFE_URL_SCHEMES = /* @__PURE__ */ new Set(["http", "https", "mailto", "tel"]);
   class TurboWarpHttpServerExtension {
     constructor() {
       this.serverUrl = DEFAULT_SERVER_URL;
@@ -350,6 +353,7 @@
         }
       });
       this.currentRequestContextId = request.id;
+      this.startRequestHat();
     }
     currentContext() {
       return this.requestContexts.get(this.currentRequestContextId);
@@ -375,6 +379,9 @@
     recordLogMessage(message) {
       const parsed = this.parseLogEntry(message);
       if (isLogLike(parsed)) this.httpLogs.push(parsed);
+    }
+    startRequestHat() {
+      Scratch.vm?.runtime?.startHats?.(HTTP_REQUEST_HAT_OPCODE);
     }
     parseLogEntry(value) {
       try {
@@ -494,8 +501,28 @@
     return ALLOWED_HTML_TAGS.has(tag) ? tag : "div";
   }
   function isSafeAttributeValue(name, value) {
-    if (!URL_ATTRIBUTES.has(name)) return true;
-    return SAFE_URL_PATTERN.test(value.trim());
+    if (URL_LIST_ATTRIBUTES.has(name)) return isSafeUrlList(value);
+    if (URL_ATTRIBUTES.has(name)) return isSafeUrl(value);
+    return true;
+  }
+  function isSafeUrlList(value) {
+    return value.split(",").map((candidate) => candidate.trim().split(/\s+/, 1)[0] ?? "").every((url) => isSafeUrl(url));
+  }
+  function isSafeUrl(value) {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    const normalized = stripUrlSchemeSeparators(trimmed);
+    const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(normalized)?.[1]?.toLowerCase();
+    return scheme === void 0 || SAFE_URL_SCHEMES.has(scheme);
+  }
+  function stripUrlSchemeSeparators(value) {
+    let result = "";
+    for (const character of value) {
+      const code = character.charCodeAt(0);
+      if (code <= 31 || code === 127 || /\s/.test(character)) continue;
+      result += character;
+    }
+    return result;
   }
   function escapeHtml(value) {
     return value.replace(/[&<>"']/g, (character) => {
@@ -505,6 +532,9 @@
       if (character === '"') return "&quot;";
       return "&#39;";
     });
+  }
+  if (!Scratch.extensions.unsandboxed) {
+    throw new Error(`${extensionConfig.name} must run unsandboxed.`);
   }
   Scratch.extensions.register(new TurboWarpHttpServerExtension());
 
