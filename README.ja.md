@@ -51,6 +51,47 @@ turbowarp-http-server --host 127.0.0.1 --port 8787
 
 Sprite route はこれとは別の TurboWarp-facing layer です。`camera` という名前の Sprite は `/camera` を公開でき、Sprite を「隠す」とその route を無効化できます。Sprite handler は HTML、JSON、redirect、`/camera/image.jpg` のような friendly alias を返せますが、`@assets` を Sprite の子 namespace にするのではなく Asset Manager capability を参照します。
 
+### 学習用コミュニティサーバ
+
+Issue #10 では、Scratch 風の project sharing app を local learning example 向けに追加しています。既定では無効なので、既存の bridge route と `@assets` route の動作は変わりません。
+
+CLI から有効化する例:
+
+```bash
+COMMUNITY=1 corepack pnpm start -- --host 127.0.0.1 --port 8787
+# または
+corepack pnpm start -- --host 127.0.0.1 --port 8787 --community
+```
+
+有効化時は次の route を提供します。
+
+| Route | Purpose |
+|---|---|
+| `GET /` | 作品一覧 HTML と、login user 向け upload form |
+| `GET /signup` / `POST /signup` | demo password registration |
+| `GET /login` / `POST /login` | demo password login |
+| `POST /logout` | session logout |
+| `GET /auth/:provider/start` | configured OAuth demo flow の開始 |
+| `GET /auth/:provider/callback` | OAuth demo flow の完了 |
+| `POST /projects` | SB3 project と optional thumbnail の upload |
+| `GET /projects/:id` | project detail HTML |
+| `GET /projects/:id.sb3` | SB3 download |
+| `POST /projects/:id/remix` | 元 project と関連付いた remix 作成 |
+| `POST /projects/:id/update` | owner だけが実行できる metadata edit |
+| `POST /projects/:id/replace` | owner だけが実行できる SB3 と thumbnail の replace |
+| `POST /projects/:id/delete` | owner だけが実行できる project deletion |
+
+demo password は Node 標準 `crypto.scrypt` で hash 化して保存します。session は HTTP-only `SameSite=Lax` cookie、HTML form の POST には CSRF token を使い、multipart body は form parse 前に上限を適用し、SB3 と thumbnail は file ごとの size limit、MIME type、file signature を検証します。owner 以外による owner-only 変更は拒否します。OAuth provider は次の環境変数が揃った場合だけ有効になります。
+
+```bash
+COMMUNITY_OAUTH_DEMO_CLIENT_ID=demo-client
+COMMUNITY_OAUTH_DEMO_AUTHORIZATION_URL=https://example.test/oauth/authorize
+COMMUNITY_OAUTH_DEMO_REDIRECT_URI=http://127.0.0.1:8787/auth/demo/callback
+COMMUNITY_OAUTH_DEMO_SCOPE=profile
+```
+
+この community server は local educational implementation であり、公開運用向けではありません。internet に公開する前に、in-memory storage を durable storage に置き換え、rate limit と abuse moderation、HTTPS と secure cookie、完全な OAuth token/userinfo exchange、必要な email または external identity verification、upload scan、audit log、backup、retention、takedown、incident-response 手順を追加してください。
+
 ## Asset Manager Resource Serving
 
 HTTP server は camera-agnostic です。`turbowarp-asset-manager` のような外部 capability が提供する generic named resource を配信し、private field を読んだり Asset Manager の storage を複製したりしません。
