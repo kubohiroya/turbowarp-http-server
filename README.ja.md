@@ -16,7 +16,7 @@ CLI で起動する HTTP ブリッジサーバと、そのサーバへ WebSocket
 
 - カスタム拡張機能を有効化した TurboWarp Desktop、TurboWarp Web、または TurboWarp Packager。
 - CLI ブリッジサーバを動かすための Node.js 22 以上。
-- 現在の拡張機能は sandbox 互換で、unsandboxed mode は不要です。
+- この拡張機能は incoming HTTP request で TurboWarp の hat thread を起動するため、unsandboxed mode が必要です。
 
 ## インストール
 

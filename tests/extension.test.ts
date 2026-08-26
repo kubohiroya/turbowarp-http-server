@@ -3,6 +3,7 @@ import {TurboWarpHttpServerExtension} from '../src/extension.js';
 import type {BridgeRequestMessage} from '../src/protocol.js';
 
 const sockets: FakeWebSocket[] = [];
+const startHats = vi.fn(() => []);
 
 class FakeWebSocket extends EventTarget {
   public static readonly OPEN = 1;
@@ -30,9 +31,11 @@ class FakeWebSocket extends EventTarget {
 
 beforeEach(() => {
   sockets.length = 0;
+  startHats.mockClear();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   vi.stubGlobal('Scratch', {
-    BlockType: {COMMAND: 'command', REPORTER: 'reporter', BOOLEAN: 'boolean'},
+    vm: {runtime: {startHats}},
+    BlockType: {COMMAND: 'command', REPORTER: 'reporter', BOOLEAN: 'boolean', HAT: 'hat'},
     ArgumentType: {STRING: 'string', NUMBER: 'number'},
     Cast: {
       toString: (value: unknown) => String(value),
@@ -140,6 +143,18 @@ describe('TurboWarpHttpServerExtension', () => {
 
     expect(extension.lastMessage()).toBe('{"type":"pong"}');
     expect(extension.isConnected()).toBe(false);
+  });
+
+  it('starts the HTTP request hat when a bridge request arrives', () => {
+    const extension = new TurboWarpHttpServerExtension();
+
+    extension.connect();
+    sockets[0]?.receive(JSON.stringify(requestMessage({id: 'req-hat'})));
+
+    expect(startHats).toHaveBeenCalledWith(
+      'kubohiroyaturbowarphttpserver_whenHttpRequestReceived'
+    );
+    expect(extension.currentRequestId()).toBe('req-hat');
   });
 
   it('returns safe defaults outside a request context', () => {
@@ -296,13 +311,17 @@ describe('TurboWarpHttpServerExtension', () => {
     const extension = new TurboWarpHttpServerExtension();
     const link = extension.newHtmlElement({TAG: 'a'});
     const image = extension.newHtmlElement({TAG: 'img'});
+    const button = extension.newHtmlElement({TAG: 'button'});
 
     extension.htmlSetAttribute({NODE: link, NAME: 'href', VALUE: 'javascript:alert(1)'});
     extension.htmlSetAttribute({NODE: link, NAME: 'data-id', VALUE: '42'});
     extension.htmlSetAttribute({NODE: image, NAME: 'src', VALUE: 'https://example.com/image.jpg'});
+    extension.htmlSetAttribute({NODE: image, NAME: 'srcset', VALUE: 'javascript:alert(1) 1x'});
+    extension.htmlSetAttribute({NODE: button, NAME: 'formaction', VALUE: 'java\nscript:alert(1)'});
 
     expect(extension.renderHtml({NODE: link})).toBe('<a data-id="42"></a>');
     expect(extension.renderHtml({NODE: image})).toBe('<img src="https://example.com/image.jpg">');
+    expect(extension.renderHtml({NODE: button})).toBe('<button></button>');
   });
 
   it('renders a self-contained virtual-scroll HTTP log viewer', () => {

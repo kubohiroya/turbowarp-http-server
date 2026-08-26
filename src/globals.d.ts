@@ -8,6 +8,11 @@ interface ScratchTranslate {
 }
 
 interface ScratchApi {
+  vm?: {
+    runtime?: {
+      startHats?(opcode: string, matchFields?: Record<string, string>): unknown[] | undefined;
+    };
+  };
   extensions: {
     unsandboxed: boolean;
     register(extension: TurboWarpExtension): void;
