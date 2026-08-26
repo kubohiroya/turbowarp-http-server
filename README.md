@@ -171,6 +171,63 @@ render HTML document title [Camera] body [section]
 
 For server diagnostics, `HTTP log viewer HTML` returns a self-contained HTML document with a virtual-scroll log viewport. Scripts can append structured log JSON with `record HTTP log [ENTRY]`, clear it with `clear HTTP logs`, or render a viewer from an explicit JSON array with `HTTP log viewer HTML from [LOGS]`.
 
+## Request Protocol And Blocks
+
+For ordinary HTTP routes that are not handled by `/@assets`, the CLI server forwards the request to the connected TurboWarp extension over WebSocket. Each forwarded request receives a unique request ID and an isolated context.
+
+Protocol v1 request messages preserve multi-valued query parameters and headers:
+
+```json
+{
+  "type": "request",
+  "protocol": "turbowarp-http-server",
+  "version": 1,
+  "id": "req-1",
+  "method": "GET",
+  "url": "http://127.0.0.1:8787/users/42?tag=a&tag=b",
+  "path": "/users/42",
+  "route": "/users/:id",
+  "pathParams": {"id": "42"},
+  "query": {"tag": ["a", "b"]},
+  "headers": {"accept": ["text/html"]},
+  "body": {"kind": "empty"},
+  "clientAddress": ""
+}
+```
+
+TurboWarp blocks can read the selected current request:
+
+```text
+current HTTP method
+current request path
+current request URL
+request header [name]
+query parameter [name]
+path parameter [name]
+current request body
+current request content type
+current request ID
+```
+
+The simple query/header reporters return the first value. The protocol keeps all values so future list-oriented blocks can expose repeated headers or query parameters without changing the wire format.
+
+Response blocks mutate the response builder for the current request and complete it with a response message:
+
+```text
+set HTTP status [200]
+set response header [name] to [value]
+remove response header [name]
+set response body [body]
+send response [body]
+respond with text [body]
+respond with HTML [body]
+respond with JSON [body]
+```
+
+Response status defaults to `200`. Status values outside `100` through `599`, unsafe response headers, CR/LF header injection values, and runtime-owned headers such as `Content-Length` are ignored or rejected before they can reach Node's HTTP response API. The server suppresses response bodies for `HEAD`, `204`, `205`, and `304` responses.
+
+If no bridge is connected, ordinary HTTP routes return `503`. If a connected bridge does not respond before the configured timeout, the server returns `504`. If the WebSocket disconnects with requests pending, they return `502`.
+
 ## Live-Camera Pattern
 
 For low-frequency camera publishing, compose three independent pieces:
@@ -270,6 +327,218 @@ Returns the most recent text message received from the bridge.
 |---|---|
 | Type | Reporter |
 | Opcode | `lastMessage` |
+
+### `when HTTP request received`
+
+Starts a TurboWarp handler thread when the bridge receives an HTTP request.
+
+| Property | Value |
+|---|---|
+| Type | Hat |
+| Opcode | `whenHttpRequestReceived` |
+
+### `use HTTP request [ID]`
+
+Selects a pending request context by request ID.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `useHttpRequest` |
+| `ID` | String, default: `req-1` |
+
+### `current request ID`
+
+Returns the current HTTP request ID.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentRequestId` |
+
+### `current HTTP method`
+
+Returns the current HTTP request method.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentHttpMethod` |
+
+### `current request path`
+
+Returns the current HTTP request path.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentRequestPath` |
+
+### `current request URL`
+
+Returns the current HTTP request URL.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentRequestUrl` |
+
+### `request header [NAME]`
+
+Returns the first value of a request header using case-insensitive lookup.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `requestHeader` |
+| `NAME` | String, default: `accept` |
+
+### `query parameter [NAME]`
+
+Returns the first query parameter value.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `queryParameter` |
+| `NAME` | String, default: `q` |
+
+### `path parameter [NAME]`
+
+Returns a route path parameter value.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `pathParameter` |
+| `NAME` | String, default: `id` |
+
+### `current request body`
+
+Returns the current textual request body, or an empty string for non-text bodies.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentRequestBody` |
+
+### `current request content type`
+
+Returns the current request Content-Type header.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentRequestContentType` |
+
+### `current request client address`
+
+Returns the current request client address when available.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentRequestClientAddress` |
+
+### `current response status`
+
+Returns the response status currently being built.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentResponseStatus` |
+
+### `set HTTP status [STATUS]`
+
+Sets the current response status.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `setHttpStatus` |
+| `STATUS` | Number, default: `200` |
+
+### `set response header [NAME] to [VALUE]`
+
+Sets a response header for the current request.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `setResponseHeader` |
+| `NAME` | String, default: `content-type` |
+| `VALUE` | String, default: `text/plain; charset=utf-8` |
+
+### `remove response header [NAME]`
+
+Removes a response header for the current request.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `removeResponseHeader` |
+| `NAME` | String, default: `content-type` |
+
+### `response header [NAME]`
+
+Returns the first configured response header value.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `responseHeader` |
+| `NAME` | String, default: `content-type` |
+
+### `set response body [BODY]`
+
+Sets the current response body without completing the response.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `setResponseBody` |
+| `BODY` | String, default: `Hello` |
+
+### `send response [BODY]`
+
+Sets the response body and completes the current request.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `sendResponse` |
+| `BODY` | String, default: `Hello` |
+
+### `respond with text [BODY]`
+
+Responds with plain text.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `respondWithText` |
+| `BODY` | String, default: `Hello` |
+
+### `respond with HTML [BODY]`
+
+Responds with HTML.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `respondWithHtml` |
+| `BODY` | String, default: `<p>Hello</p>` |
+
+### `respond with JSON [BODY]`
+
+Responds with JSON.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `respondWithJson` |
+| `BODY` | String, default: `{"ok":true}` |
 
 ### `record HTTP log [ENTRY]`
 

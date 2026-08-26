@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { BridgeRequestMessage } from './protocol.js';
 export interface ServerOptions {
     hostname: string;
     port: number;
@@ -6,6 +7,8 @@ export interface ServerOptions {
     maxResourceBodyBytes?: number;
     logger?: ResourceLogger;
     authorizeResource?: ResourceAuthorizer;
+    requestTimeoutMs?: number;
+    routes?: readonly string[];
 }
 export interface RunningServer {
     hostname: string;
@@ -66,6 +69,11 @@ export interface ServerAppOptions {
     maxResourceBodyBytes?: number;
     logger?: ResourceLogger;
     authorizeResource?: ResourceAuthorizer;
+    bridge?: HttpRequestBridge;
+    routes?: readonly string[];
+}
+export interface HttpRequestBridge {
+    forward(message: BridgeRequestMessage, method: string): Promise<Response>;
 }
 export declare function createApp(options?: ServerAppOptions): Hono;
 export declare function startServer(options: ServerOptions): RunningServer;

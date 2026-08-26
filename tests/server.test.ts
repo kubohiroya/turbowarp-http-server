@@ -11,6 +11,7 @@ import type {
   ResourceWriteRequest,
   ResourceWriteResult
 } from '../src/server.js';
+import type {BridgeRequestMessage} from '../src/protocol.js';
 
 const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
@@ -365,6 +366,135 @@ describe('HTTP bridge server app', () => {
 
     expect(socket.readyState).toBe(WebSocket.CLOSED);
   });
+
+  it('forwards HTTP requests to the TurboWarp bridge protocol and returns bridge responses', async () => {
+    const port = await getFreePort();
+    const server = startServer({
+      hostname: '127.0.0.1',
+      port,
+      routes: ['/users/:id']
+    });
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+    const nextRequest = onceRequestMessage(socket);
+
+    const responsePromise = fetch(`http://127.0.0.1:${port}/users/42?tag=a&tag=b`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Test': 'one'},
+      body: '{"hello":true}'
+    });
+    const request = await nextRequest;
+
+    expect(request).toMatchObject({
+      type: 'request',
+      protocol: 'turbowarp-http-server',
+      version: 1,
+      method: 'POST',
+      path: '/users/42',
+      route: '/users/:id',
+      pathParams: {id: '42'},
+      query: {tag: ['a', 'b']},
+      body: {kind: 'text', text: '{"hello":true}'}
+    });
+    expect(request.headers['content-type']).toEqual(['application/json']);
+    expect(request.headers['x-test']).toEqual(['one']);
+
+    socket.send(
+      JSON.stringify({
+        type: 'response',
+        id: request.id,
+        status: 201,
+        headers: {'content-type': ['text/plain; charset=utf-8'], 'x-reply': ['ok']},
+        body: {kind: 'text', text: 'created'}
+      })
+    );
+
+    const response = await responsePromise;
+    expect(response.status).toBe(201);
+    expect(response.headers.get('x-reply')).toBe('ok');
+    expect(await response.text()).toBe('created');
+    await server.close();
+  });
+
+  it('suppresses bridge response bodies for HEAD requests and no-content statuses', async () => {
+    const port = await getFreePort();
+    const server = startServer({hostname: '127.0.0.1', port});
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+    const nextRequest = onceRequestMessage(socket);
+
+    const responsePromise = fetch(`http://127.0.0.1:${port}/anything`, {method: 'HEAD'});
+    const request = await nextRequest;
+    socket.send(
+      JSON.stringify({
+        type: 'response',
+        id: request.id,
+        status: 200,
+        headers: {'content-type': ['text/plain; charset=utf-8']},
+        body: {kind: 'text', text: 'must not be sent'}
+      })
+    );
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('');
+    await server.close();
+  });
+
+  it('rejects invalid bridge response status and headers before reaching HTTP output', async () => {
+    const port = await getFreePort();
+    const server = startServer({hostname: '127.0.0.1', port});
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+    const nextRequest = onceRequestMessage(socket);
+
+    const responsePromise = fetch(`http://127.0.0.1:${port}/unsafe`);
+    const request = await nextRequest;
+    socket.send(
+      JSON.stringify({
+        type: 'response',
+        id: request.id,
+        status: 200,
+        headers: {'x-bad': ['line\nbreak']},
+        body: {kind: 'text', text: 'unsafe'}
+      })
+    );
+
+    const response = await responsePromise;
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({error: 'invalid_bridge_header'});
+    await server.close();
+  });
+
+  it('times out pending bridge requests', async () => {
+    const port = await getFreePort();
+    const server = startServer({hostname: '127.0.0.1', port, requestTimeoutMs: 20});
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+
+    const response = await fetch(`http://127.0.0.1:${port}/slow`);
+
+    expect(response.status).toBe(504);
+    await expect(response.json()).resolves.toMatchObject({error: 'gateway_timeout'});
+    await server.close();
+  });
+
+  it('fails pending bridge requests when the bridge disconnects', async () => {
+    const port = await getFreePort();
+    const server = startServer({hostname: '127.0.0.1', port, requestTimeoutMs: 1000});
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+    const nextRequest = onceRequestMessage(socket);
+
+    const responsePromise = fetch(`http://127.0.0.1:${port}/disconnect`);
+    await nextRequest;
+    socket.close();
+
+    const response = await responsePromise;
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({error: 'bridge_disconnected'});
+    await server.close();
+  });
 });
 
 interface MemoryResourceOptions {
@@ -496,5 +626,23 @@ function onceOpen(socket: WebSocket): Promise<void> {
 function onceClose(socket: WebSocket): Promise<void> {
   return new Promise((resolve) => {
     socket.once('close', () => resolve());
+  });
+}
+
+function onceRequestMessage(socket: WebSocket): Promise<BridgeRequestMessage> {
+  return new Promise((resolve, reject) => {
+    const onMessage = (message: Buffer) => {
+      try {
+        const parsed = JSON.parse(String(message)) as BridgeRequestMessage;
+        if (parsed.type === 'request') {
+          socket.off('message', onMessage);
+          resolve(parsed);
+        }
+      } catch {
+        return;
+      }
+    };
+    socket.on('message', onMessage);
+    socket.once('error', reject);
   });
 }

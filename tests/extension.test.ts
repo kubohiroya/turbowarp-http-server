@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {TurboWarpHttpServerExtension} from '../src/extension.js';
+import type {BridgeRequestMessage} from '../src/protocol.js';
 
 const sockets: FakeWebSocket[] = [];
 
@@ -76,6 +77,28 @@ describe('TurboWarpHttpServerExtension', () => {
       'isConnected',
       'sendText',
       'lastMessage',
+      'whenHttpRequestReceived',
+      'useHttpRequest',
+      'currentRequestId',
+      'currentHttpMethod',
+      'currentRequestPath',
+      'currentRequestUrl',
+      'requestHeader',
+      'queryParameter',
+      'pathParameter',
+      'currentRequestBody',
+      'currentRequestContentType',
+      'currentRequestClientAddress',
+      'currentResponseStatus',
+      'setHttpStatus',
+      'setResponseHeader',
+      'removeResponseHeader',
+      'responseHeader',
+      'setResponseBody',
+      'sendResponse',
+      'respondWithText',
+      'respondWithHtml',
+      'respondWithJson',
       'recordHttpLog',
       'clearHttpLogs',
       'httpLogViewerHtml',
@@ -117,6 +140,111 @@ describe('TurboWarpHttpServerExtension', () => {
 
     expect(extension.lastMessage()).toBe('{"type":"pong"}');
     expect(extension.isConnected()).toBe(false);
+  });
+
+  it('returns safe defaults outside a request context', () => {
+    const extension = new TurboWarpHttpServerExtension();
+
+    expect(extension.currentRequestId()).toBe('');
+    expect(extension.currentHttpMethod()).toBe('');
+    expect(extension.currentRequestPath()).toBe('');
+    expect(extension.requestHeader({NAME: 'authorization'})).toBe('');
+    expect(extension.queryParameter({NAME: 'q'})).toBe('');
+    expect(extension.pathParameter({NAME: 'id'})).toBe('');
+    expect(extension.currentRequestBody()).toBe('');
+    expect(extension.currentResponseStatus()).toBe(200);
+  });
+
+  it('exposes current request reporters from the selected request context', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    extension.receiveBridgeRequestForTest(
+      requestMessage({
+        id: 'req-1',
+        method: 'POST',
+        path: '/users/42',
+        route: '/users/:id',
+        pathParams: {id: '42'},
+        query: {tag: ['a', 'b']},
+        headers: {'Content-Type': ['application/json'], 'x-test': ['one']},
+        body: {kind: 'text', text: '{"ok":true}'},
+        clientAddress: '127.0.0.1'
+      })
+    );
+
+    expect(extension.currentRequestId()).toBe('req-1');
+    expect(extension.currentHttpMethod()).toBe('POST');
+    expect(extension.currentRequestPath()).toBe('/users/42');
+    expect(extension.currentRequestUrl()).toBe('http://example.test/users/42?tag=a&tag=b');
+    expect(extension.requestHeader({NAME: 'content-type'})).toBe('application/json');
+    expect(extension.requestHeader({NAME: 'X-Test'})).toBe('one');
+    expect(extension.queryParameter({NAME: 'tag'})).toBe('a');
+    expect(extension.pathParameter({NAME: 'id'})).toBe('42');
+    expect(extension.currentRequestBody()).toBe('{"ok":true}');
+    expect(extension.currentRequestContentType()).toBe('application/json');
+    expect(extension.currentRequestClientAddress()).toBe('127.0.0.1');
+  });
+
+  it('builds and sends responses once for the current request', () => {
+    const extension = new TurboWarpHttpServerExtension();
+
+    extension.connect();
+    sockets[0]?.receive(JSON.stringify(requestMessage({id: 'req-1'})));
+    extension.setHttpStatus({STATUS: 201});
+    extension.setResponseHeader({NAME: 'X-Reply', VALUE: 'ok'});
+    extension.setResponseHeader({NAME: 'Bad', VALUE: 'line\nbreak'});
+    extension.setResponseBody({BODY: 'first'});
+
+    expect(extension.currentResponseStatus()).toBe(201);
+    expect(extension.responseHeader({NAME: 'x-reply'})).toBe('ok');
+
+    extension.sendResponse({BODY: 'done'});
+    extension.setHttpStatus({STATUS: 500});
+    extension.sendResponse({BODY: 'again'});
+
+    expect(sockets[0]?.sent.slice(-1)).toEqual([
+      JSON.stringify({
+        type: 'response',
+        id: 'req-1',
+        status: 201,
+        headers: {'x-reply': ['ok']},
+        body: {kind: 'text', text: 'done'}
+      })
+    ]);
+    expect(extension.currentRequestId()).toBe('');
+  });
+
+  it('keeps multiple request contexts isolated until response completion', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    extension.receiveBridgeRequestForTest(requestMessage({id: 'req-a', pathParams: {id: 'a'}}));
+    extension.receiveBridgeRequestForTest(requestMessage({id: 'req-b', pathParams: {id: 'b'}}));
+
+    expect(extension.pathParameter({NAME: 'id'})).toBe('b');
+
+    extension.useHttpRequest({ID: 'req-a'});
+    expect(extension.pathParameter({NAME: 'id'})).toBe('a');
+    extension.setHttpStatus({STATUS: 202});
+
+    extension.useHttpRequest({ID: 'req-b'});
+    expect(extension.currentResponseStatus()).toBe(200);
+    expect(extension.pathParameter({NAME: 'id'})).toBe('b');
+  });
+
+  it('sets convenience response content types', () => {
+    const extension = new TurboWarpHttpServerExtension();
+
+    extension.connect();
+    sockets[0]?.receive(JSON.stringify(requestMessage({id: 'req-json'})));
+    extension.respondWithJson({BODY: '{"ok":true}'});
+
+    expect(sockets[0]?.sent.slice(-1)).toEqual([
+      JSON.stringify({
+        type: 'response',
+        id: 'req-json',
+        status: 200,
+        headers: {'content-type': ['application/json; charset=utf-8']},
+        body: {kind: 'text', text: '{"ok":true}'}
+      })
+    ]);
   });
 
   it('builds Markdown text with chainable handles', () => {
@@ -196,3 +324,23 @@ describe('TurboWarpHttpServerExtension', () => {
     expect(extension.httpLogViewerHtml()).toContain('logs.length');
   });
 });
+
+function requestMessage(overrides: Partial<BridgeRequestMessage> = {}): BridgeRequestMessage {
+  const path = overrides.path ?? '/users/42';
+  return {
+    type: 'request',
+    protocol: 'turbowarp-http-server',
+    version: 1,
+    id: 'req-1',
+    method: 'GET',
+    url: `http://example.test${path}?tag=a&tag=b`,
+    path,
+    route: '/users/:id',
+    pathParams: {id: '42'},
+    query: {tag: ['a', 'b']},
+    headers: {},
+    body: {kind: 'empty'},
+    clientAddress: '',
+    ...overrides
+  };
+}

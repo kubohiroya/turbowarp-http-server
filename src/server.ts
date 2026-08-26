@@ -5,6 +5,18 @@ import type {Context} from 'hono';
 import {secureHeaders} from 'hono/secure-headers';
 import type {WebSocket} from 'ws';
 import {WebSocketServer} from 'ws';
+import {
+  HTTP_BRIDGE_PROTOCOL,
+  HTTP_BRIDGE_PROTOCOL_VERSION,
+  isBodyForbidden,
+  isForbiddenResponseHeader,
+  isValidHttpStatus,
+  normalizeHeaderName,
+  parseBridgeClientMessage,
+  validateHeaderName,
+  validateHeaderValue
+} from './protocol.js';
+import type {BridgeBody, BridgeRequestMessage, BridgeResponseMessage} from './protocol.js';
 
 export interface ServerOptions {
   hostname: string;
@@ -13,6 +25,8 @@ export interface ServerOptions {
   maxResourceBodyBytes?: number;
   logger?: ResourceLogger;
   authorizeResource?: ResourceAuthorizer;
+  requestTimeoutMs?: number;
+  routes?: readonly string[];
 }
 
 export interface RunningServer {
@@ -88,9 +102,22 @@ export interface ServerAppOptions {
   maxResourceBodyBytes?: number;
   logger?: ResourceLogger;
   authorizeResource?: ResourceAuthorizer;
+  bridge?: HttpRequestBridge;
+  routes?: readonly string[];
 }
 
 const DEFAULT_MAX_RESOURCE_BODY_BYTES = 10 * 1024 * 1024;
+const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
+const TEXT_BODY_TYPES = [
+  'application/json',
+  'application/x-www-form-urlencoded',
+  'application/xml',
+  'text/'
+];
+
+export interface HttpRequestBridge {
+  forward(message: BridgeRequestMessage, method: string): Promise<Response>;
+}
 
 export function createApp(options: ServerAppOptions = {}): Hono {
   const app = new Hono();
@@ -118,6 +145,10 @@ export function createApp(options: ServerAppOptions = {}): Hono {
     const resourceResponse = await handleResourceRequest(c, options);
     if (resourceResponse) return resourceResponse;
 
+    if (options.bridge) {
+      return options.bridge.forward(await createBridgeRequestMessage(c.req.raw, options.routes ?? []), c.req.method);
+    }
+
     return c.json(
       {
         error: 'not_connected',
@@ -131,7 +162,8 @@ export function createApp(options: ServerAppOptions = {}): Hono {
 }
 
 export function startServer(options: ServerOptions): RunningServer {
-  const app = createApp(options);
+  const bridge = new WebSocketHttpRequestBridge(options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
+  const app = createApp({...options, bridge});
   const wss = new WebSocketServer({noServer: true});
   const sockets = new Set<WebSocket>();
   const server: ServerType = serve({
@@ -148,18 +180,20 @@ export function startServer(options: ServerOptions): RunningServer {
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       sockets.add(ws);
+      bridge.attach(ws);
       ws.on('close', () => {
         sockets.delete(ws);
+        bridge.detach(ws);
       });
       ws.send(
         JSON.stringify({
           type: 'hello',
-          protocol: 'turbowarp-http-server',
+          protocol: HTTP_BRIDGE_PROTOCOL,
           version: 1
         })
       );
       ws.on('message', (message) => {
-        ws.send(message);
+        bridge.receive(ws, String(message));
       });
     });
   });
@@ -189,6 +223,76 @@ export function startServer(options: ServerOptions): RunningServer {
   };
 }
 
+class WebSocketHttpRequestBridge implements HttpRequestBridge {
+  private socket: WebSocket | null = null;
+  private nextRequestId = 1;
+  private readonly pending = new Map<
+    string,
+    {
+      method: string;
+      resolve(response: Response): void;
+      timeout: ReturnType<typeof setTimeout>;
+    }
+  >();
+
+  public constructor(private readonly requestTimeoutMs: number) {}
+
+  public attach(socket: WebSocket): void {
+    this.socket = socket;
+  }
+
+  public detach(socket: WebSocket): void {
+    if (this.socket !== socket) return;
+    this.socket = null;
+    for (const [id, pending] of this.pending) {
+      clearTimeout(pending.timeout);
+      pending.resolve(jsonResponse({error: 'bridge_disconnected'}, 502));
+      this.pending.delete(id);
+    }
+  }
+
+  public async forward(message: BridgeRequestMessage, method: string): Promise<Response> {
+    if (!this.socket || this.socket.readyState !== this.socket.OPEN) {
+      return jsonResponse({error: 'not_connected'}, 503);
+    }
+
+    const id = `req-${this.nextRequestId}`;
+    this.nextRequestId += 1;
+    const requestMessage = {...message, id};
+
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        resolve(jsonResponse({error: 'gateway_timeout'}, 504));
+      }, this.requestTimeoutMs);
+
+      this.pending.set(id, {method, resolve, timeout});
+      this.socket?.send(JSON.stringify(requestMessage));
+    });
+  }
+
+  public receive(socket: WebSocket, message: string): void {
+    if (socket !== this.socket) return;
+    const parsed = parseBridgeClientMessage(message);
+    if (!parsed) return;
+    if (parsed.type === 'error') {
+      if (!parsed.id) return;
+      const pending = this.pending.get(parsed.id);
+      if (!pending) return;
+      clearTimeout(pending.timeout);
+      this.pending.delete(parsed.id);
+      pending.resolve(jsonResponse({error: 'bridge_error', message: parsed.message}, 502));
+      return;
+    }
+
+    const pending = this.pending.get(parsed.id);
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    this.pending.delete(parsed.id);
+    pending.resolve(toHttpResponse(parsed, pending.method));
+  }
+}
+
 function closeSocket(socket: WebSocket): Promise<void> {
   return new Promise((resolve) => {
     if (socket.readyState === socket.CLOSED) {
@@ -198,6 +302,130 @@ function closeSocket(socket: WebSocket): Promise<void> {
     socket.once('close', () => resolve());
     socket.terminate();
   });
+}
+
+async function createBridgeRequestMessage(
+  request: Request,
+  routes: readonly string[]
+): Promise<BridgeRequestMessage> {
+  const url = new URL(request.url);
+  const routeMatch = matchRoute(url.pathname, routes);
+  return {
+    type: 'request',
+    protocol: HTTP_BRIDGE_PROTOCOL,
+    version: HTTP_BRIDGE_PROTOCOL_VERSION,
+    id: '',
+    method: request.method.toUpperCase(),
+    url: request.url,
+    path: url.pathname,
+    route: routeMatch.route,
+    pathParams: routeMatch.pathParams,
+    query: collectQuery(url.searchParams),
+    headers: collectHeaders(request.headers),
+    body: await readTextBridgeBody(request),
+    clientAddress: ''
+  };
+}
+
+function toHttpResponse(message: BridgeResponseMessage, method: string): Response {
+  const status = isValidHttpStatus(message.status) ? message.status : 502;
+  if (!isValidHttpStatus(message.status)) {
+    return jsonResponse({error: 'invalid_bridge_status'}, 502);
+  }
+
+  const headers = new Headers();
+  for (const [name, values] of Object.entries(message.headers)) {
+    const normalized = normalizeHeaderName(name);
+    if (
+      !validateHeaderName(normalized) ||
+      isForbiddenResponseHeader(normalized) ||
+      values.some((value) => !validateHeaderValue(value))
+    ) {
+      return jsonResponse({error: 'invalid_bridge_header'}, 502);
+    }
+    for (const value of values) {
+      headers.append(normalized, value);
+    }
+  }
+
+  if (isBodyForbidden(method, status)) {
+    return new Response(null, {status, headers});
+  }
+
+  if (message.body.kind === 'text') {
+    if (!headers.has('content-type')) headers.set('content-type', 'text/plain; charset=utf-8');
+    return new Response(message.body.text, {status, headers});
+  }
+  return new Response(null, {status, headers});
+}
+
+function collectQuery(params: URLSearchParams): Record<string, string[]> {
+  const query: Record<string, string[]> = {};
+  for (const [name, value] of params) {
+    query[name] ??= [];
+    query[name].push(value);
+  }
+  return query;
+}
+
+function collectHeaders(headers: Headers): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  headers.forEach((value, name) => {
+    const normalized = normalizeHeaderName(name);
+    result[normalized] ??= [];
+    result[normalized].push(value);
+  });
+  return result;
+}
+
+async function readTextBridgeBody(request: Request): Promise<BridgeBody> {
+  if (request.method.toUpperCase() === 'GET' || request.method.toUpperCase() === 'HEAD') {
+    return {kind: 'empty'};
+  }
+  const contentType = request.headers.get('content-type') ?? '';
+  const lowerContentType = contentType.toLowerCase();
+  if (!TEXT_BODY_TYPES.some((type) => lowerContentType.startsWith(type))) {
+    return {kind: 'unsupported', reason: 'non_text_body'};
+  }
+  return {kind: 'text', text: await request.text()};
+}
+
+interface RouteMatch {
+  route: string;
+  pathParams: Record<string, string>;
+}
+
+function matchRoute(pathname: string, routes: readonly string[]): RouteMatch {
+  for (const route of routes) {
+    const params = matchRoutePattern(pathname, route);
+    if (params) return {route, pathParams: params};
+  }
+  return {route: pathname, pathParams: {}};
+}
+
+function matchRoutePattern(pathname: string, route: string): Record<string, string> | null {
+  const pathSegments = splitRoute(pathname);
+  const routeSegments = splitRoute(route);
+  if (pathSegments.length !== routeSegments.length) return null;
+
+  const params: Record<string, string> = {};
+  for (let index = 0; index < routeSegments.length; index += 1) {
+    const routeSegment = routeSegments[index];
+    const pathSegment = pathSegments[index] ?? '';
+    if (routeSegment?.startsWith(':')) {
+      params[routeSegment.slice(1)] = pathSegment;
+    } else if (routeSegment !== pathSegment) {
+      return null;
+    }
+  }
+  return params;
+}
+
+function splitRoute(value: string): string[] {
+  return value
+    .split('/')
+    .filter((segment) => segment.length > 0)
+    .map(decodePathSegment);
 }
 
 async function handleResourceRequest(

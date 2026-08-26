@@ -13,11 +13,31 @@
     blockIconURI: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgNDggNDgiPjxyZWN0IHg9IjYiIHk9IjEwIiB3aWR0aD0iMzYiIGhlaWdodD0iMjgiIHJ4PSI0IiBmaWxsPSIjMjU2M0VCIi8+PHBhdGggZD0iTTEyIDE4aDI0TTExIDI0aDE0TTExIDMwaDIwIiBzdHJva2U9IiNGRkYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iMzQiIGN5PSIzMCIgcj0iMyIgZmlsbD0iIzIyQzU1RSIvPjwvc3ZnPg=="
   };
   const extensionName = "TurboWarp-HTTP-Server";
-  const blocks = [{ "opcode": "setServerUrl", "blockType": "COMMAND", "text": "set HTTP bridge URL to [URL]", "description": "Sets the WebSocket URL used to reach the HTTP bridge server.", "arguments": { "URL": { "type": "STRING", "defaultValue": "ws://127.0.0.1:8787/ws" } } }, { "opcode": "connect", "blockType": "COMMAND", "text": "connect to HTTP bridge", "description": "Opens a WebSocket connection to the configured HTTP bridge server.", "arguments": {} }, { "opcode": "disconnect", "blockType": "COMMAND", "text": "disconnect from HTTP bridge", "description": "Closes the current bridge connection.", "arguments": {} }, { "opcode": "isConnected", "blockType": "BOOLEAN", "text": "HTTP bridge connected?", "description": "Reports whether the bridge WebSocket is currently open.", "arguments": {} }, { "opcode": "sendText", "blockType": "COMMAND", "text": "send [MESSAGE] to HTTP bridge", "description": "Sends a text message to the connected HTTP bridge server.", "arguments": { "MESSAGE": { "type": "STRING", "defaultValue": '{"type":"ping"}' } } }, { "opcode": "lastMessage", "blockType": "REPORTER", "text": "last HTTP bridge message", "description": "Returns the most recent text message received from the bridge.", "arguments": {} }, { "opcode": "recordHttpLog", "blockType": "COMMAND", "text": "record HTTP log [ENTRY]", "description": "Adds a structured HTTP log entry JSON string to the extension log buffer.", "arguments": { "ENTRY": { "type": "STRING", "defaultValue": '{"method":"GET","path":"/","status":200}' } } }, { "opcode": "clearHttpLogs", "blockType": "COMMAND", "text": "clear HTTP logs", "description": "Clears the extension log buffer.", "arguments": {} }, { "opcode": "httpLogViewerHtml", "blockType": "REPORTER", "text": "HTTP log viewer HTML", "description": "Returns a self-contained virtual-scroll HTML log viewer for buffered HTTP logs.", "arguments": {} }, { "opcode": "httpLogViewerHtmlFromJson", "blockType": "REPORTER", "text": "HTTP log viewer HTML from [LOGS]", "description": "Returns a self-contained virtual-scroll HTML log viewer from a JSON array of log entries.", "arguments": { "LOGS": { "type": "STRING", "defaultValue": '[{"method":"GET","path":"/","status":200}]' } } }, { "opcode": "newMarkdownDocument", "blockType": "REPORTER", "text": "new markdown document", "description": "Creates an empty Markdown builder handle.", "arguments": {} }, { "opcode": "markdownHeading", "blockType": "REPORTER", "text": "markdown [DOC] with heading level [LEVEL] [TEXT]", "description": "Appends a Markdown heading and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "LEVEL": { "type": "NUMBER", "defaultValue": 1 }, "TEXT": { "type": "STRING", "defaultValue": "Title" } } }, { "opcode": "markdownParagraph", "blockType": "REPORTER", "text": "markdown [DOC] with paragraph [TEXT]", "description": "Appends a Markdown paragraph and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "TEXT": { "type": "STRING", "defaultValue": "Hello" } } }, { "opcode": "markdownBullet", "blockType": "REPORTER", "text": "markdown [DOC] with bullet [TEXT]", "description": "Appends a Markdown bullet and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "TEXT": { "type": "STRING", "defaultValue": "Item" } } }, { "opcode": "markdownCodeBlock", "blockType": "REPORTER", "text": "markdown [DOC] with code [CODE] language [LANG]", "description": "Appends a fenced Markdown code block and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "CODE": { "type": "STRING", "defaultValue": "console.log('hello')" }, "LANG": { "type": "STRING", "defaultValue": "js" } } }, { "opcode": "renderMarkdown", "blockType": "REPORTER", "text": "render markdown [DOC]", "description": "Renders a Markdown builder handle to Markdown text.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" } } }, { "opcode": "newHtmlElement", "blockType": "REPORTER", "text": "new HTML element [TAG]", "description": "Creates an HTML element builder handle.", "arguments": { "TAG": { "type": "STRING", "defaultValue": "div" } } }, { "opcode": "htmlText", "blockType": "REPORTER", "text": "HTML text [TEXT]", "description": "Creates an escaped HTML text node handle.", "arguments": { "TEXT": { "type": "STRING", "defaultValue": "Hello" } } }, { "opcode": "htmlSetAttribute", "blockType": "REPORTER", "text": "HTML [NODE] with attribute [NAME] [VALUE]", "description": "Sets an escaped attribute on an HTML element and returns the same handle.", "arguments": { "NODE": { "type": "STRING", "defaultValue": "html:1" }, "NAME": { "type": "STRING", "defaultValue": "class" }, "VALUE": { "type": "STRING", "defaultValue": "content" } } }, { "opcode": "htmlAppendChild", "blockType": "REPORTER", "text": "HTML [PARENT] with child [CHILD]", "description": "Appends a child node to an HTML element and returns the parent handle.", "arguments": { "PARENT": { "type": "STRING", "defaultValue": "html:1" }, "CHILD": { "type": "STRING", "defaultValue": "html:2" } } }, { "opcode": "renderHtml", "blockType": "REPORTER", "text": "render HTML [NODE]", "description": "Renders an HTML node handle to an HTML fragment.", "arguments": { "NODE": { "type": "STRING", "defaultValue": "html:1" } } }, { "opcode": "renderHtmlDocument", "blockType": "REPORTER", "text": "render HTML document title [TITLE] body [BODY]", "description": "Renders a full HTML document from an HTML body node handle.", "arguments": { "TITLE": { "type": "STRING", "defaultValue": "Page" }, "BODY": { "type": "STRING", "defaultValue": "html:1" } } }];
+  const blocks = [{ "opcode": "setServerUrl", "blockType": "COMMAND", "text": "set HTTP bridge URL to [URL]", "description": "Sets the WebSocket URL used to reach the HTTP bridge server.", "arguments": { "URL": { "type": "STRING", "defaultValue": "ws://127.0.0.1:8787/ws" } } }, { "opcode": "connect", "blockType": "COMMAND", "text": "connect to HTTP bridge", "description": "Opens a WebSocket connection to the configured HTTP bridge server.", "arguments": {} }, { "opcode": "disconnect", "blockType": "COMMAND", "text": "disconnect from HTTP bridge", "description": "Closes the current bridge connection.", "arguments": {} }, { "opcode": "isConnected", "blockType": "BOOLEAN", "text": "HTTP bridge connected?", "description": "Reports whether the bridge WebSocket is currently open.", "arguments": {} }, { "opcode": "sendText", "blockType": "COMMAND", "text": "send [MESSAGE] to HTTP bridge", "description": "Sends a text message to the connected HTTP bridge server.", "arguments": { "MESSAGE": { "type": "STRING", "defaultValue": '{"type":"ping"}' } } }, { "opcode": "lastMessage", "blockType": "REPORTER", "text": "last HTTP bridge message", "description": "Returns the most recent text message received from the bridge.", "arguments": {} }, { "opcode": "whenHttpRequestReceived", "blockType": "HAT", "text": "when HTTP request received", "description": "Starts a TurboWarp handler thread when the bridge receives an HTTP request.", "arguments": {} }, { "opcode": "useHttpRequest", "blockType": "COMMAND", "text": "use HTTP request [ID]", "description": "Selects a pending request context by request ID.", "arguments": { "ID": { "type": "STRING", "defaultValue": "req-1" } } }, { "opcode": "currentRequestId", "blockType": "REPORTER", "text": "current request ID", "description": "Returns the current HTTP request ID.", "arguments": {} }, { "opcode": "currentHttpMethod", "blockType": "REPORTER", "text": "current HTTP method", "description": "Returns the current HTTP request method.", "arguments": {} }, { "opcode": "currentRequestPath", "blockType": "REPORTER", "text": "current request path", "description": "Returns the current HTTP request path.", "arguments": {} }, { "opcode": "currentRequestUrl", "blockType": "REPORTER", "text": "current request URL", "description": "Returns the current HTTP request URL.", "arguments": {} }, { "opcode": "requestHeader", "blockType": "REPORTER", "text": "request header [NAME]", "description": "Returns the first value of a request header using case-insensitive lookup.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "accept" } } }, { "opcode": "queryParameter", "blockType": "REPORTER", "text": "query parameter [NAME]", "description": "Returns the first query parameter value.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "q" } } }, { "opcode": "pathParameter", "blockType": "REPORTER", "text": "path parameter [NAME]", "description": "Returns a route path parameter value.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "id" } } }, { "opcode": "currentRequestBody", "blockType": "REPORTER", "text": "current request body", "description": "Returns the current textual request body, or an empty string for non-text bodies.", "arguments": {} }, { "opcode": "currentRequestContentType", "blockType": "REPORTER", "text": "current request content type", "description": "Returns the current request Content-Type header.", "arguments": {} }, { "opcode": "currentRequestClientAddress", "blockType": "REPORTER", "text": "current request client address", "description": "Returns the current request client address when available.", "arguments": {} }, { "opcode": "currentResponseStatus", "blockType": "REPORTER", "text": "current response status", "description": "Returns the response status currently being built.", "arguments": {} }, { "opcode": "setHttpStatus", "blockType": "COMMAND", "text": "set HTTP status [STATUS]", "description": "Sets the current response status.", "arguments": { "STATUS": { "type": "NUMBER", "defaultValue": 200 } } }, { "opcode": "setResponseHeader", "blockType": "COMMAND", "text": "set response header [NAME] to [VALUE]", "description": "Sets a response header for the current request.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "content-type" }, "VALUE": { "type": "STRING", "defaultValue": "text/plain; charset=utf-8" } } }, { "opcode": "removeResponseHeader", "blockType": "COMMAND", "text": "remove response header [NAME]", "description": "Removes a response header for the current request.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "content-type" } } }, { "opcode": "responseHeader", "blockType": "REPORTER", "text": "response header [NAME]", "description": "Returns the first configured response header value.", "arguments": { "NAME": { "type": "STRING", "defaultValue": "content-type" } } }, { "opcode": "setResponseBody", "blockType": "COMMAND", "text": "set response body [BODY]", "description": "Sets the current response body without completing the response.", "arguments": { "BODY": { "type": "STRING", "defaultValue": "Hello" } } }, { "opcode": "sendResponse", "blockType": "COMMAND", "text": "send response [BODY]", "description": "Sets the response body and completes the current request.", "arguments": { "BODY": { "type": "STRING", "defaultValue": "Hello" } } }, { "opcode": "respondWithText", "blockType": "COMMAND", "text": "respond with text [BODY]", "description": "Responds with plain text.", "arguments": { "BODY": { "type": "STRING", "defaultValue": "Hello" } } }, { "opcode": "respondWithHtml", "blockType": "COMMAND", "text": "respond with HTML [BODY]", "description": "Responds with HTML.", "arguments": { "BODY": { "type": "STRING", "defaultValue": "<p>Hello</p>" } } }, { "opcode": "respondWithJson", "blockType": "COMMAND", "text": "respond with JSON [BODY]", "description": "Responds with JSON.", "arguments": { "BODY": { "type": "STRING", "defaultValue": '{"ok":true}' } } }, { "opcode": "recordHttpLog", "blockType": "COMMAND", "text": "record HTTP log [ENTRY]", "description": "Adds a structured HTTP log entry JSON string to the extension log buffer.", "arguments": { "ENTRY": { "type": "STRING", "defaultValue": '{"method":"GET","path":"/","status":200}' } } }, { "opcode": "clearHttpLogs", "blockType": "COMMAND", "text": "clear HTTP logs", "description": "Clears the extension log buffer.", "arguments": {} }, { "opcode": "httpLogViewerHtml", "blockType": "REPORTER", "text": "HTTP log viewer HTML", "description": "Returns a self-contained virtual-scroll HTML log viewer for buffered HTTP logs.", "arguments": {} }, { "opcode": "httpLogViewerHtmlFromJson", "blockType": "REPORTER", "text": "HTTP log viewer HTML from [LOGS]", "description": "Returns a self-contained virtual-scroll HTML log viewer from a JSON array of log entries.", "arguments": { "LOGS": { "type": "STRING", "defaultValue": '[{"method":"GET","path":"/","status":200}]' } } }, { "opcode": "newMarkdownDocument", "blockType": "REPORTER", "text": "new markdown document", "description": "Creates an empty Markdown builder handle.", "arguments": {} }, { "opcode": "markdownHeading", "blockType": "REPORTER", "text": "markdown [DOC] with heading level [LEVEL] [TEXT]", "description": "Appends a Markdown heading and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "LEVEL": { "type": "NUMBER", "defaultValue": 1 }, "TEXT": { "type": "STRING", "defaultValue": "Title" } } }, { "opcode": "markdownParagraph", "blockType": "REPORTER", "text": "markdown [DOC] with paragraph [TEXT]", "description": "Appends a Markdown paragraph and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "TEXT": { "type": "STRING", "defaultValue": "Hello" } } }, { "opcode": "markdownBullet", "blockType": "REPORTER", "text": "markdown [DOC] with bullet [TEXT]", "description": "Appends a Markdown bullet and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "TEXT": { "type": "STRING", "defaultValue": "Item" } } }, { "opcode": "markdownCodeBlock", "blockType": "REPORTER", "text": "markdown [DOC] with code [CODE] language [LANG]", "description": "Appends a fenced Markdown code block and returns the same builder handle.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" }, "CODE": { "type": "STRING", "defaultValue": "console.log('hello')" }, "LANG": { "type": "STRING", "defaultValue": "js" } } }, { "opcode": "renderMarkdown", "blockType": "REPORTER", "text": "render markdown [DOC]", "description": "Renders a Markdown builder handle to Markdown text.", "arguments": { "DOC": { "type": "STRING", "defaultValue": "md:1" } } }, { "opcode": "newHtmlElement", "blockType": "REPORTER", "text": "new HTML element [TAG]", "description": "Creates an HTML element builder handle.", "arguments": { "TAG": { "type": "STRING", "defaultValue": "div" } } }, { "opcode": "htmlText", "blockType": "REPORTER", "text": "HTML text [TEXT]", "description": "Creates an escaped HTML text node handle.", "arguments": { "TEXT": { "type": "STRING", "defaultValue": "Hello" } } }, { "opcode": "htmlSetAttribute", "blockType": "REPORTER", "text": "HTML [NODE] with attribute [NAME] [VALUE]", "description": "Sets an escaped attribute on an HTML element and returns the same handle.", "arguments": { "NODE": { "type": "STRING", "defaultValue": "html:1" }, "NAME": { "type": "STRING", "defaultValue": "class" }, "VALUE": { "type": "STRING", "defaultValue": "content" } } }, { "opcode": "htmlAppendChild", "blockType": "REPORTER", "text": "HTML [PARENT] with child [CHILD]", "description": "Appends a child node to an HTML element and returns the parent handle.", "arguments": { "PARENT": { "type": "STRING", "defaultValue": "html:1" }, "CHILD": { "type": "STRING", "defaultValue": "html:2" } } }, { "opcode": "renderHtml", "blockType": "REPORTER", "text": "render HTML [NODE]", "description": "Renders an HTML node handle to an HTML fragment.", "arguments": { "NODE": { "type": "STRING", "defaultValue": "html:1" } } }, { "opcode": "renderHtmlDocument", "blockType": "REPORTER", "text": "render HTML document title [TITLE] body [BODY]", "description": "Renders a full HTML document from an HTML body node handle.", "arguments": { "TITLE": { "type": "STRING", "defaultValue": "Page" }, "BODY": { "type": "STRING", "defaultValue": "html:1" } } }];
   const definitions = {
     extensionName,
     blocks
   };
+  function normalizeHeaderName(name) {
+    return name.trim().toLowerCase();
+  }
+  function isValidHttpStatus(status) {
+    return Number.isInteger(status) && status >= 100 && status <= 599;
+  }
+  function isForbiddenResponseHeader(name) {
+    return ["connection", "content-length", "transfer-encoding", "upgrade"].includes(
+      normalizeHeaderName(name)
+    );
+  }
+  function validateHeaderName(name) {
+    return /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(name);
+  }
+  function validateHeaderValue(value) {
+    return !/[\r\n]/.test(value);
+  }
+  function firstValue(values) {
+    return values?.[0] ?? "";
+  }
   const blockDefinitions = definitions.blocks;
   const DEFAULT_SERVER_URL = "ws://127.0.0.1:8787/ws";
   const ALLOWED_HTML_TAGS = /* @__PURE__ */ new Set([
@@ -74,6 +94,8 @@
       this.httpLogs = [];
       this.markdownBuilders = /* @__PURE__ */ new Map();
       this.htmlNodes = /* @__PURE__ */ new Map();
+      this.requestContexts = /* @__PURE__ */ new Map();
+      this.currentRequestContextId = "";
     }
     getInfo() {
       return {
@@ -95,6 +117,7 @@
       socket.addEventListener("message", (event) => {
         this.lastReceivedMessage = this.stringifyMessage(event.data);
         this.recordLogMessage(this.lastReceivedMessage);
+        this.receiveBridgeMessage(this.lastReceivedMessage);
       });
       socket.addEventListener("close", () => {
         if (this.socket === socket) this.socket = null;
@@ -116,6 +139,98 @@
     }
     lastMessage() {
       return this.lastReceivedMessage;
+    }
+    whenHttpRequestReceived() {
+      return false;
+    }
+    useHttpRequest(args) {
+      const id = Scratch.Cast.toString(args.ID);
+      if (this.requestContexts.has(id)) this.currentRequestContextId = id;
+    }
+    currentRequestId() {
+      return this.currentContext()?.request.id ?? "";
+    }
+    currentHttpMethod() {
+      return this.currentContext()?.request.method ?? "";
+    }
+    currentRequestPath() {
+      return this.currentContext()?.request.path ?? "";
+    }
+    currentRequestUrl() {
+      return this.currentContext()?.request.url ?? "";
+    }
+    requestHeader(args) {
+      const name = normalizeHeaderName(Scratch.Cast.toString(args.NAME));
+      return firstValue(this.currentContext()?.request.headers[name]);
+    }
+    queryParameter(args) {
+      return firstValue(this.currentContext()?.request.query[Scratch.Cast.toString(args.NAME)]);
+    }
+    pathParameter(args) {
+      return this.currentContext()?.request.pathParams[Scratch.Cast.toString(args.NAME)] ?? "";
+    }
+    currentRequestBody() {
+      const body = this.currentContext()?.request.body;
+      return body?.kind === "text" ? body.text : "";
+    }
+    currentRequestContentType() {
+      return this.requestHeader({ NAME: "content-type" });
+    }
+    currentRequestClientAddress() {
+      return this.currentContext()?.request.clientAddress ?? "";
+    }
+    currentResponseStatus() {
+      return this.currentContext()?.response.status ?? 200;
+    }
+    setHttpStatus(args) {
+      const context = this.mutableCurrentContext();
+      if (!context) return;
+      const status = Math.trunc(Scratch.Cast.toNumber(args.STATUS));
+      if (isValidHttpStatus(status)) context.response.status = status;
+    }
+    setResponseHeader(args) {
+      const context = this.mutableCurrentContext();
+      if (!context) return;
+      const name = normalizeHeaderName(Scratch.Cast.toString(args.NAME));
+      const value = Scratch.Cast.toString(args.VALUE);
+      if (validateHeaderName(name) && validateHeaderValue(value) && !isForbiddenResponseHeader(name)) {
+        context.response.headers[name] = [value];
+      }
+    }
+    removeResponseHeader(args) {
+      const context = this.mutableCurrentContext();
+      if (!context) return;
+      delete context.response.headers[normalizeHeaderName(Scratch.Cast.toString(args.NAME))];
+    }
+    responseHeader(args) {
+      const name = normalizeHeaderName(Scratch.Cast.toString(args.NAME));
+      return firstValue(this.currentContext()?.response.headers[name]);
+    }
+    setResponseBody(args) {
+      const context = this.mutableCurrentContext();
+      if (!context) return;
+      context.response.body = { kind: "text", text: Scratch.Cast.toString(args.BODY) };
+    }
+    sendResponse(args) {
+      const context = this.mutableCurrentContext();
+      if (!context) return;
+      context.response.body = { kind: "text", text: Scratch.Cast.toString(args.BODY) };
+      this.completeResponse(context);
+    }
+    respondWithText(args) {
+      this.setResponseHeader({ NAME: "content-type", VALUE: "text/plain; charset=utf-8" });
+      this.sendResponse({ BODY: args.BODY });
+    }
+    respondWithHtml(args) {
+      this.setResponseHeader({ NAME: "content-type", VALUE: "text/html; charset=utf-8" });
+      this.sendResponse({ BODY: args.BODY });
+    }
+    respondWithJson(args) {
+      this.setResponseHeader({ NAME: "content-type", VALUE: "application/json; charset=utf-8" });
+      this.sendResponse({ BODY: args.BODY });
+    }
+    receiveBridgeRequestForTest(request) {
+      this.acceptBridgeRequest(request);
     }
     recordHttpLog(args) {
       this.httpLogs.push(this.parseLogEntry(Scratch.Cast.toString(args.ENTRY)));
@@ -209,6 +324,54 @@
       if (message instanceof ArrayBuffer) return new TextDecoder().decode(message);
       return String(message);
     }
+    receiveBridgeMessage(message) {
+      try {
+        const parsed = JSON.parse(message);
+        if (parsed.type === "request" && typeof parsed.id === "string") {
+          this.acceptBridgeRequest(parsed);
+        }
+      } catch {
+        return;
+      }
+    }
+    acceptBridgeRequest(request) {
+      this.requestContexts.set(request.id, {
+        request: {
+          ...request,
+          headers: normalizeHeaderRecord(request.headers),
+          query: normalizeValueRecord(request.query),
+          pathParams: normalizePathParams(request.pathParams)
+        },
+        response: {
+          status: 200,
+          headers: {},
+          body: { kind: "empty" },
+          completed: false
+        }
+      });
+      this.currentRequestContextId = request.id;
+    }
+    currentContext() {
+      return this.requestContexts.get(this.currentRequestContextId);
+    }
+    mutableCurrentContext() {
+      const context = this.currentContext();
+      return context && !context.response.completed ? context : void 0;
+    }
+    completeResponse(context) {
+      if (context.response.completed) return;
+      context.response.completed = true;
+      const message = {
+        type: "response",
+        id: context.request.id,
+        status: context.response.status,
+        headers: context.response.headers,
+        body: context.response.body
+      };
+      this.socket?.send(JSON.stringify(message));
+      this.requestContexts.delete(context.request.id);
+      if (this.currentRequestContextId === context.request.id) this.currentRequestContextId = "";
+    }
     recordLogMessage(message) {
       const parsed = this.parseLogEntry(message);
       if (isLogLike(parsed)) this.httpLogs.push(parsed);
@@ -298,6 +461,27 @@
   }
   function isLogLike(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function normalizeHeaderRecord(headers) {
+    const normalized = {};
+    for (const [name, values] of Object.entries(headers ?? {})) {
+      normalized[normalizeHeaderName(name)] = values.map((value) => String(value));
+    }
+    return normalized;
+  }
+  function normalizeValueRecord(values) {
+    const normalized = {};
+    for (const [name, items] of Object.entries(values ?? {})) {
+      normalized[name] = items.map((value) => String(value));
+    }
+    return normalized;
+  }
+  function normalizePathParams(values) {
+    const normalized = {};
+    for (const [name, value] of Object.entries(values ?? {})) {
+      normalized[name] = String(value);
+    }
+    return normalized;
   }
   function escapeMarkdownLine(value) {
     return value.replace(/\\/g, "\\\\").replace(/([`*_#[\]])/g, "\\$1").replace(/\r?\n/g, " ");

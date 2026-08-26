@@ -122,6 +122,63 @@ render HTML document title [Camera] body [section]
 
 server diagnostics 向けに、`HTTP log viewer HTML` は virtual-scroll log viewport を持つ self-contained HTML document を返します。`record HTTP log [ENTRY]` で structured log JSON を追加し、`clear HTTP logs` で消去できます。明示的な JSON array から viewer を作る場合は `HTTP log viewer HTML from [LOGS]` を使います。
 
+## Request Protocol And Blocks
+
+`/@assets` で処理されない通常の HTTP route は、CLI server から connected TurboWarp extension へ WebSocket 経由で forward されます。各 request には一意の request ID が付き、request context は ID ごとに分離されます。
+
+protocol v1 の request message は、query parameter と header の複数値を保持します。
+
+```json
+{
+  "type": "request",
+  "protocol": "turbowarp-http-server",
+  "version": 1,
+  "id": "req-1",
+  "method": "GET",
+  "url": "http://127.0.0.1:8787/users/42?tag=a&tag=b",
+  "path": "/users/42",
+  "route": "/users/:id",
+  "pathParams": {"id": "42"},
+  "query": {"tag": ["a", "b"]},
+  "headers": {"accept": ["text/html"]},
+  "body": {"kind": "empty"},
+  "clientAddress": ""
+}
+```
+
+TurboWarp blocks は selected current request を参照できます。
+
+```text
+current HTTP method
+current request path
+current request URL
+request header [name]
+query parameter [name]
+path parameter [name]
+current request body
+current request content type
+current request ID
+```
+
+simple query/header reporter は最初の値を返します。wire protocol は全値を保持するため、将来 list-oriented block を追加しても protocol を壊さずに済みます。
+
+response blocks は current request の response builder を変更し、最後に response message として完了します。
+
+```text
+set HTTP status [200]
+set response header [name] to [value]
+remove response header [name]
+set response body [body]
+send response [body]
+respond with text [body]
+respond with HTML [body]
+respond with JSON [body]
+```
+
+response status の既定値は `200` です。`100` から `599` の範囲外の status、不安全な response header、CR/LF を含む header injection value、`Content-Length` のような runtime-owned header は Node.js の HTTP response API に届く前に無視または拒否されます。server boundary では `HEAD`、`204`、`205`、`304` の body を抑止します。
+
+bridge が未接続の場合、通常 route は `503` を返します。connected bridge が timeout までに応答しない場合は `504`、pending request 中に WebSocket が切断された場合は `502` を返します。
+
 ## Live-Camera Pattern
 
 低頻度 camera publishing は、次の 3 つを独立して組み合わせます。
