@@ -152,6 +152,31 @@ describe('TurboWarpHttpServerExtension', () => {
     );
   });
 
+  it('prevents cyclic HTML builder trees', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    const parent = extension.newHtmlElement({TAG: 'div'});
+    const child = extension.newHtmlElement({TAG: 'span'});
+
+    extension.htmlAppendChild({PARENT: parent, CHILD: child});
+    extension.htmlAppendChild({PARENT: child, CHILD: parent});
+    extension.htmlAppendChild({PARENT: parent, CHILD: parent});
+
+    expect(extension.renderHtml({NODE: parent})).toBe('<div><span></span></div>');
+  });
+
+  it('rejects unsafe URL attributes in HTML builder output', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    const link = extension.newHtmlElement({TAG: 'a'});
+    const image = extension.newHtmlElement({TAG: 'img'});
+
+    extension.htmlSetAttribute({NODE: link, NAME: 'href', VALUE: 'javascript:alert(1)'});
+    extension.htmlSetAttribute({NODE: link, NAME: 'data-id', VALUE: '42'});
+    extension.htmlSetAttribute({NODE: image, NAME: 'src', VALUE: 'https://example.com/image.jpg'});
+
+    expect(extension.renderHtml({NODE: link})).toBe('<a data-id="42"></a>');
+    expect(extension.renderHtml({NODE: image})).toBe('<img src="https://example.com/image.jpg">');
+  });
+
   it('renders a self-contained virtual-scroll HTTP log viewer', () => {
     const extension = new TurboWarpHttpServerExtension();
 

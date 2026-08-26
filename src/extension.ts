@@ -62,6 +62,8 @@ const ALLOWED_HTML_TAGS = new Set([
 const VOID_HTML_TAGS = new Set(['img', 'input']);
 const VALID_ATTRIBUTE = /^[a-zA-Z_:][a-zA-Z0-9:_.-]*$/;
 const VALID_MARKDOWN_LANGUAGE = /^[a-zA-Z0-9_+.-]*$/;
+const URL_ATTRIBUTES = new Set(['action', 'href', 'src']);
+const SAFE_URL_PATTERN = /^(#|\/(?!\/)|\.{0,2}\/|https?:|mailto:|tel:)/i;
 
 type HtmlNode = HtmlElementNode | HtmlTextNode;
 
@@ -208,8 +210,15 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
     const handle = this.ensureHtmlElementHandle(args.NODE);
     const node = this.htmlNodes.get(handle);
     const name = Scratch.Cast.toString(args.NAME).trim();
-    if (node?.kind === 'element' && VALID_ATTRIBUTE.test(name) && !name.toLowerCase().startsWith('on')) {
-      node.attributes[name] = Scratch.Cast.toString(args.VALUE);
+    const normalizedName = name.toLowerCase();
+    const value = Scratch.Cast.toString(args.VALUE);
+    if (
+      node?.kind === 'element' &&
+      VALID_ATTRIBUTE.test(name) &&
+      !normalizedName.startsWith('on') &&
+      isSafeAttributeValue(normalizedName, value)
+    ) {
+      node.attributes[name] = value;
     }
     return handle;
   }
@@ -218,20 +227,26 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
     const parentHandle = this.ensureHtmlElementHandle(args.PARENT);
     const childHandle = Scratch.Cast.toString(args.CHILD);
     const parent = this.htmlNodes.get(parentHandle);
-    if (parent?.kind === 'element' && this.htmlNodes.has(childHandle)) {
+    if (
+      parent?.kind === 'element' &&
+      this.htmlNodes.has(childHandle) &&
+      parentHandle !== childHandle &&
+      !this.hasHtmlDescendant(childHandle, parentHandle, new Set())
+    ) {
       parent.children.push(childHandle);
     }
     return parentHandle;
   }
 
   public renderHtml(args: {NODE: unknown}): string {
-    return this.renderHtmlNode(Scratch.Cast.toString(args.NODE));
+    return this.renderHtmlNode(Scratch.Cast.toString(args.NODE), new Set());
   }
 
   public renderHtmlDocument(args: {TITLE: unknown; BODY: unknown}): string {
     const title = escapeHtml(Scratch.Cast.toString(args.TITLE));
     return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${this.renderHtmlNode(
-      Scratch.Cast.toString(args.BODY)
+      Scratch.Cast.toString(args.BODY),
+      new Set()
     )}</body></html>`;
   }
 
@@ -288,15 +303,32 @@ function escapeHtml(value){return value.replace(/[&<>"']/g,ch=>({'&':'&amp;','<'
     return this.newHtmlElement({TAG: 'div'});
   }
 
-  private renderHtmlNode(handle: string): string {
+  private renderHtmlNode(handle: string, visiting: Set<string>): string {
+    if (visiting.has(handle)) return '';
     const node = this.htmlNodes.get(handle);
     if (!node) return '';
     if (node.kind === 'text') return escapeHtml(node.text);
+    visiting.add(handle);
     const attributes = Object.entries(node.attributes)
       .map(([name, value]) => ` ${name}="${escapeHtml(value)}"`)
       .join('');
-    if (VOID_HTML_TAGS.has(node.tag)) return `<${node.tag}${attributes}>`;
-    return `<${node.tag}${attributes}>${node.children.map((child) => this.renderHtmlNode(child)).join('')}</${node.tag}>`;
+    if (VOID_HTML_TAGS.has(node.tag)) {
+      visiting.delete(handle);
+      return `<${node.tag}${attributes}>`;
+    }
+    const children = node.children.map((child) => this.renderHtmlNode(child, visiting)).join('');
+    visiting.delete(handle);
+    return `<${node.tag}${attributes}>${children}</${node.tag}>`;
+  }
+
+  private hasHtmlDescendant(handle: string, targetHandle: string, visited: Set<string>): boolean {
+    if (visited.has(handle)) return false;
+    visited.add(handle);
+    const node = this.htmlNodes.get(handle);
+    if (node?.kind !== 'element') return false;
+    return node.children.some(
+      (child) => child === targetHandle || this.hasHtmlDescendant(child, targetHandle, visited)
+    );
   }
 
   private nextHandle(prefix: 'md' | 'html'): string {
@@ -338,6 +370,11 @@ function escapeMarkdownParagraph(value: string): string {
 function normalizeHtmlTag(value: string): string {
   const tag = value.trim().toLowerCase();
   return ALLOWED_HTML_TAGS.has(tag) ? tag : 'div';
+}
+
+function isSafeAttributeValue(name: string, value: string): boolean {
+  if (!URL_ATTRIBUTES.has(name)) return true;
+  return SAFE_URL_PATTERN.test(value.trim());
 }
 
 function escapeHtml(value: string): string {

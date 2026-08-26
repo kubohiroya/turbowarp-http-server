@@ -63,6 +63,8 @@
   const VOID_HTML_TAGS = /* @__PURE__ */ new Set(["img", "input"]);
   const VALID_ATTRIBUTE = /^[a-zA-Z_:][a-zA-Z0-9:_.-]*$/;
   const VALID_MARKDOWN_LANGUAGE = /^[a-zA-Z0-9_+.-]*$/;
+  const URL_ATTRIBUTES = /* @__PURE__ */ new Set(["action", "href", "src"]);
+  const SAFE_URL_PATTERN = /^(#|\/(?!\/)|\.{0,2}\/|https?:|mailto:|tel:)/i;
   class TurboWarpHttpServerExtension {
     constructor() {
       this.serverUrl = DEFAULT_SERVER_URL;
@@ -176,8 +178,10 @@
       const handle = this.ensureHtmlElementHandle(args.NODE);
       const node = this.htmlNodes.get(handle);
       const name = Scratch.Cast.toString(args.NAME).trim();
-      if (node?.kind === "element" && VALID_ATTRIBUTE.test(name) && !name.toLowerCase().startsWith("on")) {
-        node.attributes[name] = Scratch.Cast.toString(args.VALUE);
+      const normalizedName = name.toLowerCase();
+      const value = Scratch.Cast.toString(args.VALUE);
+      if (node?.kind === "element" && VALID_ATTRIBUTE.test(name) && !normalizedName.startsWith("on") && isSafeAttributeValue(normalizedName, value)) {
+        node.attributes[name] = value;
       }
       return handle;
     }
@@ -185,18 +189,19 @@
       const parentHandle = this.ensureHtmlElementHandle(args.PARENT);
       const childHandle = Scratch.Cast.toString(args.CHILD);
       const parent = this.htmlNodes.get(parentHandle);
-      if (parent?.kind === "element" && this.htmlNodes.has(childHandle)) {
+      if (parent?.kind === "element" && this.htmlNodes.has(childHandle) && parentHandle !== childHandle && !this.hasHtmlDescendant(childHandle, parentHandle, /* @__PURE__ */ new Set())) {
         parent.children.push(childHandle);
       }
       return parentHandle;
     }
     renderHtml(args) {
-      return this.renderHtmlNode(Scratch.Cast.toString(args.NODE));
+      return this.renderHtmlNode(Scratch.Cast.toString(args.NODE), /* @__PURE__ */ new Set());
     }
     renderHtmlDocument(args) {
       const title = escapeHtml(Scratch.Cast.toString(args.TITLE));
       return `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${this.renderHtmlNode(
-        Scratch.Cast.toString(args.BODY)
+        Scratch.Cast.toString(args.BODY),
+        /* @__PURE__ */ new Set()
       )}</body></html>`;
     }
     stringifyMessage(message) {
@@ -245,13 +250,29 @@
       if (node?.kind === "element") return handle;
       return this.newHtmlElement({ TAG: "div" });
     }
-    renderHtmlNode(handle) {
+    renderHtmlNode(handle, visiting) {
+      if (visiting.has(handle)) return "";
       const node = this.htmlNodes.get(handle);
       if (!node) return "";
       if (node.kind === "text") return escapeHtml(node.text);
+      visiting.add(handle);
       const attributes = Object.entries(node.attributes).map(([name, value]) => ` ${name}="${escapeHtml(value)}"`).join("");
-      if (VOID_HTML_TAGS.has(node.tag)) return `<${node.tag}${attributes}>`;
-      return `<${node.tag}${attributes}>${node.children.map((child) => this.renderHtmlNode(child)).join("")}</${node.tag}>`;
+      if (VOID_HTML_TAGS.has(node.tag)) {
+        visiting.delete(handle);
+        return `<${node.tag}${attributes}>`;
+      }
+      const children = node.children.map((child) => this.renderHtmlNode(child, visiting)).join("");
+      visiting.delete(handle);
+      return `<${node.tag}${attributes}>${children}</${node.tag}>`;
+    }
+    hasHtmlDescendant(handle, targetHandle, visited) {
+      if (visited.has(handle)) return false;
+      visited.add(handle);
+      const node = this.htmlNodes.get(handle);
+      if (node?.kind !== "element") return false;
+      return node.children.some(
+        (child) => child === targetHandle || this.hasHtmlDescendant(child, targetHandle, visited)
+      );
     }
     nextHandle(prefix) {
       const handle = `${prefix}:${this.nextHandleId}`;
@@ -287,6 +308,10 @@
   function normalizeHtmlTag(value) {
     const tag = value.trim().toLowerCase();
     return ALLOWED_HTML_TAGS.has(tag) ? tag : "div";
+  }
+  function isSafeAttributeValue(name, value) {
+    if (!URL_ATTRIBUTES.has(name)) return true;
+    return SAFE_URL_PATTERN.test(value.trim());
   }
   function escapeHtml(value) {
     return value.replace(/[&<>"']/g, (character) => {
