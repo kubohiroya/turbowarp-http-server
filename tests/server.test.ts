@@ -1,6 +1,8 @@
 import {describe, expect, it} from 'vitest';
 import {readFile} from 'node:fs/promises';
-import {createApp} from '../src/server.js';
+import {createServer} from 'node:net';
+import {WebSocket} from 'ws';
+import {createApp, startServer} from '../src/server.js';
 import type {
   ResourceCapability,
   ResourceLogEvent,
@@ -59,6 +61,22 @@ describe('HTTP bridge server app', () => {
     expect(headResponse.headers.get('content-type')).toBe('image/jpeg');
     expect(headResponse.headers.get('content-length')).toBe('4');
     expect(await headResponse.text()).toBe('');
+  });
+
+  it('uses the actual byte length for in-memory resource responses', async () => {
+    const resources = new MemoryResources();
+    resources.seed('', {
+      name: 'live-camera',
+      mimeType: 'image/jpeg',
+      bytes: jpegBytes,
+      byteLength: 999,
+      replacementId: 'frame-1'
+    });
+
+    const response = await createApp({resources}).request('/@assets/live-camera');
+
+    expect(response.headers.get('content-length')).toBe('4');
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(jpegBytes);
   });
 
   it('supports conditional GET with ETag', async () => {
@@ -334,6 +352,19 @@ describe('HTTP bridge server app', () => {
     expect(dependencies).not.toHaveProperty('turbowarp-camera-source');
     expect(dependencies).not.toHaveProperty('turbowarp-html');
   });
+
+  it('closes upgraded WebSocket clients during server shutdown', async () => {
+    const port = await getFreePort();
+    const server = startServer({hostname: '127.0.0.1', port});
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+
+    await onceOpen(socket);
+    const closed = onceClose(socket);
+    await server.close();
+    await closed;
+
+    expect(socket.readyState).toBe(WebSocket.CLOSED);
+  });
 });
 
 interface MemoryResourceOptions {
@@ -440,4 +471,30 @@ function snapshotMetadata(snapshot: ResourceSnapshot): ResourceMetadata {
   if (snapshot.lastModified !== undefined) metadata.lastModified = snapshot.lastModified;
   if (snapshot.cacheControl !== undefined) metadata.cacheControl = snapshot.cacheControl;
   return metadata;
+}
+
+function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      server.close(() => {
+        if (typeof address === 'object' && address !== null) resolve(address.port);
+        else reject(new Error('Unable to allocate a free port.'));
+      });
+    });
+  });
+}
+
+function onceOpen(socket: WebSocket): Promise<void> {
+  return new Promise((resolve, reject) => {
+    socket.once('open', () => resolve());
+    socket.once('error', reject);
+  });
+}
+
+function onceClose(socket: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    socket.once('close', () => resolve());
+  });
 }

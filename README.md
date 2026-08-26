@@ -160,7 +160,7 @@ markdown [md:1] with paragraph [OK]
 render markdown [md:1]
 ```
 
-HTML builders use opaque handles such as `html:1`. Text and attributes are escaped, event-handler attributes such as `onclick` are ignored, and unknown tags fall back to `div`.
+HTML builders use opaque handles such as `html:1`. Text and attributes are escaped, event-handler attributes such as `onclick` are ignored, URL attributes only accept conservative safe schemes, and unknown tags fall back to `div`.
 
 ```text
 new HTML element [section]

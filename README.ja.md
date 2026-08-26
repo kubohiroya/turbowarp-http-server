@@ -111,7 +111,7 @@ markdown [md:1] with paragraph [OK]
 render markdown [md:1]
 ```
 
-HTML builder は `html:1` のような opaque handle を使います。text と attribute は escape され、`onclick` のような event-handler attribute は無視され、未知の tag は `div` に fallback します。
+HTML builder は `html:1` のような opaque handle を使います。text と attribute は escape され、`onclick` のような event-handler attribute は無視され、URL attribute は保守的な safe scheme のみを受け付け、未知の tag は `div` に fallback します。
 
 ```text
 new HTML element [section]

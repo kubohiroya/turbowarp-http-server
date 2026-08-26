@@ -28,6 +28,7 @@ export function createApp(options = {}) {
 export function startServer(options) {
     const app = createApp(options);
     const wss = new WebSocketServer({ noServer: true });
+    const sockets = new Set();
     const server = serve({
         fetch: app.fetch,
         hostname: options.hostname,
@@ -39,6 +40,10 @@ export function startServer(options) {
             return;
         }
         wss.handleUpgrade(request, socket, head, (ws) => {
+            sockets.add(ws);
+            ws.on('close', () => {
+                sockets.delete(ws);
+            });
             ws.send(JSON.stringify({
                 type: 'hello',
                 protocol: 'turbowarp-http-server',
@@ -52,15 +57,40 @@ export function startServer(options) {
     return {
         hostname: options.hostname,
         port: options.port,
-        close: () => new Promise((resolve, reject) => {
-            server.close((error) => {
-                if (error)
-                    reject(error);
-                else
-                    resolve();
-            });
-        })
+        close: async () => {
+            const socketClosePromises = Array.from(sockets, (socket) => closeSocket(socket));
+            await Promise.all([
+                new Promise((resolve, reject) => {
+                    server.close((error) => {
+                        if (error)
+                            reject(error);
+                        else
+                            resolve();
+                    });
+                }),
+                new Promise((resolve, reject) => {
+                    wss.close((error) => {
+                        if (error)
+                            reject(error);
+                        else
+                            resolve();
+                    });
+                }),
+                ...socketClosePromises
+            ]);
+            sockets.clear();
+        }
     };
+}
+function closeSocket(socket) {
+    return new Promise((resolve) => {
+        if (socket.readyState === socket.CLOSED) {
+            resolve();
+            return;
+        }
+        socket.once('close', () => resolve());
+        socket.terminate();
+    });
 }
 async function handleResourceRequest(c, options) {
     const route = parseResourceRoute(new URL(c.req.url).pathname);
@@ -237,7 +267,7 @@ function resourceHeaders(snapshot) {
     return headers;
 }
 function getByteLength(snapshot) {
-    return snapshot.byteLength ?? snapshot.bytes.byteLength;
+    return snapshot.bytes.byteLength;
 }
 function getEtag(snapshot) {
     const identity = snapshot.etag ?? snapshot.replacementId;

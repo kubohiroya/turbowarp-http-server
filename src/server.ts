@@ -3,6 +3,7 @@ import type {ServerType} from '@hono/node-server';
 import {Hono} from 'hono';
 import type {Context} from 'hono';
 import {secureHeaders} from 'hono/secure-headers';
+import type {WebSocket} from 'ws';
 import {WebSocketServer} from 'ws';
 
 export interface ServerOptions {
@@ -132,6 +133,7 @@ export function createApp(options: ServerAppOptions = {}): Hono {
 export function startServer(options: ServerOptions): RunningServer {
   const app = createApp(options);
   const wss = new WebSocketServer({noServer: true});
+  const sockets = new Set<WebSocket>();
   const server: ServerType = serve({
     fetch: app.fetch,
     hostname: options.hostname,
@@ -145,6 +147,10 @@ export function startServer(options: ServerOptions): RunningServer {
     }
 
     wss.handleUpgrade(request, socket, head, (ws) => {
+      sockets.add(ws);
+      ws.on('close', () => {
+        sockets.delete(ws);
+      });
       ws.send(
         JSON.stringify({
           type: 'hello',
@@ -161,14 +167,37 @@ export function startServer(options: ServerOptions): RunningServer {
   return {
     hostname: options.hostname,
     port: options.port,
-    close: () =>
-      new Promise((resolve, reject) => {
-        server.close((error) => {
-          if (error) reject(error);
-          else resolve();
-        });
-      })
+    close: async () => {
+      const socketClosePromises = Array.from(sockets, (socket) => closeSocket(socket));
+      await Promise.all([
+        new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        }),
+        new Promise<void>((resolve, reject) => {
+          wss.close((error) => {
+            if (error) reject(error);
+            else resolve();
+          });
+        }),
+        ...socketClosePromises
+      ]);
+      sockets.clear();
+    }
   };
+}
+
+function closeSocket(socket: WebSocket): Promise<void> {
+  return new Promise((resolve) => {
+    if (socket.readyState === socket.CLOSED) {
+      resolve();
+      return;
+    }
+    socket.once('close', () => resolve());
+    socket.terminate();
+  });
 }
 
 async function handleResourceRequest(
@@ -393,7 +422,7 @@ function resourceHeaders(snapshot: ResourceSnapshot): Headers {
 }
 
 function getByteLength(snapshot: ResourceSnapshot): number {
-  return snapshot.byteLength ?? snapshot.bytes.byteLength;
+  return snapshot.bytes.byteLength;
 }
 
 function getEtag(snapshot: ResourceSnapshot): string | undefined {
