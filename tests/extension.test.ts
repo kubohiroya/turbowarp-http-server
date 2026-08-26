@@ -32,7 +32,7 @@ beforeEach(() => {
   vi.stubGlobal('WebSocket', FakeWebSocket);
   vi.stubGlobal('Scratch', {
     BlockType: {COMMAND: 'command', REPORTER: 'reporter', BOOLEAN: 'boolean'},
-    ArgumentType: {STRING: 'string'},
+    ArgumentType: {STRING: 'string', NUMBER: 'number'},
     Cast: {
       toString: (value: unknown) => String(value),
       toNumber: (value: unknown) => Number(value),
@@ -75,7 +75,23 @@ describe('TurboWarpHttpServerExtension', () => {
       'disconnect',
       'isConnected',
       'sendText',
-      'lastMessage'
+      'lastMessage',
+      'recordHttpLog',
+      'clearHttpLogs',
+      'httpLogViewerHtml',
+      'httpLogViewerHtmlFromJson',
+      'newMarkdownDocument',
+      'markdownHeading',
+      'markdownParagraph',
+      'markdownBullet',
+      'markdownCodeBlock',
+      'renderMarkdown',
+      'newHtmlElement',
+      'htmlText',
+      'htmlSetAttribute',
+      'htmlAppendChild',
+      'renderHtml',
+      'renderHtmlDocument'
     ]);
   });
 
@@ -101,5 +117,57 @@ describe('TurboWarpHttpServerExtension', () => {
 
     expect(extension.lastMessage()).toBe('{"type":"pong"}');
     expect(extension.isConnected()).toBe(false);
+  });
+
+  it('builds Markdown text with chainable handles', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    const doc = extension.newMarkdownDocument();
+
+    extension.markdownHeading({DOC: doc, LEVEL: 2, TEXT: 'HTTP *Logs*'});
+    extension.markdownParagraph({DOC: doc, TEXT: 'Use <stable> response text.'});
+    extension.markdownBullet({DOC: doc, TEXT: 'GET /@assets/live-camera'});
+    extension.markdownCodeBlock({DOC: doc, CODE: 'status = 200', LANG: 'js'});
+
+    expect(extension.renderMarkdown({DOC: doc})).toBe(
+      '## HTTP \\*Logs\\*\n\nUse <stable> response text.\n\n- GET /@assets/live-camera\n\n```js\nstatus = 200\n```'
+    );
+  });
+
+  it('builds escaped HTML fragments and documents with element handles', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    const section = extension.newHtmlElement({TAG: 'section'});
+    const heading = extension.newHtmlElement({TAG: 'h1'});
+    const text = extension.htmlText({TEXT: '<Live & Logs>'});
+
+    extension.htmlAppendChild({PARENT: heading, CHILD: text});
+    extension.htmlSetAttribute({NODE: section, NAME: 'class', VALUE: 'panel'});
+    extension.htmlSetAttribute({NODE: section, NAME: 'onclick', VALUE: 'alert(1)'});
+    extension.htmlAppendChild({PARENT: section, CHILD: heading});
+
+    expect(extension.renderHtml({NODE: section})).toBe(
+      '<section class="panel"><h1>&lt;Live &amp; Logs&gt;</h1></section>'
+    );
+    expect(extension.renderHtmlDocument({TITLE: '<Dashboard>', BODY: section})).toContain(
+      '<title>&lt;Dashboard&gt;</title>'
+    );
+  });
+
+  it('renders a self-contained virtual-scroll HTTP log viewer', () => {
+    const extension = new TurboWarpHttpServerExtension();
+
+    extension.recordHttpLog({ENTRY: '{"method":"GET","path":"/camera","status":200}'});
+    const html = extension.httpLogViewerHtml();
+    const htmlFromJson = extension.httpLogViewerHtmlFromJson({
+      LOGS: '[{"method":"PUT","path":"/@assets/live-camera","status":204}]'
+    });
+
+    expect(html).toContain('HTTP logs');
+    expect(html).toContain('viewport');
+    expect(html).toContain('translateY');
+    expect(html).toContain('/camera');
+    expect(htmlFromJson).toContain('/@assets/live-camera');
+
+    extension.clearHttpLogs();
+    expect(extension.httpLogViewerHtml()).toContain('logs.length');
   });
 });

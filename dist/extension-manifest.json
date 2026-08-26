@@ -3,6 +3,11 @@
   "id": "kubohiroyaturbowarphttpserver",
   "blocks": [
     {
+      "opcode": "clearHttpLogs",
+      "blockType": "COMMAND",
+      "arguments": []
+    },
+    {
       "opcode": "connect",
       "blockType": "COMMAND",
       "arguments": []
@@ -13,6 +18,63 @@
       "arguments": []
     },
     {
+      "opcode": "htmlAppendChild",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "CHILD",
+          "type": "STRING"
+        },
+        {
+          "id": "PARENT",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "htmlSetAttribute",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "NODE",
+          "type": "STRING"
+        },
+        {
+          "id": "VALUE",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "htmlText",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "httpLogViewerHtml",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "httpLogViewerHtmlFromJson",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "LOGS",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
       "opcode": "isConnected",
       "blockType": "BOOLEAN",
       "arguments": []
@@ -21,6 +83,129 @@
       "opcode": "lastMessage",
       "blockType": "REPORTER",
       "arguments": []
+    },
+    {
+      "opcode": "markdownBullet",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "DOC",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "markdownCodeBlock",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "CODE",
+          "type": "STRING"
+        },
+        {
+          "id": "DOC",
+          "type": "STRING"
+        },
+        {
+          "id": "LANG",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "markdownHeading",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "DOC",
+          "type": "STRING"
+        },
+        {
+          "id": "LEVEL",
+          "type": "NUMBER"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "markdownParagraph",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "DOC",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "newHtmlElement",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "TAG",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "newMarkdownDocument",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "recordHttpLog",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "ENTRY",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "renderHtml",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NODE",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "renderHtmlDocument",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "BODY",
+          "type": "STRING"
+        },
+        {
+          "id": "TITLE",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "renderMarkdown",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "DOC",
+          "type": "STRING"
+        }
+      ]
     },
     {
       "opcode": "sendText",
