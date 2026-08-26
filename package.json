@@ -29,6 +29,7 @@
   "files": [
     "dist/",
     "docs/",
+    "examples/",
     "schemas/",
     "src/",
     "templates/",
@@ -47,12 +48,13 @@
     "build": "vite build && tsc -p tsconfig.cli.json",
     "lint": "eslint src tests vite.config.ts",
     "test": "vitest run",
+    "examples:check": "node scripts/check-examples.mjs",
     "docs": "node scripts/generate-readme.mjs",
     "docs:check": "node scripts/generate-readme.mjs --check",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "start": "node dist/cli.js",
     "check:dist": "pnpm run build && node scripts/check-dist.mjs",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run docs:check && pnpm run check:dist && pnpm run pack:check"
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run examples:check && pnpm run docs:check && pnpm run check:dist && pnpm run pack:check"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.6",

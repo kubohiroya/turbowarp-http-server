@@ -6,6 +6,8 @@ import type {Context} from 'hono';
 import {secureHeaders} from 'hono/secure-headers';
 import type {WebSocket} from 'ws';
 import {WebSocketServer} from 'ws';
+import {createCommunityApp} from './community.js';
+import type {CommunityServerOptions} from './community.js';
 import {
   HTTP_BRIDGE_PROTOCOL,
   HTTP_BRIDGE_PROTOCOL_VERSION,
@@ -29,6 +31,7 @@ export interface ServerOptions {
   authorizeResource?: ResourceAuthorizer;
   requestTimeoutMs?: number;
   routes?: readonly string[];
+  community?: false | CommunityServerOptions;
 }
 
 export interface RunningServer {
@@ -107,6 +110,7 @@ export interface ServerAppOptions {
   authorizeResource?: ResourceAuthorizer;
   bridge?: HttpRequestBridge;
   routes?: readonly string[];
+  community?: false | CommunityServerOptions;
 }
 
 const DEFAULT_MAX_RESOURCE_BODY_BYTES = 10 * 1024 * 1024;
@@ -127,6 +131,10 @@ export function createApp(options: ServerAppOptions = {}): Hono {
   const app = new Hono();
 
   app.use('*', secureHeaders());
+
+  if (options.community) {
+    app.route('/', createCommunityApp(options.community));
+  }
 
   app.get('/health', (c) =>
     c.json({

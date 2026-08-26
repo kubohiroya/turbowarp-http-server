@@ -51,6 +51,47 @@ The server exposes:
 
 Sprite routes are a separate TurboWarp-facing layer. A Sprite named `camera` can publish `/camera`, and hiding that Sprite can disable the route. Those Sprite handlers may serve HTML, JSON, redirects, or friendly aliases such as `/camera/image.jpg`; they should call into the Asset Manager capability instead of making `@assets` a child namespace of the Sprite.
 
+### Learning-only community server
+
+Issue #10 adds an optional Scratch-like project sharing app for local learning examples. It is disabled by default so the existing bridge and `@assets` routes keep their current behavior.
+
+Enable it from the CLI:
+
+```bash
+COMMUNITY=1 corepack pnpm start -- --host 127.0.0.1 --port 8787
+# or
+corepack pnpm start -- --host 127.0.0.1 --port 8787 --community
+```
+
+When enabled, the community app provides:
+
+| Route | Purpose |
+|---|---|
+| `GET /` | Project listing HTML and an upload form for logged-in users |
+| `GET /signup` / `POST /signup` | Demo password registration |
+| `GET /login` / `POST /login` | Demo password login |
+| `POST /logout` | Session logout |
+| `GET /auth/:provider/start` | Start a configured OAuth demo flow |
+| `GET /auth/:provider/callback` | Complete the OAuth demo flow |
+| `POST /projects` | Upload an SB3 project and optional thumbnail |
+| `GET /projects/:id` | Project detail HTML |
+| `GET /projects/:id.sb3` | SB3 download |
+| `POST /projects/:id/remix` | Create a remix linked to the source project |
+| `POST /projects/:id/update` | Owner-only metadata edit |
+| `POST /projects/:id/replace` | Owner-only SB3 and thumbnail replacement |
+| `POST /projects/:id/delete` | Owner-only project deletion |
+
+The demo hashes passwords with Node's standard `crypto.scrypt`, stores sessions in an HTTP-only `SameSite=Lax` cookie, issues CSRF tokens for HTML form posts, enforces multipart body limits before form parsing, applies per-file SB3 and thumbnail size limits, checks MIME types and file signatures, and rejects owner-only changes from other users. OAuth providers are enabled only when environment variables are present:
+
+```bash
+COMMUNITY_OAUTH_DEMO_CLIENT_ID=demo-client
+COMMUNITY_OAUTH_DEMO_AUTHORIZATION_URL=https://example.test/oauth/authorize
+COMMUNITY_OAUTH_DEMO_REDIRECT_URI=http://127.0.0.1:8787/auth/demo/callback
+COMMUNITY_OAUTH_DEMO_SCOPE=profile
+```
+
+This community server is a local educational implementation, not a public production service. Before exposing it on the internet, replace the in-memory storage with durable storage, add rate limiting and abuse moderation, use HTTPS with secure cookies, implement a complete OAuth token/userinfo exchange, add email or external identity verification as needed, scan uploads, add audit logging, and document backup, retention, takedown, and incident-response procedures.
+
 ### TurboWarp extension bundle
 
 1. Download [`dist/turbowarp-http-server.js`](dist/turbowarp-http-server.js?raw=1).
