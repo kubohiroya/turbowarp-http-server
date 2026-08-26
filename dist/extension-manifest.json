@@ -1,0 +1,47 @@
+{
+  "formatVersion": 1,
+  "id": "kubohiroyaturbowarphttpserver",
+  "blocks": [
+    {
+      "opcode": "connect",
+      "blockType": "COMMAND",
+      "arguments": []
+    },
+    {
+      "opcode": "disconnect",
+      "blockType": "COMMAND",
+      "arguments": []
+    },
+    {
+      "opcode": "isConnected",
+      "blockType": "BOOLEAN",
+      "arguments": []
+    },
+    {
+      "opcode": "lastMessage",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "sendText",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "MESSAGE",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "setServerUrl",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "URL",
+          "type": "STRING"
+        }
+      ]
+    }
+  ],
+  "menus": []
+}

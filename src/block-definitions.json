@@ -1,0 +1,51 @@
+{
+  "extensionName": "TurboWarp-HTTP-Server",
+  "blocks": [
+    {
+      "opcode": "setServerUrl",
+      "blockType": "COMMAND",
+      "text": "set HTTP bridge URL to [URL]",
+      "description": "Sets the WebSocket URL used to reach the HTTP bridge server.",
+      "arguments": {
+        "URL": {"type": "STRING", "defaultValue": "ws://127.0.0.1:8787/ws"}
+      }
+    },
+    {
+      "opcode": "connect",
+      "blockType": "COMMAND",
+      "text": "connect to HTTP bridge",
+      "description": "Opens a WebSocket connection to the configured HTTP bridge server.",
+      "arguments": {}
+    },
+    {
+      "opcode": "disconnect",
+      "blockType": "COMMAND",
+      "text": "disconnect from HTTP bridge",
+      "description": "Closes the current bridge connection.",
+      "arguments": {}
+    },
+    {
+      "opcode": "isConnected",
+      "blockType": "BOOLEAN",
+      "text": "HTTP bridge connected?",
+      "description": "Reports whether the bridge WebSocket is currently open.",
+      "arguments": {}
+    },
+    {
+      "opcode": "sendText",
+      "blockType": "COMMAND",
+      "text": "send [MESSAGE] to HTTP bridge",
+      "description": "Sends a text message to the connected HTTP bridge server.",
+      "arguments": {
+        "MESSAGE": {"type": "STRING", "defaultValue": "{\"type\":\"ping\"}"}
+      }
+    },
+    {
+      "opcode": "lastMessage",
+      "blockType": "REPORTER",
+      "text": "last HTTP bridge message",
+      "description": "Returns the most recent text message received from the bridge.",
+      "arguments": {}
+    }
+  ]
+}
