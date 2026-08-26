@@ -46,6 +46,154 @@
       "text": "last HTTP bridge message",
       "description": "Returns the most recent text message received from the bridge.",
       "arguments": {}
+    },
+    {
+      "opcode": "recordHttpLog",
+      "blockType": "COMMAND",
+      "text": "record HTTP log [ENTRY]",
+      "description": "Adds a structured HTTP log entry JSON string to the extension log buffer.",
+      "arguments": {
+        "ENTRY": {"type": "STRING", "defaultValue": "{\"method\":\"GET\",\"path\":\"/\",\"status\":200}"}
+      }
+    },
+    {
+      "opcode": "clearHttpLogs",
+      "blockType": "COMMAND",
+      "text": "clear HTTP logs",
+      "description": "Clears the extension log buffer.",
+      "arguments": {}
+    },
+    {
+      "opcode": "httpLogViewerHtml",
+      "blockType": "REPORTER",
+      "text": "HTTP log viewer HTML",
+      "description": "Returns a self-contained virtual-scroll HTML log viewer for buffered HTTP logs.",
+      "arguments": {}
+    },
+    {
+      "opcode": "httpLogViewerHtmlFromJson",
+      "blockType": "REPORTER",
+      "text": "HTTP log viewer HTML from [LOGS]",
+      "description": "Returns a self-contained virtual-scroll HTML log viewer from a JSON array of log entries.",
+      "arguments": {
+        "LOGS": {"type": "STRING", "defaultValue": "[{\"method\":\"GET\",\"path\":\"/\",\"status\":200}]"}
+      }
+    },
+    {
+      "opcode": "newMarkdownDocument",
+      "blockType": "REPORTER",
+      "text": "new markdown document",
+      "description": "Creates an empty Markdown builder handle.",
+      "arguments": {}
+    },
+    {
+      "opcode": "markdownHeading",
+      "blockType": "REPORTER",
+      "text": "markdown [DOC] with heading level [LEVEL] [TEXT]",
+      "description": "Appends a Markdown heading and returns the same builder handle.",
+      "arguments": {
+        "DOC": {"type": "STRING", "defaultValue": "md:1"},
+        "LEVEL": {"type": "NUMBER", "defaultValue": 1},
+        "TEXT": {"type": "STRING", "defaultValue": "Title"}
+      }
+    },
+    {
+      "opcode": "markdownParagraph",
+      "blockType": "REPORTER",
+      "text": "markdown [DOC] with paragraph [TEXT]",
+      "description": "Appends a Markdown paragraph and returns the same builder handle.",
+      "arguments": {
+        "DOC": {"type": "STRING", "defaultValue": "md:1"},
+        "TEXT": {"type": "STRING", "defaultValue": "Hello"}
+      }
+    },
+    {
+      "opcode": "markdownBullet",
+      "blockType": "REPORTER",
+      "text": "markdown [DOC] with bullet [TEXT]",
+      "description": "Appends a Markdown bullet and returns the same builder handle.",
+      "arguments": {
+        "DOC": {"type": "STRING", "defaultValue": "md:1"},
+        "TEXT": {"type": "STRING", "defaultValue": "Item"}
+      }
+    },
+    {
+      "opcode": "markdownCodeBlock",
+      "blockType": "REPORTER",
+      "text": "markdown [DOC] with code [CODE] language [LANG]",
+      "description": "Appends a fenced Markdown code block and returns the same builder handle.",
+      "arguments": {
+        "DOC": {"type": "STRING", "defaultValue": "md:1"},
+        "CODE": {"type": "STRING", "defaultValue": "console.log('hello')"},
+        "LANG": {"type": "STRING", "defaultValue": "js"}
+      }
+    },
+    {
+      "opcode": "renderMarkdown",
+      "blockType": "REPORTER",
+      "text": "render markdown [DOC]",
+      "description": "Renders a Markdown builder handle to Markdown text.",
+      "arguments": {
+        "DOC": {"type": "STRING", "defaultValue": "md:1"}
+      }
+    },
+    {
+      "opcode": "newHtmlElement",
+      "blockType": "REPORTER",
+      "text": "new HTML element [TAG]",
+      "description": "Creates an HTML element builder handle.",
+      "arguments": {
+        "TAG": {"type": "STRING", "defaultValue": "div"}
+      }
+    },
+    {
+      "opcode": "htmlText",
+      "blockType": "REPORTER",
+      "text": "HTML text [TEXT]",
+      "description": "Creates an escaped HTML text node handle.",
+      "arguments": {
+        "TEXT": {"type": "STRING", "defaultValue": "Hello"}
+      }
+    },
+    {
+      "opcode": "htmlSetAttribute",
+      "blockType": "REPORTER",
+      "text": "HTML [NODE] with attribute [NAME] [VALUE]",
+      "description": "Sets an escaped attribute on an HTML element and returns the same handle.",
+      "arguments": {
+        "NODE": {"type": "STRING", "defaultValue": "html:1"},
+        "NAME": {"type": "STRING", "defaultValue": "class"},
+        "VALUE": {"type": "STRING", "defaultValue": "content"}
+      }
+    },
+    {
+      "opcode": "htmlAppendChild",
+      "blockType": "REPORTER",
+      "text": "HTML [PARENT] with child [CHILD]",
+      "description": "Appends a child node to an HTML element and returns the parent handle.",
+      "arguments": {
+        "PARENT": {"type": "STRING", "defaultValue": "html:1"},
+        "CHILD": {"type": "STRING", "defaultValue": "html:2"}
+      }
+    },
+    {
+      "opcode": "renderHtml",
+      "blockType": "REPORTER",
+      "text": "render HTML [NODE]",
+      "description": "Renders an HTML node handle to an HTML fragment.",
+      "arguments": {
+        "NODE": {"type": "STRING", "defaultValue": "html:1"}
+      }
+    },
+    {
+      "opcode": "renderHtmlDocument",
+      "blockType": "REPORTER",
+      "text": "render HTML document title [TITLE] body [BODY]",
+      "description": "Renders a full HTML document from an HTML body node handle.",
+      "arguments": {
+        "TITLE": {"type": "STRING", "defaultValue": "Page"},
+        "BODY": {"type": "STRING", "defaultValue": "html:1"}
+      }
     }
   ]
 }

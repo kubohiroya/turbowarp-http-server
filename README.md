@@ -42,7 +42,14 @@ The server exposes:
 |---|---|
 | `GET /health` | Health check |
 | `GET /ws` | WebSocket endpoint used by the TurboWarp extension |
+| `GET /@assets/<name>` | Serve a named Asset Manager resource when a resource capability is attached |
+| `HEAD /@assets/<name>` | Return the same resource metadata without a body |
+| `PUT /@assets/<name>` | Create or atomically replace a named resource when supported |
+| `DELETE /@assets/<name>` | Remove a named resource when supported |
+| `GET /@assets/` | Return resource metadata without embedding binary payloads when supported |
 | Any other HTTP route | Temporary `503 not_connected` placeholder until HTTP forwarding is implemented |
+
+Sprite routes are a separate TurboWarp-facing layer. A Sprite named `camera` can publish `/camera`, and hiding that Sprite can disable the route. Those Sprite handlers may serve HTML, JSON, redirects, or friendly aliases such as `/camera/image.jpg`; they should call into the Asset Manager capability instead of making `@assets` a child namespace of the Sprite.
 
 ### TurboWarp extension bundle
 
@@ -84,6 +91,123 @@ connect to HTTP bridge
 send [{"type":"ping"}] to HTTP bridge
 last HTTP bridge message
 ```
+
+## Asset Manager Resource Serving
+
+The HTTP server is camera-agnostic. It serves generic named resources supplied by an external capability, such as `turbowarp-asset-manager`, without reading private extension fields or duplicating Asset Manager storage.
+
+The generic Asset Manager namespace is rooted at `/@assets/`. It is not owned by a Sprite route; it is managed by the background/server-side resource capability. Sprite routes can still expose friendly aliases, but the generic resource route stays global.
+
+| Resource | HTTP route |
+|---|---|
+| Resource `live-camera` | `/@assets/live-camera` |
+| Resource `logo` | `/@assets/logo` |
+
+The resource capability boundary provides:
+
+- logical resource name
+- MIME type
+- binary bytes for a consistent snapshot
+- byte length when known
+- replacement identity for ETag generation when available
+- optional last-modified timestamp
+- optional namespace publication policy
+
+Resource responses include `Content-Type`, `Content-Length`, `ETag` when identity is available, `Last-Modified` when supplied, and `Cache-Control`. The default cache policy is `no-cache` when ETag or last-modified metadata is available, and `no-store` when no validation metadata exists. `HEAD` returns the same metadata as `GET` with no body.
+
+`PUT` uses the request body bytes and `Content-Type` to create or replace a resource through the capability. The server enforces a configurable body-size limit before handing bytes to the capability, rejects unsupported MIME types when the capability reports them, and makes replacements visible atomically to subsequent requests. A `GET` already in progress receives the snapshot it started with.
+
+The management namespace `/_tw-http/` is reserved and is not treated as an asset route. Paths such as `/camera/@assets/live-camera` are not generic Asset Manager routes; use a Scratch/TurboWarp handler to alias friendly Sprite URLs to `/@assets/<name>` when needed. Resource authorization hooks, when configured, are applied to `GET`, `HEAD`, `PUT`, `DELETE`, and listing requests. Structured resource logs include metadata such as route, resource name, MIME type, byte count, and status; they do not include binary request or response bodies.
+
+## Sprite Route Model
+
+TurboWarp-facing routes should map naturally to visible project objects:
+
+| TurboWarp object | Public route |
+|---|---|
+| Stage/background script | `/` |
+| Sprite `camera` while visible | `/camera` |
+| Sprite `camera` while hidden | route disabled |
+
+This keeps Scratch interaction tangible: showing a Sprite publishes its route, and hiding it withdraws that route. Asset Manager resources remain global at `/@assets/<name>` so the same resource can be reused by multiple Sprite routes without duplicating storage.
+
+A live camera page can therefore be modeled as:
+
+```text
+Sprite: camera
+    visible -> /camera is enabled
+    hidden  -> /camera is disabled
+
+GET /camera
+    -> returns an HTML page built by the Sprite handler
+
+GET /camera/image.jpg
+    -> friendly handler/alias that serves /@assets/live-camera
+```
+
+In other words, `/camera/image.jpg` is a Sprite route decision, while `/@assets/live-camera` is the generic Asset Manager resource endpoint.
+
+## Response Content Builders
+
+The extension includes small builder-style blocks for response body construction. They are intentionally local to this package and do not introduce runtime dependencies on `turbowarp-html` or `turbowarp-markdown`.
+
+Markdown builders return opaque handles such as `md:1`, allowing block chains to append content and render the final Markdown text:
+
+```text
+new markdown document
+markdown [md:1] with heading level [1] [Status]
+markdown [md:1] with paragraph [OK]
+render markdown [md:1]
+```
+
+HTML builders use opaque handles such as `html:1`. Text and attributes are escaped, event-handler attributes such as `onclick` are ignored, and unknown tags fall back to `div`.
+
+```text
+new HTML element [section]
+HTML text [Live camera]
+HTML [section] with child [text]
+render HTML document title [Camera] body [section]
+```
+
+For server diagnostics, `HTTP log viewer HTML` returns a self-contained HTML document with a virtual-scroll log viewport. Scripts can append structured log JSON with `record HTTP log [ENTRY]`, clear it with `clear HTTP logs`, or render a viewer from an explicit JSON array with `HTTP log viewer HTML from [LOGS]`.
+
+## Live-Camera Pattern
+
+For low-frequency camera publishing, compose three independent pieces:
+
+```text
+TurboWarp Camera Source
+    -> capture current frame every 10 seconds
+    -> replace Asset Manager resource "live-camera"
+    -> HTTP Server serves /@assets/live-camera
+    -> browser loads the stable URL
+```
+
+The HTTP server does not depend on `turbowarp-camera-source` or `turbowarp-html`. Camera Source only produces snapshots; Asset Manager owns the named resource; HTTP Server serves the generic resource URL.
+
+Example block-level flow:
+
+```text
+forever
+  capture current camera frame
+  replace asset [live-camera] with captured JPEG bytes
+  wait 10 seconds
+end
+```
+
+External consumers can use the stable URL:
+
+```text
+/@assets/live-camera
+```
+
+If a friendlier URL is desired, a Scratch/TurboWarp route handler can alias:
+
+```text
+/camera/image.jpg -> /@assets/live-camera
+```
+
+An HTML page generated by `turbowarp-html` can refresh an `<img>` every 10 seconds, but cache correctness should come from HTTP validation headers, not timestamp query strings. With replacement identities from Asset Manager, clients can revalidate the stable URL using ETag and receive the newest snapshot without stale browser cache behavior.
 
 ## Block reference
 
@@ -146,6 +270,173 @@ Returns the most recent text message received from the bridge.
 |---|---|
 | Type | Reporter |
 | Opcode | `lastMessage` |
+
+### `record HTTP log [ENTRY]`
+
+Adds a structured HTTP log entry JSON string to the extension log buffer.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `recordHttpLog` |
+| `ENTRY` | String, default: `{"method":"GET","path":"/","status":200}` |
+
+### `clear HTTP logs`
+
+Clears the extension log buffer.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `clearHttpLogs` |
+
+### `HTTP log viewer HTML`
+
+Returns a self-contained virtual-scroll HTML log viewer for buffered HTTP logs.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `httpLogViewerHtml` |
+
+### `HTTP log viewer HTML from [LOGS]`
+
+Returns a self-contained virtual-scroll HTML log viewer from a JSON array of log entries.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `httpLogViewerHtmlFromJson` |
+| `LOGS` | String, default: `[{"method":"GET","path":"/","status":200}]` |
+
+### `new markdown document`
+
+Creates an empty Markdown builder handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `newMarkdownDocument` |
+
+### `markdown [DOC] with heading level [LEVEL] [TEXT]`
+
+Appends a Markdown heading and returns the same builder handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `markdownHeading` |
+| `DOC` | String, default: `md:1` |
+| `LEVEL` | Number, default: `1` |
+| `TEXT` | String, default: `Title` |
+
+### `markdown [DOC] with paragraph [TEXT]`
+
+Appends a Markdown paragraph and returns the same builder handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `markdownParagraph` |
+| `DOC` | String, default: `md:1` |
+| `TEXT` | String, default: `Hello` |
+
+### `markdown [DOC] with bullet [TEXT]`
+
+Appends a Markdown bullet and returns the same builder handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `markdownBullet` |
+| `DOC` | String, default: `md:1` |
+| `TEXT` | String, default: `Item` |
+
+### `markdown [DOC] with code [CODE] language [LANG]`
+
+Appends a fenced Markdown code block and returns the same builder handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `markdownCodeBlock` |
+| `DOC` | String, default: `md:1` |
+| `CODE` | String, default: `console.log('hello')` |
+| `LANG` | String, default: `js` |
+
+### `render markdown [DOC]`
+
+Renders a Markdown builder handle to Markdown text.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `renderMarkdown` |
+| `DOC` | String, default: `md:1` |
+
+### `new HTML element [TAG]`
+
+Creates an HTML element builder handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `newHtmlElement` |
+| `TAG` | String, default: `div` |
+
+### `HTML text [TEXT]`
+
+Creates an escaped HTML text node handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `htmlText` |
+| `TEXT` | String, default: `Hello` |
+
+### `HTML [NODE] with attribute [NAME] [VALUE]`
+
+Sets an escaped attribute on an HTML element and returns the same handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `htmlSetAttribute` |
+| `NODE` | String, default: `html:1` |
+| `NAME` | String, default: `class` |
+| `VALUE` | String, default: `content` |
+
+### `HTML [PARENT] with child [CHILD]`
+
+Appends a child node to an HTML element and returns the parent handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `htmlAppendChild` |
+| `PARENT` | String, default: `html:1` |
+| `CHILD` | String, default: `html:2` |
+
+### `render HTML [NODE]`
+
+Renders an HTML node handle to an HTML fragment.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `renderHtml` |
+| `NODE` | String, default: `html:1` |
+
+### `render HTML document title [TITLE] body [BODY]`
+
+Renders a full HTML document from an HTML body node handle.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `renderHtmlDocument` |
+| `TITLE` | String, default: `Page` |
+| `BODY` | String, default: `html:1` |
 
 <!-- END GENERATED BLOCKS -->
 
