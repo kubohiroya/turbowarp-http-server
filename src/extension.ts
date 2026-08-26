@@ -1,7 +1,16 @@
 import {extensionConfig} from './config';
 import definitions from './block-definitions.json';
+import {
+  firstValue,
+  isForbiddenResponseHeader,
+  isValidHttpStatus,
+  normalizeHeaderName,
+  validateHeaderName,
+  validateHeaderValue
+} from './protocol';
+import type {BridgeBody, BridgeRequestMessage, BridgeResponseMessage} from './protocol';
 
-type BlockTypeName = 'COMMAND' | 'REPORTER' | 'BOOLEAN';
+type BlockTypeName = 'COMMAND' | 'REPORTER' | 'BOOLEAN' | 'HAT';
 type ArgumentTypeName = 'STRING' | 'NUMBER';
 
 interface DefinitionArgument {
@@ -79,6 +88,18 @@ interface HtmlTextNode {
   text: string;
 }
 
+interface ResponseBuilder {
+  status: number;
+  headers: Record<string, string[]>;
+  body: BridgeBody;
+  completed: boolean;
+}
+
+interface RequestContext {
+  request: BridgeRequestMessage;
+  response: ResponseBuilder;
+}
+
 export class TurboWarpHttpServerExtension implements TurboWarpExtension {
   private serverUrl = DEFAULT_SERVER_URL;
   private socket: WebSocket | null = null;
@@ -87,6 +108,8 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
   private readonly httpLogs: unknown[] = [];
   private readonly markdownBuilders = new Map<string, string[]>();
   private readonly htmlNodes = new Map<string, HtmlNode>();
+  private readonly requestContexts = new Map<string, RequestContext>();
+  private currentRequestContextId = '';
 
   public getInfo(): Record<string, unknown> {
     return {
@@ -112,6 +135,7 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
     socket.addEventListener('message', (event) => {
       this.lastReceivedMessage = this.stringifyMessage(event.data);
       this.recordLogMessage(this.lastReceivedMessage);
+      this.receiveBridgeMessage(this.lastReceivedMessage);
     });
     socket.addEventListener('close', () => {
       if (this.socket === socket) this.socket = null;
@@ -137,6 +161,125 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
 
   public lastMessage(): string {
     return this.lastReceivedMessage;
+  }
+
+  public whenHttpRequestReceived(): boolean {
+    return false;
+  }
+
+  public useHttpRequest(args: {ID: unknown}): void {
+    const id = Scratch.Cast.toString(args.ID);
+    if (this.requestContexts.has(id)) this.currentRequestContextId = id;
+  }
+
+  public currentRequestId(): string {
+    return this.currentContext()?.request.id ?? '';
+  }
+
+  public currentHttpMethod(): string {
+    return this.currentContext()?.request.method ?? '';
+  }
+
+  public currentRequestPath(): string {
+    return this.currentContext()?.request.path ?? '';
+  }
+
+  public currentRequestUrl(): string {
+    return this.currentContext()?.request.url ?? '';
+  }
+
+  public requestHeader(args: {NAME: unknown}): string {
+    const name = normalizeHeaderName(Scratch.Cast.toString(args.NAME));
+    return firstValue(this.currentContext()?.request.headers[name]);
+  }
+
+  public queryParameter(args: {NAME: unknown}): string {
+    return firstValue(this.currentContext()?.request.query[Scratch.Cast.toString(args.NAME)]);
+  }
+
+  public pathParameter(args: {NAME: unknown}): string {
+    return this.currentContext()?.request.pathParams[Scratch.Cast.toString(args.NAME)] ?? '';
+  }
+
+  public currentRequestBody(): string {
+    const body = this.currentContext()?.request.body;
+    return body?.kind === 'text' ? body.text : '';
+  }
+
+  public currentRequestContentType(): string {
+    return this.requestHeader({NAME: 'content-type'});
+  }
+
+  public currentRequestClientAddress(): string {
+    return this.currentContext()?.request.clientAddress ?? '';
+  }
+
+  public currentResponseStatus(): number {
+    return this.currentContext()?.response.status ?? 200;
+  }
+
+  public setHttpStatus(args: {STATUS: unknown}): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    const status = Math.trunc(Scratch.Cast.toNumber(args.STATUS));
+    if (isValidHttpStatus(status)) context.response.status = status;
+  }
+
+  public setResponseHeader(args: {NAME: unknown; VALUE: unknown}): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    const name = normalizeHeaderName(Scratch.Cast.toString(args.NAME));
+    const value = Scratch.Cast.toString(args.VALUE);
+    if (
+      validateHeaderName(name) &&
+      validateHeaderValue(value) &&
+      !isForbiddenResponseHeader(name)
+    ) {
+      context.response.headers[name] = [value];
+    }
+  }
+
+  public removeResponseHeader(args: {NAME: unknown}): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    delete context.response.headers[normalizeHeaderName(Scratch.Cast.toString(args.NAME))];
+  }
+
+  public responseHeader(args: {NAME: unknown}): string {
+    const name = normalizeHeaderName(Scratch.Cast.toString(args.NAME));
+    return firstValue(this.currentContext()?.response.headers[name]);
+  }
+
+  public setResponseBody(args: {BODY: unknown}): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    context.response.body = {kind: 'text', text: Scratch.Cast.toString(args.BODY)};
+  }
+
+  public sendResponse(args: {BODY: unknown}): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    context.response.body = {kind: 'text', text: Scratch.Cast.toString(args.BODY)};
+    this.completeResponse(context);
+  }
+
+  public respondWithText(args: {BODY: unknown}): void {
+    this.setResponseHeader({NAME: 'content-type', VALUE: 'text/plain; charset=utf-8'});
+    this.sendResponse({BODY: args.BODY});
+  }
+
+  public respondWithHtml(args: {BODY: unknown}): void {
+    this.setResponseHeader({NAME: 'content-type', VALUE: 'text/html; charset=utf-8'});
+    this.sendResponse({BODY: args.BODY});
+  }
+
+  public respondWithJson(args: {BODY: unknown}): void {
+    this.setResponseHeader({NAME: 'content-type', VALUE: 'application/json; charset=utf-8'});
+    this.sendResponse({BODY: args.BODY});
+  }
+
+  public receiveBridgeRequestForTest(request: BridgeRequestMessage): void {
+    this.acceptBridgeRequest(request);
   }
 
   public recordHttpLog(args: {ENTRY: unknown}): void {
@@ -256,6 +399,59 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
     return String(message);
   }
 
+  private receiveBridgeMessage(message: string): void {
+    try {
+      const parsed = JSON.parse(message) as Partial<BridgeRequestMessage>;
+      if (parsed.type === 'request' && typeof parsed.id === 'string') {
+        this.acceptBridgeRequest(parsed as BridgeRequestMessage);
+      }
+    } catch {
+      return;
+    }
+  }
+
+  private acceptBridgeRequest(request: BridgeRequestMessage): void {
+    this.requestContexts.set(request.id, {
+      request: {
+        ...request,
+        headers: normalizeHeaderRecord(request.headers),
+        query: normalizeValueRecord(request.query),
+        pathParams: normalizePathParams(request.pathParams)
+      },
+      response: {
+        status: 200,
+        headers: {},
+        body: {kind: 'empty'},
+        completed: false
+      }
+    });
+    this.currentRequestContextId = request.id;
+  }
+
+  private currentContext(): RequestContext | undefined {
+    return this.requestContexts.get(this.currentRequestContextId);
+  }
+
+  private mutableCurrentContext(): RequestContext | undefined {
+    const context = this.currentContext();
+    return context && !context.response.completed ? context : undefined;
+  }
+
+  private completeResponse(context: RequestContext): void {
+    if (context.response.completed) return;
+    context.response.completed = true;
+    const message: BridgeResponseMessage = {
+      type: 'response',
+      id: context.request.id,
+      status: context.response.status,
+      headers: context.response.headers,
+      body: context.response.body
+    };
+    this.socket?.send(JSON.stringify(message));
+    this.requestContexts.delete(context.request.id);
+    if (this.currentRequestContextId === context.request.id) this.currentRequestContextId = '';
+  }
+
   private recordLogMessage(message: string): void {
     const parsed = this.parseLogEntry(message);
     if (isLogLike(parsed)) this.httpLogs.push(parsed);
@@ -357,6 +553,30 @@ function escapeHtml(value){return value.replace(/[&<>"']/g,ch=>({'&':'&amp;','<'
 
 function isLogLike(value: unknown): boolean {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeHeaderRecord(headers: Record<string, string[]>): Record<string, string[]> {
+  const normalized: Record<string, string[]> = {};
+  for (const [name, values] of Object.entries(headers ?? {})) {
+    normalized[normalizeHeaderName(name)] = values.map((value) => String(value));
+  }
+  return normalized;
+}
+
+function normalizeValueRecord(values: Record<string, string[]>): Record<string, string[]> {
+  const normalized: Record<string, string[]> = {};
+  for (const [name, items] of Object.entries(values ?? {})) {
+    normalized[name] = items.map((value) => String(value));
+  }
+  return normalized;
+}
+
+function normalizePathParams(values: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  for (const [name, value] of Object.entries(values ?? {})) {
+    normalized[name] = String(value);
+  }
+  return normalized;
 }
 
 function escapeMarkdownLine(value: string): string {

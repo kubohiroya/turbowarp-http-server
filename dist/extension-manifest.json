@@ -13,6 +13,46 @@
       "arguments": []
     },
     {
+      "opcode": "currentHttpMethod",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentRequestBody",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentRequestClientAddress",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentRequestContentType",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentRequestId",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentRequestPath",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentRequestUrl",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentResponseStatus",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
       "opcode": "disconnect",
       "blockType": "COMMAND",
       "arguments": []
@@ -164,11 +204,41 @@
       "arguments": []
     },
     {
+      "opcode": "pathParameter",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "queryParameter",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
       "opcode": "recordHttpLog",
       "blockType": "COMMAND",
       "arguments": [
         {
           "id": "ENTRY",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "removeResponseHeader",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
           "type": "STRING"
         }
       ]
@@ -208,11 +278,105 @@
       ]
     },
     {
+      "opcode": "requestHeader",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "respondWithHtml",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "BODY",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "respondWithJson",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "BODY",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "respondWithText",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "BODY",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "responseHeader",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "sendResponse",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "BODY",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
       "opcode": "sendText",
       "blockType": "COMMAND",
       "arguments": [
         {
           "id": "MESSAGE",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "setHttpStatus",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "STATUS",
+          "type": "NUMBER"
+        }
+      ]
+    },
+    {
+      "opcode": "setResponseBody",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "BODY",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "setResponseHeader",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "VALUE",
           "type": "STRING"
         }
       ]
@@ -226,6 +390,21 @@
           "type": "STRING"
         }
       ]
+    },
+    {
+      "opcode": "useHttpRequest",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "ID",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "whenHttpRequestReceived",
+      "blockType": "HAT",
+      "arguments": []
     }
   ],
   "menus": []

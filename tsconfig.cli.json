@@ -9,5 +9,5 @@
     "sourceMap": true,
     "noEmit": false
   },
-  "include": ["src/cli.ts", "src/server.ts"]
+  "include": ["src/cli.ts", "src/server.ts", "src/protocol.ts"]
 }

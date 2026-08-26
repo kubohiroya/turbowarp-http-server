@@ -48,6 +48,187 @@
       "arguments": {}
     },
     {
+      "opcode": "whenHttpRequestReceived",
+      "blockType": "HAT",
+      "text": "when HTTP request received",
+      "description": "Starts a TurboWarp handler thread when the bridge receives an HTTP request.",
+      "arguments": {}
+    },
+    {
+      "opcode": "useHttpRequest",
+      "blockType": "COMMAND",
+      "text": "use HTTP request [ID]",
+      "description": "Selects a pending request context by request ID.",
+      "arguments": {
+        "ID": {"type": "STRING", "defaultValue": "req-1"}
+      }
+    },
+    {
+      "opcode": "currentRequestId",
+      "blockType": "REPORTER",
+      "text": "current request ID",
+      "description": "Returns the current HTTP request ID.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentHttpMethod",
+      "blockType": "REPORTER",
+      "text": "current HTTP method",
+      "description": "Returns the current HTTP request method.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentRequestPath",
+      "blockType": "REPORTER",
+      "text": "current request path",
+      "description": "Returns the current HTTP request path.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentRequestUrl",
+      "blockType": "REPORTER",
+      "text": "current request URL",
+      "description": "Returns the current HTTP request URL.",
+      "arguments": {}
+    },
+    {
+      "opcode": "requestHeader",
+      "blockType": "REPORTER",
+      "text": "request header [NAME]",
+      "description": "Returns the first value of a request header using case-insensitive lookup.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "accept"}
+      }
+    },
+    {
+      "opcode": "queryParameter",
+      "blockType": "REPORTER",
+      "text": "query parameter [NAME]",
+      "description": "Returns the first query parameter value.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "q"}
+      }
+    },
+    {
+      "opcode": "pathParameter",
+      "blockType": "REPORTER",
+      "text": "path parameter [NAME]",
+      "description": "Returns a route path parameter value.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "id"}
+      }
+    },
+    {
+      "opcode": "currentRequestBody",
+      "blockType": "REPORTER",
+      "text": "current request body",
+      "description": "Returns the current textual request body, or an empty string for non-text bodies.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentRequestContentType",
+      "blockType": "REPORTER",
+      "text": "current request content type",
+      "description": "Returns the current request Content-Type header.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentRequestClientAddress",
+      "blockType": "REPORTER",
+      "text": "current request client address",
+      "description": "Returns the current request client address when available.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentResponseStatus",
+      "blockType": "REPORTER",
+      "text": "current response status",
+      "description": "Returns the response status currently being built.",
+      "arguments": {}
+    },
+    {
+      "opcode": "setHttpStatus",
+      "blockType": "COMMAND",
+      "text": "set HTTP status [STATUS]",
+      "description": "Sets the current response status.",
+      "arguments": {
+        "STATUS": {"type": "NUMBER", "defaultValue": 200}
+      }
+    },
+    {
+      "opcode": "setResponseHeader",
+      "blockType": "COMMAND",
+      "text": "set response header [NAME] to [VALUE]",
+      "description": "Sets a response header for the current request.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "content-type"},
+        "VALUE": {"type": "STRING", "defaultValue": "text/plain; charset=utf-8"}
+      }
+    },
+    {
+      "opcode": "removeResponseHeader",
+      "blockType": "COMMAND",
+      "text": "remove response header [NAME]",
+      "description": "Removes a response header for the current request.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "content-type"}
+      }
+    },
+    {
+      "opcode": "responseHeader",
+      "blockType": "REPORTER",
+      "text": "response header [NAME]",
+      "description": "Returns the first configured response header value.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "content-type"}
+      }
+    },
+    {
+      "opcode": "setResponseBody",
+      "blockType": "COMMAND",
+      "text": "set response body [BODY]",
+      "description": "Sets the current response body without completing the response.",
+      "arguments": {
+        "BODY": {"type": "STRING", "defaultValue": "Hello"}
+      }
+    },
+    {
+      "opcode": "sendResponse",
+      "blockType": "COMMAND",
+      "text": "send response [BODY]",
+      "description": "Sets the response body and completes the current request.",
+      "arguments": {
+        "BODY": {"type": "STRING", "defaultValue": "Hello"}
+      }
+    },
+    {
+      "opcode": "respondWithText",
+      "blockType": "COMMAND",
+      "text": "respond with text [BODY]",
+      "description": "Responds with plain text.",
+      "arguments": {
+        "BODY": {"type": "STRING", "defaultValue": "Hello"}
+      }
+    },
+    {
+      "opcode": "respondWithHtml",
+      "blockType": "COMMAND",
+      "text": "respond with HTML [BODY]",
+      "description": "Responds with HTML.",
+      "arguments": {
+        "BODY": {"type": "STRING", "defaultValue": "<p>Hello</p>"}
+      }
+    },
+    {
+      "opcode": "respondWithJson",
+      "blockType": "COMMAND",
+      "text": "respond with JSON [BODY]",
+      "description": "Responds with JSON.",
+      "arguments": {
+        "BODY": {"type": "STRING", "defaultValue": "{\"ok\":true}"}
+      }
+    },
+    {
       "opcode": "recordHttpLog",
       "blockType": "COMMAND",
       "text": "record HTTP log [ENTRY]",
