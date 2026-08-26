@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { CommunityServerOptions } from './community.js';
 import type { BridgeRequestMessage } from './protocol.js';
 export interface ServerOptions {
     hostname: string;
@@ -10,6 +11,7 @@ export interface ServerOptions {
     authorizeResource?: ResourceAuthorizer;
     requestTimeoutMs?: number;
     routes?: readonly string[];
+    community?: false | CommunityServerOptions;
 }
 export interface RunningServer {
     hostname: string;
@@ -73,6 +75,7 @@ export interface ServerAppOptions {
     authorizeResource?: ResourceAuthorizer;
     bridge?: HttpRequestBridge;
     routes?: readonly string[];
+    community?: false | CommunityServerOptions;
 }
 export interface HttpRequestBridge {
     forward(message: BridgeRequestMessage, method: string): Promise<Response>;

@@ -3,6 +3,7 @@ import { getConnInfo } from '@hono/node-server/conninfo';
 import { Hono } from 'hono';
 import { secureHeaders } from 'hono/secure-headers';
 import { WebSocketServer } from 'ws';
+import { createCommunityApp } from './community.js';
 import { HTTP_BRIDGE_PROTOCOL, HTTP_BRIDGE_PROTOCOL_VERSION, isBodyForbidden, isForbiddenResponseHeader, isValidHttpStatus, normalizeHeaderName, parseBridgeClientMessage, validateHeaderName, validateHeaderValue } from './protocol.js';
 const DEFAULT_MAX_RESOURCE_BODY_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
@@ -16,6 +17,9 @@ const TEXT_BODY_TYPES = [
 export function createApp(options = {}) {
     const app = new Hono();
     app.use('*', secureHeaders());
+    if (options.community) {
+        app.route('/', createCommunityApp(options.community));
+    }
     app.get('/health', (c) => c.json({
         ok: true,
         service: 'turbowarp-http-server'

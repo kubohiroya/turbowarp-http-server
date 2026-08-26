@@ -19,7 +19,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 function parseArgs(args) {
     const options = {
         hostname: process.env.HOST ?? '127.0.0.1',
-        port: parsePort(process.env.PORT ?? '8787')
+        port: parsePort(process.env.PORT ?? '8787'),
+        community: isTruthy(process.env.COMMUNITY) ? {} : false
     };
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
@@ -30,6 +31,9 @@ function parseArgs(args) {
         else if (arg === '--port') {
             options.port = parsePort(requireValue(args, index, '--port'));
             index += 1;
+        }
+        else if (arg === '--community') {
+            options.community = {};
         }
         else if (arg === '--help' || arg === '-h') {
             printHelp();
@@ -55,6 +59,9 @@ function parsePort(value) {
     }
     return port;
 }
+function isTruthy(value) {
+    return value === '1' || value === 'true' || value === 'yes';
+}
 function printHelp() {
     console.log(`Usage: turbowarp-http-server [--host <host>] [--port <port>]
 
@@ -63,6 +70,7 @@ Starts the companion HTTP/WebSocket bridge for the TurboWarp extension.
 Options:
   --host <host>  Hostname or address to bind. Defaults to HOST or 127.0.0.1.
   --port <port>  TCP port to bind. Defaults to PORT or 8787.
+  --community    Enable the learning-only Scratch-like community routes.
   -h, --help     Show this help.
 `);
 }
