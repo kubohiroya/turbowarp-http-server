@@ -4,6 +4,7 @@ const requiredArtifacts = [
   'dist/turbowarp-http-server.js',
   'dist/extension-manifest.json',
   'dist/cli.js',
+  'dist/digest-cli.js',
   'dist/server.js'
 ];
 const missing = [];

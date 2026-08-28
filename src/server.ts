@@ -1,11 +1,15 @@
 import {serve} from '@hono/node-server';
 import {getConnInfo} from '@hono/node-server/conninfo';
 import type {ServerType} from '@hono/node-server';
+import {createServer as createHttpsServer} from 'node:https';
+import type {ServerOptions as HttpsServerOptions} from 'node:https';
 import {Hono} from 'hono';
 import type {Context} from 'hono';
 import {secureHeaders} from 'hono/secure-headers';
 import type {WebSocket} from 'ws';
 import {WebSocketServer} from 'ws';
+import {DIGEST_AUTH_USER_HEADER, isLocalAddress, verifyDigestAuth} from './auth/digest.js';
+import type {DigestAuthOptions} from './auth/digest.js';
 import {createCommunityApp} from './community.js';
 import type {CommunityServerOptions} from './community.js';
 import {
@@ -29,6 +33,8 @@ export interface ServerOptions {
   maxRequestBodyBytes?: number;
   logger?: ResourceLogger;
   authorizeResource?: ResourceAuthorizer;
+  digestAuth?: DigestAuthOptions;
+  tls?: HttpsServerOptions;
   requestTimeoutMs?: number;
   routes?: readonly string[];
   community?: false | CommunityServerOptions;
@@ -108,6 +114,7 @@ export interface ServerAppOptions {
   maxRequestBodyBytes?: number;
   logger?: ResourceLogger;
   authorizeResource?: ResourceAuthorizer;
+  digestAuth?: DigestAuthOptions;
   bridge?: HttpRequestBridge;
   routes?: readonly string[];
   community?: false | CommunityServerOptions;
@@ -122,6 +129,7 @@ const TEXT_BODY_TYPES = [
   'application/xml',
   'text/'
 ];
+const authenticatedUsers = new WeakMap<Request, string>();
 
 export interface HttpRequestBridge {
   forward(message: BridgeRequestMessage, method: string): Promise<Response>;
@@ -131,6 +139,24 @@ export function createApp(options: ServerAppOptions = {}): Hono {
   const app = new Hono();
 
   app.use('*', secureHeaders());
+
+  if (options.digestAuth) {
+    app.use('*', async (c, next) => {
+      const result = await verifyDigestAuth(c.req.raw, c.req.method, options.digestAuth!);
+      if (!result.ok) {
+        return c.json(
+          {
+            error: 'authentication_required',
+            message: 'HTTP Digest authentication is required.'
+          },
+          401,
+          {'WWW-Authenticate': result.challenge ?? ''}
+        );
+      }
+      if (result.username) authenticatedUsers.set(c.req.raw, result.username);
+      await next();
+    });
+  }
 
   if (options.community) {
     app.route('/', createCommunityApp(options.community));
@@ -158,12 +184,15 @@ export function createApp(options: ServerAppOptions = {}): Hono {
     if (resourceResponse) return resourceResponse;
 
     if (options.bridge) {
+      const bridgeRequestOptions: BridgeRequestOptions = {
+        routes: options.routes ?? [],
+        maxBodyBytes: options.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES,
+        clientAddress: readClientAddress(c)
+      };
+      const authenticatedUser = authenticatedUsers.get(c.req.raw);
+      if (authenticatedUser) bridgeRequestOptions.authenticatedUser = authenticatedUser;
       return options.bridge.forward(
-        await createBridgeRequestMessage(c.req.raw, {
-          routes: options.routes ?? [],
-          maxBodyBytes: options.maxRequestBodyBytes ?? DEFAULT_MAX_REQUEST_BODY_BYTES,
-          clientAddress: readClientAddress(c)
-        }),
+        await createBridgeRequestMessage(c.req.raw, bridgeRequestOptions),
         c.req.method
       );
     }
@@ -188,11 +217,16 @@ export function startServer(options: ServerOptions): RunningServer {
   const server: ServerType = serve({
     fetch: app.fetch,
     hostname: options.hostname,
-    port: options.port
+    port: options.port,
+    ...(options.tls ? {createServer: createHttpsServer, serverOptions: options.tls} : {})
   });
 
   server.on('upgrade', (request, socket, head) => {
     if (new URL(request.url ?? '/', 'http://127.0.0.1').pathname !== '/ws') {
+      socket.destroy();
+      return;
+    }
+    if (!isLocalAddress(socket.remoteAddress)) {
       socket.destroy();
       return;
     }
@@ -342,12 +376,16 @@ interface BridgeRequestOptions {
   routes: readonly string[];
   maxBodyBytes: number;
   clientAddress: string;
+  authenticatedUser?: string;
 }
 
 async function createBridgeRequestMessage(request: Request, options: BridgeRequestOptions): Promise<BridgeRequestMessage> {
   const url = new URL(request.url);
   const routeMatch = matchRoute(url.pathname, options.routes);
-  return {
+  const headers = collectHeaders(request.headers);
+  delete headers[DIGEST_AUTH_USER_HEADER];
+  if (options.authenticatedUser) headers[DIGEST_AUTH_USER_HEADER] = [options.authenticatedUser];
+  const message: BridgeRequestMessage = {
     type: 'request',
     protocol: HTTP_BRIDGE_PROTOCOL,
     version: HTTP_BRIDGE_PROTOCOL_VERSION,
@@ -358,10 +396,17 @@ async function createBridgeRequestMessage(request: Request, options: BridgeReque
     route: routeMatch.route,
     pathParams: routeMatch.pathParams,
     query: collectQuery(url.searchParams),
-    headers: collectHeaders(request.headers),
+    headers,
     body: await readTextBridgeBody(request, options.maxBodyBytes),
     clientAddress: options.clientAddress
   };
+  if (options.authenticatedUser) {
+    message.auth = {
+      type: 'digest',
+      username: options.authenticatedUser
+    };
+  }
+  return message;
 }
 
 function toHttpResponse(message: BridgeResponseMessage, method: string): Response {

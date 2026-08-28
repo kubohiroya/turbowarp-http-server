@@ -36,6 +36,35 @@ From an installed package:
 turbowarp-http-server --host 127.0.0.1 --port 8787
 ```
 
+For an offline venue LAN, enable HTTP Digest authentication with an htdigest file:
+
+```bash
+turbowarp-http-digest init ./users.htdigest --realm turbowarp-lan
+turbowarp-http-digest add ./users.htdigest alice --realm turbowarp-lan
+
+turbowarp-http-server \
+  --host 0.0.0.0 \
+  --port 8787 \
+  --auth-digest ./users.htdigest \
+  --auth-realm turbowarp-lan
+```
+
+Digest authentication is intended for simple user identification on a trusted LAN where certificates and external identity providers are not available. It is disabled by default. The authenticated username is forwarded to TurboWarp handlers as the runtime-owned `x-turbowarp-http-auth-user` request header; an incoming client-supplied header with the same name is overwritten. The `/ws` endpoint is only accepted from localhost peers.
+
+TurboWarp handlers can read authentication context with reporter blocks: `current auth type`, `current authenticated user`, `current auth provider`, `current auth profile JSON`, and `auth profile field [NAME]`. Digest authentication provides the username. OAuth-capable deployments can forward provider profile data as request auth context, and handlers can read fields such as `email`, `name`, or dotted paths like `organization.name`.
+
+If a certificate and private key are already available, the server can run HTTPS directly:
+
+```bash
+turbowarp-http-server \
+  --host 0.0.0.0 \
+  --port 8787 \
+  --tls-cert ./certs/server.crt \
+  --tls-key ./certs/server.key
+```
+
+Certificate issuance, renewal, distribution, and OS/browser trust configuration are outside this package. For Internet-facing deployments, terminate TLS at a reverse proxy and use the Cloudflare/OAuth deployment path for authentication.
+
 The server exposes:
 
 | Route | Purpose |
@@ -480,6 +509,52 @@ Returns the current request client address when available.
 |---|---|
 | Type | Reporter |
 | Opcode | `currentRequestClientAddress` |
+
+### `current auth type`
+
+Returns the current authentication type, such as digest or oauth.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthType` |
+
+### `current authenticated user`
+
+Returns the authenticated username or a stable user-like profile field when available.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthenticatedUser` |
+
+### `current auth provider`
+
+Returns the authentication provider name when available.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthProvider` |
+
+### `current auth profile JSON`
+
+Returns the provider profile object as JSON when available.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthProfileJson` |
+
+### `auth profile field [NAME]`
+
+Returns a top-level or dotted field from the provider profile object.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `authProfileField` |
+| `NAME` | String, default: `email` |
 
 ### `current response status`
 

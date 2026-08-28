@@ -24,6 +24,7 @@
   ],
   "type": "module",
   "bin": {
+    "turbowarp-http-digest": "dist/digest-cli.js",
     "turbowarp-http-server": "dist/cli.js"
   },
   "files": [

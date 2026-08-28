@@ -1,4 +1,6 @@
+import type { ServerOptions as HttpsServerOptions } from 'node:https';
 import { Hono } from 'hono';
+import type { DigestAuthOptions } from './auth/digest.js';
 import type { CommunityServerOptions } from './community.js';
 import type { BridgeRequestMessage } from './protocol.js';
 export interface ServerOptions {
@@ -9,6 +11,8 @@ export interface ServerOptions {
     maxRequestBodyBytes?: number;
     logger?: ResourceLogger;
     authorizeResource?: ResourceAuthorizer;
+    digestAuth?: DigestAuthOptions;
+    tls?: HttpsServerOptions;
     requestTimeoutMs?: number;
     routes?: readonly string[];
     community?: false | CommunityServerOptions;
@@ -73,6 +77,7 @@ export interface ServerAppOptions {
     maxRequestBodyBytes?: number;
     logger?: ResourceLogger;
     authorizeResource?: ResourceAuthorizer;
+    digestAuth?: DigestAuthOptions;
     bridge?: HttpRequestBridge;
     routes?: readonly string[];
     community?: false | CommunityServerOptions;
