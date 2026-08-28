@@ -1,6 +1,11 @@
 import {describe, expect, it} from 'vitest';
-import {readFile} from 'node:fs/promises';
+import {execFile} from 'node:child_process';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {request as httpsRequest} from 'node:https';
 import {createServer} from 'node:net';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {promisify} from 'node:util';
 import {WebSocket} from 'ws';
 import {createApp, startServer} from '../src/server.js';
 import type {
@@ -16,6 +21,7 @@ import type {BridgeRequestMessage} from '../src/protocol.js';
 
 const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+const execFileAsync = promisify(execFile);
 
 describe('HTTP bridge server app', () => {
   it('reports health', async () => {
@@ -368,6 +374,26 @@ describe('HTTP bridge server app', () => {
     expect(socket.readyState).toBe(WebSocket.CLOSED);
   });
 
+  it('starts an HTTPS server when TLS options are provided', async () => {
+    const port = await getFreePort();
+    const tlsFiles = await createTestCertificate();
+    const [cert, key] = await Promise.all([readFile(tlsFiles.cert), readFile(tlsFiles.key)]);
+    const server = startServer({hostname: '127.0.0.1', port, tls: {cert, key}});
+
+    try {
+      const response = await httpsGetJson(`https://127.0.0.1:${port}/health`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        ok: true,
+        service: 'turbowarp-http-server'
+      });
+    } finally {
+      await server.close();
+      await rm(tlsFiles.dir, {recursive: true, force: true});
+    }
+  });
+
   it('forwards HTTP requests to the TurboWarp bridge protocol and returns bridge responses', async () => {
     const port = await getFreePort();
     const server = startServer({
@@ -690,4 +716,47 @@ function onceRequestMessage(socket: WebSocket): Promise<BridgeRequestMessage> {
     socket.on('message', onMessage);
     socket.once('error', reject);
   });
+}
+
+function httpsGetJson(url: string): Promise<{status: number; body: unknown}> {
+  return new Promise((resolve, reject) => {
+    const request = httpsRequest(url, {rejectUnauthorized: false}, (response) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer) => chunks.push(chunk));
+      response.on('end', () => {
+        try {
+          resolve({
+            status: response.statusCode ?? 0,
+            body: JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+async function createTestCertificate(): Promise<{dir: string; cert: string; key: string}> {
+  const dir = await mkdtemp(join(tmpdir(), 'tw-http-tls-'));
+  const cert = join(dir, 'server.crt');
+  const key = join(dir, 'server.key');
+  await execFileAsync('openssl', [
+    'req',
+    '-x509',
+    '-newkey',
+    'rsa:2048',
+    '-nodes',
+    '-keyout',
+    key,
+    '-out',
+    cert,
+    '-subj',
+    '/CN=127.0.0.1',
+    '-days',
+    '1'
+  ]);
+  return {dir, cert, key};
 }

@@ -92,6 +92,11 @@ describe('TurboWarpHttpServerExtension', () => {
       'currentRequestBody',
       'currentRequestContentType',
       'currentRequestClientAddress',
+      'currentAuthType',
+      'currentAuthenticatedUser',
+      'currentAuthProvider',
+      'currentAuthProfileJson',
+      'authProfileField',
       'currentResponseStatus',
       'setHttpStatus',
       'setResponseHeader',
@@ -167,6 +172,11 @@ describe('TurboWarpHttpServerExtension', () => {
     expect(extension.queryParameter({NAME: 'q'})).toBe('');
     expect(extension.pathParameter({NAME: 'id'})).toBe('');
     expect(extension.currentRequestBody()).toBe('');
+    expect(extension.currentAuthType()).toBe('');
+    expect(extension.currentAuthenticatedUser()).toBe('');
+    expect(extension.currentAuthProvider()).toBe('');
+    expect(extension.currentAuthProfileJson()).toBe('');
+    expect(extension.authProfileField({NAME: 'email'})).toBe('');
     expect(extension.currentResponseStatus()).toBe(200);
   });
 
@@ -182,7 +192,11 @@ describe('TurboWarpHttpServerExtension', () => {
         query: {tag: ['a', 'b']},
         headers: {'Content-Type': ['application/json'], 'x-test': ['one']},
         body: {kind: 'text', text: '{"ok":true}'},
-        clientAddress: '127.0.0.1'
+        clientAddress: '127.0.0.1',
+        auth: {
+          type: 'digest',
+          username: 'alice'
+        }
       })
     );
 
@@ -197,6 +211,38 @@ describe('TurboWarpHttpServerExtension', () => {
     expect(extension.currentRequestBody()).toBe('{"ok":true}');
     expect(extension.currentRequestContentType()).toBe('application/json');
     expect(extension.currentRequestClientAddress()).toBe('127.0.0.1');
+    expect(extension.currentAuthType()).toBe('digest');
+    expect(extension.currentAuthenticatedUser()).toBe('alice');
+    expect(extension.currentAuthProvider()).toBe('');
+    expect(extension.currentAuthProfileJson()).toBe('');
+    expect(extension.authProfileField({NAME: 'email'})).toBe('');
+  });
+
+  it('exposes OAuth provider profile fields from the selected request context', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    extension.receiveBridgeRequestForTest(
+      requestMessage({
+        auth: {
+          type: 'oauth',
+          provider: 'cloudflare',
+          profile: {
+            sub: 'user-123',
+            email: 'alice@example.test',
+            name: 'Alice',
+            organization: {name: 'Example School'},
+            groups: ['students']
+          }
+        }
+      })
+    );
+
+    expect(extension.currentAuthType()).toBe('oauth');
+    expect(extension.currentAuthenticatedUser()).toBe('alice@example.test');
+    expect(extension.currentAuthProvider()).toBe('cloudflare');
+    expect(extension.currentAuthProfileJson()).toContain('"email":"alice@example.test"');
+    expect(extension.authProfileField({NAME: 'email'})).toBe('alice@example.test');
+    expect(extension.authProfileField({NAME: 'organization.name'})).toBe('Example School');
+    expect(extension.authProfileField({NAME: 'groups'})).toBe('["students"]');
   });
 
   it('builds and sends responses once for the current request', () => {

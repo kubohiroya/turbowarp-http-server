@@ -36,6 +36,35 @@ package としてインストールした場合:
 turbowarp-http-server --host 127.0.0.1 --port 8787
 ```
 
+インターネットへ出られない会場 LAN では、htdigest file を使って HTTP Digest 認証を有効化できます。
+
+```bash
+turbowarp-http-digest init ./users.htdigest --realm turbowarp-lan
+turbowarp-http-digest add ./users.htdigest alice --realm turbowarp-lan
+
+turbowarp-http-server \
+  --host 0.0.0.0 \
+  --port 8787 \
+  --auth-digest ./users.htdigest \
+  --auth-realm turbowarp-lan
+```
+
+Digest 認証は、証明書配布や外部 IdP を使えない trusted LAN 内での簡易的な user 識別を目的とします。既定では無効です。認証済み username は runtime-owned な `x-turbowarp-http-auth-user` request header として TurboWarp handler に渡され、client が同名 header を送っても上書きされます。`/ws` endpoint は localhost peer からの接続だけを受け付けます。
+
+TurboWarp handler では、`current auth type`、`current authenticated user`、`current auth provider`、`current auth profile JSON`、`auth profile field [NAME]` の reporter block で認証 context を参照できます。Digest 認証では username を提供します。OAuth 対応 deployment では provider profile data を request auth context として渡し、handler 側で `email`、`name`、`organization.name` のような field を参照できます。
+
+証明書と秘密鍵をすでに用意できる場合は、server を直接 HTTPS で起動できます。
+
+```bash
+turbowarp-http-server \
+  --host 0.0.0.0 \
+  --port 8787 \
+  --tls-cert ./certs/server.crt \
+  --tls-key ./certs/server.key
+```
+
+証明書の発行、更新、配布、OS/browser の trust 設定はこの package の責務外です。Internet-facing deployment では reverse proxy で TLS termination し、認証が必要な場合は Cloudflare/OAuth の deployment path を使います。
+
 サーバは次の経路を提供します。
 
 | Route | Purpose |
