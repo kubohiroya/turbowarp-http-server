@@ -168,6 +168,10 @@ GET /camera/image.jpg
 
 つまり `/camera/image.jpg` は Sprite route の判断で、`/@assets/live-camera` は generic Asset Manager resource endpoint です。
 
+## デプロイターゲット検討
+
+Sprite route と HTTP handler block を公開可能な serverless application へ変換する構想については、[デプロイ先と技術スタックの選定メモ](docs/deployment-targets.ja.md) にまとめています。MVP では Cloudflare Workers 向け TypeScript + Hono 生成を第一候補にし、D1/R2/KV/Durable Objects の使い分けと外部 IdP 認証連携の方針を整理しています。
+
 ## Response Content Builders
 
 HTTP response body を組み立てやすくするため、builder-style の補助ブロックを追加しています。これらはこの package 内の最小実装で、runtime dependency として `turbowarp-html` や `turbowarp-markdown` は追加しません。

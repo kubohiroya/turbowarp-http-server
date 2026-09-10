@@ -40,7 +40,7 @@
   ],
   "packageManager": "pnpm@11.11.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "dev": "vite build --watch",
@@ -49,12 +49,12 @@
     "build": "vite build && tsc -p tsconfig.cli.json",
     "lint": "eslint src tests vite.config.ts",
     "test": "vitest run",
-    "examples:check": "node scripts/check-examples.mjs",
-    "docs": "node scripts/generate-readme.mjs",
-    "docs:check": "node scripts/generate-readme.mjs --check",
+    "examples:check": "node scripts/check-examples.ts",
+    "docs": "node scripts/generate-readme.ts",
+    "docs:check": "node scripts/generate-readme.ts --check",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "start": "node dist/cli.js",
-    "check:dist": "pnpm run build && node scripts/check-dist.mjs",
+    "check:dist": "pnpm run build && node scripts/check-dist.ts",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run examples:check && pnpm run docs:check && pnpm run check:dist && pnpm run pack:check"
   },
   "dependencies": {
