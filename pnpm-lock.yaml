@@ -22,8 +22,8 @@ importers:
         specifier: ^9.39.5
         version: 9.39.5
       '@kubohiroya/vite-plugin-turbowarp-extension':
-        specifier: 0.3.0
-        version: 0.3.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.12))
+        specifier: 0.4.0
+        version: 0.4.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.12))
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
@@ -274,9 +274,9 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0':
-    resolution: {integrity: sha512-8JsF0BSMU9Q7MDQJtCzYmL9+4ZV8Q0EuAUdZUhGuAHjnTky8ss3zI+me2Tn1i2Ke24pzv311Tx4wGYkb2DaqhA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
+  '@kubohiroya/vite-plugin-turbowarp-extension@0.4.0':
+    resolution: {integrity: sha512-8Uh4TA4pNhFkx/HFIT6gBZTgQY3Lv3LTDYRQN6oWtHHzoiK+Chn9LBtKeagBXDlQsCZC+8WcOGhCGSWHOhxXbw==}
+    engines: {node: '>=22.18.0'}
     peerDependencies:
       vite: '>=8.0.0'
 
@@ -1246,7 +1246,7 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@kubohiroya/vite-plugin-turbowarp-extension@0.3.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.12))':
+  '@kubohiroya/vite-plugin-turbowarp-extension@0.4.0(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.12))':
     dependencies:
       acorn: 8.18.0
       vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.12)
