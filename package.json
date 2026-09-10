@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-http-server",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "A TurboWarp extension for connecting block programs to an HTTP bridge server.",
   "author": "Hiroya Kubo <hiroya@cuc.ac.jp>",
