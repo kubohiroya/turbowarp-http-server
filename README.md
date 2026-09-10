@@ -134,7 +134,7 @@ The reviewed JavaScript build is committed to this repository, so users do not n
 Install an exact version that you have reviewed:
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-http-server@0.1.0
+pnpm add --save-exact @kubohiroya/turbowarp-http-server@0.2.0
 ```
 
 Load the standalone bundle from:
@@ -146,7 +146,7 @@ node_modules/@kubohiroya/turbowarp-http-server/dist/turbowarp-http-server.js
 A version-pinned CDN URL is:
 
 ```text
-https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-http-server@0.1.0/dist/turbowarp-http-server.js
+https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-http-server@0.2.0/dist/turbowarp-http-server.js
 ```
 
 ## Quick start

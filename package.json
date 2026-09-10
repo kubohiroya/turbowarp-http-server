@@ -1,7 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-http-server",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
   "description": "A TurboWarp extension for connecting block programs to an HTTP bridge server.",
   "author": "Hiroya Kubo <hiroya@cuc.ac.jp>",
   "license": "MPL-2.0",
