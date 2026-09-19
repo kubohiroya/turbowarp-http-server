@@ -6,6 +6,7 @@ import { parseDeployIr } from './validate.js';
 export * from './feature-flags.js';
 export * from './ir-v2/index.js';
 export * from './manifest/index.js';
+export * from './validator/index.js';
 export async function compileToDirectory(options) {
     if (extname(options.input).toLowerCase() === '.sb3') {
         throw new Error('Direct .sb3 input is not supported yet. Export or extract project.json first.');

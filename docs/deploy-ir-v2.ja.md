@@ -6,6 +6,8 @@ Deploy IR v2は、TurboWarpのHTTP handlerをplatform-neutralな型付き表現�
 
 外部extension manifestのlock／offline解決仕様は[Compiler extension manifest registry](compiler-manifest-registry.ja.md)を参照してください。
 
+許可block、binding scope、bounded control flow、response、work budgetの規則は[Server-executable subset](server-executable-subset.ja.md)を参照してください。
+
 ## Versionと有効化
 
 - rootの`version`は整数`2`です。
