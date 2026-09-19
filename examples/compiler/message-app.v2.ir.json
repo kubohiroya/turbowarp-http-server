@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "name": "turbowarp-message-app",
+  "auth": {"kind": "none"},
+  "capabilities": [{"kind": "record-store"}],
+  "routes": [
+    {
+      "id": "home",
+      "method": "GET",
+      "path": "/",
+      "auth": "public",
+      "body": [
+        {
+          "kind": "respond",
+          "format": "text",
+          "body": {"kind": "literal", "valueType": "string", "value": "TurboWarp message API"}
+        }
+      ]
+    },
+    {
+      "id": "create-message",
+      "method": "POST",
+      "path": "/messages",
+      "auth": "public",
+      "body": [
+        {
+          "kind": "record-create",
+          "collection": "messages",
+          "data": {"kind": "request", "valueType": "string", "source": "body-text"},
+          "result": {"id": "created", "type": {"kind": "value", "valueType": "json-object"}}
+        },
+        {"kind": "set-status", "status": 201},
+        {
+          "kind": "respond",
+          "format": "json",
+          "body": {"kind": "binding", "valueType": "json-object", "binding": "created"}
+        }
+      ]
+    }
+  ]
+}

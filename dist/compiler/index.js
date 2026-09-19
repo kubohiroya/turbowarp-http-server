@@ -3,6 +3,8 @@ import { dirname, extname, join, resolve } from 'node:path';
 import { generateCloudflareWorker } from './generator.js';
 import { compileTurboWarpProject } from './turbowarp.js';
 import { parseDeployIr } from './validate.js';
+export * from './feature-flags.js';
+export * from './ir-v2/index.js';
 export async function compileToDirectory(options) {
     if (extname(options.input).toLowerCase() === '.sb3') {
         throw new Error('Direct .sb3 input is not supported yet. Export or extract project.json first.');

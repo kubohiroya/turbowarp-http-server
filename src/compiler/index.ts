@@ -5,6 +5,9 @@ import type {CompilerDiagnostic, DeployIr} from './ir.js';
 import {compileTurboWarpProject} from './turbowarp.js';
 import {parseDeployIr} from './validate.js';
 
+export * from './feature-flags.js';
+export * from './ir-v2/index.js';
+
 export type CompilerInputFormat = 'turbowarp-json' | 'ir';
 
 export interface CompileOptions {

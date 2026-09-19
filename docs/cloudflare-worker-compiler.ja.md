@@ -2,6 +2,8 @@
 
 Issue #13 の MVP として、TurboWarp の HTTP handler を検証可能な中間表現（IR）へ変換し、Cloudflare Workers 上の Hono application を生成する。既存の WebSocket bridge は変更せず、生成は明示的な `compile` subcommand を実行した場合だけ行う。
 
+この文書はIR v1／Cloudflare generatorの仕様を扱う。platform-neutralなIR v2の基礎仕様は[Deploy IR v2 基礎仕様](deploy-ir-v2.ja.md)を参照する。IR v2は実験的な追加moduleで、現時点の`compile` commandは引き続きv1を使用する。
+
 ## アーキテクチャ
 
 ```text
