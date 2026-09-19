@@ -95,6 +95,12 @@ requestのaffine `binary-body`はnamed snapshotへ暗黙変換せず、明示imp
 
 `HEAD`は`listResources`が利用可能ならmetadataだけを参照し、`GET`は`getResource`が返したbytesをcopyしてsnapshotを分離します。未公開namespaceはnot foundとして扱い、kind／representation不一致とabortは共通のstable errorへ変換します。このadapterはNode runtime向けであり、生成targetが`named-body-provider` capabilityを宣言する根拠にはしません。
 
+## TurboWarp bridge block
+
+`respond with named ...` blockはnamespace、name、kind、scope、任意のtarget ID、representation、最大byte数だけをWebSocket bridgeへ送ります。resource body、base64、data URLはbridge messageへ格納しません。Node serverは`--enable-named-response-body`指定時だけdescriptorを上記Asset Manager providerへ渡し、block側上限とserver側上限の小さい方を適用します。
+
+同じblock messageをGETで受けるとsnapshot bodyを返し、HEADではproviderの`stat`を使用してbodyを返しません。feature flag未指定時はproviderへアクセスせず501 `NAMED_RESPONSE_BODY_DISABLED`です。Structured Dataなど別namespaceは対応providerが登録されるまで`NAMED_DATA_PROVIDER_NOT_FOUND`となります。
+
 ## ロールバック
 
 compiler flagがOFFの場合は`TW2_NAMED_RESPONSE_BODY_DISABLED`で生成前に拒否します。runtimeの`namedResponseBody=false`ではproviderを参照せず501 `NAMED_RESPONSE_BODY_DISABLED`を返します。既存`respond`／`respond-binary`、IR v1、browser runtime、cloud objectは変更・削除しません。問題時は新しい呼び出し経路だけを停止できます。

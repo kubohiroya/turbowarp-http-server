@@ -418,6 +418,126 @@ describe('HTTP bridge server app', () => {
     await server.close();
   });
 
+  it('resolves named Asset Manager bridge responses on the server without transporting bytes', async () => {
+    const resources = new MemoryResources();
+    resources.seed('', {
+      name: 'avatar',
+      mimeType: 'image/png',
+      bytes: pngBytes,
+      replacementId: 'avatar-v1'
+    });
+    const port = await getFreePort();
+    const server = startServer({
+      hostname: '127.0.0.1',
+      port,
+      resources,
+      namedResponseBody: true
+    });
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+    const nextRequest = onceRequestMessage(socket);
+    const responsePromise = fetch(`http://127.0.0.1:${port}/avatar`);
+    const request = await nextRequest;
+
+    socket.send(
+      JSON.stringify({
+        type: 'response',
+        id: request.id,
+        status: 200,
+        headers: {'x-source': ['named']},
+        body: {
+          kind: 'named',
+          reference: {
+            namespace: 'asset-manager',
+            name: 'avatar',
+            kind: 'asset',
+            scope: 'project'
+          },
+          representation: 'raw',
+          maxBytes: 1024
+        }
+      })
+    );
+
+    const response = await responsePromise;
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/png');
+    expect(response.headers.get('content-length')).toBe('4');
+    expect(response.headers.get('etag')).toBe('"avatar-v1"');
+    expect(response.headers.get('x-source')).toBe('named');
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(pngBytes);
+
+    const nextHeadRequest = onceRequestMessage(socket);
+    const headPromise = fetch(`http://127.0.0.1:${port}/avatar`, {method: 'HEAD'});
+    const headRequest = await nextHeadRequest;
+    socket.send(
+      JSON.stringify({
+        type: 'response',
+        id: headRequest.id,
+        status: 200,
+        headers: {},
+        body: {
+          kind: 'named',
+          reference: {
+            namespace: 'asset-manager',
+            name: 'avatar',
+            kind: 'asset',
+            scope: 'project'
+          },
+          representation: 'raw',
+          maxBytes: 1024
+        }
+      })
+    );
+    const head = await headPromise;
+    expect(head.headers.get('content-length')).toBe('4');
+    expect(await head.text()).toBe('');
+    socket.close();
+    await server.close();
+  });
+
+  it('keeps named bridge responses disabled by default', async () => {
+    const resources = new MemoryResources();
+    resources.seed('', {
+      name: 'avatar',
+      mimeType: 'image/png',
+      bytes: pngBytes,
+      replacementId: 'avatar-v1'
+    });
+    const port = await getFreePort();
+    const server = startServer({hostname: '127.0.0.1', port, resources});
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+    const nextRequest = onceRequestMessage(socket);
+    const responsePromise = fetch(`http://127.0.0.1:${port}/avatar`);
+    const request = await nextRequest;
+    socket.send(
+      JSON.stringify({
+        type: 'response',
+        id: request.id,
+        status: 200,
+        headers: {},
+        body: {
+          kind: 'named',
+          reference: {
+            namespace: 'asset-manager',
+            name: 'avatar',
+            kind: 'asset',
+            scope: 'project'
+          },
+          representation: 'raw',
+          maxBytes: 1024
+        }
+      })
+    );
+
+    const response = await responsePromise;
+    expect(response.status).toBe(501);
+    await expect(response.json()).resolves.toEqual({error: 'NAMED_RESPONSE_BODY_DISABLED'});
+    socket.close();
+    await server.close();
+  });
+
   it('does not read text bridge request bodies over the configured limit', async () => {
     const forwarded: BridgeRequestMessage[] = [];
     const bridge: HttpRequestBridge = {

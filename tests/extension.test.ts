@@ -109,6 +109,7 @@ describe('TurboWarpHttpServerExtension', () => {
       'respondWithText',
       'respondWithHtml',
       'respondWithJson',
+      'respondWithNamedBody',
       'recordHttpLog',
       'clearHttpLogs',
       'httpLogViewerHtml',
@@ -281,6 +282,41 @@ describe('TurboWarpHttpServerExtension', () => {
         body: {kind: 'text', text: '{"ok":true}'}
       })
     ]);
+  });
+
+  it('sends only a named descriptor for server-side body resolution', () => {
+    const extension = new TurboWarpHttpServerExtension();
+    extension.connect();
+    sockets[0]?.receive(JSON.stringify(requestMessage({id: 'req-named'})));
+
+    extension.respondWithNamedBody({
+      NAMESPACE: 'asset-manager',
+      NAME: 'avatar',
+      KIND: 'asset',
+      SCOPE: 'project',
+      TARGET_ID: 'ignored',
+      REPRESENTATION: 'raw',
+      MAX_BYTES: 1024
+    });
+
+    const sent = sockets[0]!.sent;
+    expect(JSON.parse(sent[sent.length - 1]!)).toEqual({
+      type: 'response',
+      id: 'req-named',
+      status: 200,
+      headers: {},
+      body: {
+        kind: 'named',
+        reference: {
+          namespace: 'asset-manager',
+          name: 'avatar',
+          kind: 'asset',
+          scope: 'project'
+        },
+        representation: 'raw',
+        maxBytes: 1024
+      }
+    });
   });
 
   it('builds Markdown text with chainable handles', () => {

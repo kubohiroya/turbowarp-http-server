@@ -75,6 +75,9 @@ const HTTP_REQUEST_HAT_OPCODE = `${extensionConfig.id}_whenHttpRequestReceived`;
 const URL_ATTRIBUTES = new Set(['action', 'cite', 'formaction', 'href', 'poster', 'src', 'xlink:href']);
 const URL_LIST_ATTRIBUTES = new Set(['srcset']);
 const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+const NAMED_BODY_KINDS = new Set(['structured', 'document', 'binary', 'asset']);
+const NAMED_BODY_SCOPES = new Set(['target', 'project']);
+const NAMED_BODY_REPRESENTATIONS = new Set(['json', 'yaml', 'html', 'markdown', 'raw']);
 
 type HtmlNode = HtmlElementNode | HtmlTextNode;
 
@@ -313,6 +316,47 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
   public respondWithJson(args: {BODY: unknown}): void {
     this.setResponseHeader({NAME: 'content-type', VALUE: 'application/json; charset=utf-8'});
     this.sendResponse({BODY: args.BODY});
+  }
+
+  public respondWithNamedBody(args: {
+    NAMESPACE: unknown;
+    NAME: unknown;
+    KIND: unknown;
+    SCOPE: unknown;
+    TARGET_ID: unknown;
+    REPRESENTATION: unknown;
+    MAX_BYTES: unknown;
+  }): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    const kind = Scratch.Cast.toString(args.KIND).toLowerCase();
+    const scope = Scratch.Cast.toString(args.SCOPE).toLowerCase();
+    const representation = Scratch.Cast.toString(args.REPRESENTATION).toLowerCase();
+    const maxBytes = Math.trunc(Scratch.Cast.toNumber(args.MAX_BYTES));
+    if (
+      !NAMED_BODY_KINDS.has(kind) ||
+      !NAMED_BODY_SCOPES.has(scope) ||
+      !NAMED_BODY_REPRESENTATIONS.has(representation) ||
+      !Number.isSafeInteger(maxBytes) ||
+      maxBytes < 1
+    ) {
+      context.response.body = {kind: 'unsupported', reason: 'invalid_named_body'};
+      this.completeResponse(context);
+      return;
+    }
+    context.response.body = {
+      kind: 'named',
+      reference: {
+        namespace: Scratch.Cast.toString(args.NAMESPACE),
+        name: Scratch.Cast.toString(args.NAME),
+        kind: kind as 'structured' | 'document' | 'binary' | 'asset',
+        scope: scope as 'target' | 'project'
+      },
+      representation: representation as 'json' | 'yaml' | 'html' | 'markdown' | 'raw',
+      ...(scope === 'target' ? {targetId: Scratch.Cast.toString(args.TARGET_ID)} : {}),
+      maxBytes
+    };
+    this.completeResponse(context);
   }
 
   public receiveBridgeRequestForTest(request: BridgeRequestMessage): void {

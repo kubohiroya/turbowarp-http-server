@@ -14,6 +14,8 @@ export interface ServerOptions {
     logger?: ResourceLogger;
     authorizeResource?: ResourceAuthorizer;
     requestTimeoutMs?: number;
+    namedResponseBody?: boolean;
+    maxNamedResponseBodyBytes?: number;
     routes?: readonly string[];
     community?: false | CommunityServerOptions;
 }
@@ -82,7 +84,7 @@ export interface ServerAppOptions {
     community?: false | CommunityServerOptions;
 }
 export interface HttpRequestBridge {
-    forward(message: BridgeRequestMessage, method: string): Promise<Response>;
+    forward(message: BridgeRequestMessage, method: string, signal?: AbortSignal): Promise<Response>;
 }
 export declare function createApp(options?: ServerAppOptions): Hono;
 export declare function startServer(options: ServerOptions): RunningServer;

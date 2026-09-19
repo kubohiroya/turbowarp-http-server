@@ -651,6 +651,22 @@ Responds with JSON.
 | Opcode | `respondWithJson` |
 | `BODY` | String, default: `{"ok":true}` |
 
+### `respond with named [NAMESPACE] [NAME] kind [KIND] scope [SCOPE] target [TARGET_ID] as [REPRESENTATION] max bytes [MAX_BYTES]`
+
+Completes the response with a named structured, document, binary, or asset snapshot resolved by the server.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `respondWithNamedBody` |
+| `NAMESPACE` | String, default: `asset-manager` |
+| `NAME` | String, default: `avatar` |
+| `KIND` | String, default: `asset` |
+| `SCOPE` | String, default: `project` |
+| `TARGET_ID` | String, default: `Stage:1` |
+| `REPRESENTATION` | String, default: `raw` |
+| `MAX_BYTES` | Number, default: `10485760` |
+
 ### `record HTTP log [ENTRY]`
 
 Adds a structured HTTP log entry JSON string to the extension log buffer.

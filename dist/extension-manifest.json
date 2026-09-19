@@ -362,6 +362,40 @@
       ]
     },
     {
+      "opcode": "respondWithNamedBody",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "KIND",
+          "type": "STRING"
+        },
+        {
+          "id": "MAX_BYTES",
+          "type": "NUMBER"
+        },
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "NAMESPACE",
+          "type": "STRING"
+        },
+        {
+          "id": "REPRESENTATION",
+          "type": "STRING"
+        },
+        {
+          "id": "SCOPE",
+          "type": "STRING"
+        },
+        {
+          "id": "TARGET_ID",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
       "opcode": "respondWithText",
       "blockType": "COMMAND",
       "arguments": [

@@ -11,7 +11,19 @@ export interface BridgeUnsupportedBody {
     kind: 'unsupported';
     reason: string;
 }
-export type BridgeBody = BridgeTextBody | BridgeEmptyBody | BridgeUnsupportedBody;
+export interface BridgeNamedBody {
+    kind: 'named';
+    reference: {
+        namespace: string;
+        name: string;
+        kind: 'structured' | 'document' | 'binary' | 'asset';
+        scope: 'target' | 'project';
+    };
+    representation: 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+    targetId?: string;
+    maxBytes: number;
+}
+export type BridgeBody = BridgeTextBody | BridgeEmptyBody | BridgeUnsupportedBody | BridgeNamedBody;
 export interface BridgeRequestMessage {
     type: 'request';
     protocol: typeof HTTP_BRIDGE_PROTOCOL;

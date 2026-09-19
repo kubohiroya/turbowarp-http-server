@@ -6,6 +6,7 @@ interface CliOptions {
   hostname: string;
   port: number;
   community?: false | CommunityServerOptions;
+  namedResponseBody?: boolean;
 }
 
 void main(process.argv.slice(2)).catch((error: unknown) => {
@@ -62,6 +63,8 @@ function parseArgs(args: readonly string[]): CliOptions {
       index += 1;
     } else if (arg === '--community') {
       options.community = {};
+    } else if (arg === '--enable-named-response-body') {
+      options.namedResponseBody = true;
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
@@ -175,6 +178,7 @@ Options:
   --host <host>  Hostname or address to bind. Defaults to HOST or 127.0.0.1.
   --port <port>  TCP port to bind. Defaults to PORT or 8787.
   --community    Enable the learning-only Scratch-like community routes.
+  --enable-named-response-body Enable experimental named response blocks (default OFF).
   -h, --help     Show this help.
 `);
 }
