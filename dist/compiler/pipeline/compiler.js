@@ -1,4 +1,5 @@
 import { cloudflareWorkersAdapter } from '../adapters/cloudflare.js';
+import { firebaseFunctionsAdapter } from '../adapters/firebase.js';
 import { validateDeployIrV2Subset } from '../validator/ir-validator.js';
 import { generateHonoCore } from './core-generator.js';
 import { PlatformAdapterRegistry } from './registry.js';
@@ -8,8 +9,9 @@ export function compileDeployIrV2(ir, options) {
     if (targetNeutral.length > 0)
         return { ok: false, diagnostics: targetNeutral };
     const registry = new PlatformAdapterRegistry();
-    for (const adapter of options.adapters ?? [cloudflareWorkersAdapter])
+    for (const adapter of options.adapters ?? [cloudflareWorkersAdapter, firebaseFunctionsAdapter]) {
         registry.register(adapter);
+    }
     const adapter = registry.resolve(options.target);
     if (adapter === undefined) {
         return {
@@ -26,6 +28,9 @@ export function compileDeployIrV2(ir, options) {
             ]
         };
     }
+    const targetLimitDiagnostics = validateTargetBinaryLimits(ir, adapter);
+    if (targetLimitDiagnostics.length > 0)
+        return { ok: false, diagnostics: targetLimitDiagnostics };
     const requirements = extractCapabilityRequirements(ir);
     const planned = adapter.plan({ ir, requirements, config: options.targetConfig });
     if (!planned.ok)
@@ -50,6 +55,41 @@ export function compileDeployIrV2(ir, options) {
         [filePath]: `${JSON.stringify(manifest, null, 2)}\n`
     });
     return { ok: true, files, manifest };
+}
+function validateTargetBinaryLimits(ir, adapter) {
+    const maximum = adapter.capabilities().maxBinaryBytes;
+    if (maximum === undefined)
+        return [];
+    const diagnostics = [];
+    for (const route of ir.routes)
+        visitStatements(route.body, route.id, maximum, adapter.id, diagnostics);
+    return diagnostics;
+}
+function visitStatements(statements, routeId, maximum, targetId, diagnostics) {
+    for (const statement of statements) {
+        if ((statement.kind === 'request-body-binary' ||
+            statement.kind === 'asset-object-get' ||
+            statement.kind === 'asset-object-put') &&
+            statement.maxBytes > maximum) {
+            diagnostics.push({
+                severity: 'error',
+                code: 'TW2_TARGET_BINARY_LIMIT_EXCEEDED',
+                message: `Binary limit ${statement.maxBytes} exceeds the ${targetId} target limit ${maximum}.`,
+                reason: 'The selected platform cannot safely satisfy this binary operation limit.',
+                suggestion: `Set maxBytes to ${maximum} or less, or choose a target with a larger declared limit.`,
+                targetId,
+                routeId,
+                ...(statement.sourceRef === undefined ? {} : { sourceRef: statement.sourceRef })
+            });
+        }
+        if (statement.kind === 'if') {
+            visitStatements(statement.then, routeId, maximum, targetId, diagnostics);
+            visitStatements(statement.else ?? [], routeId, maximum, targetId, diagnostics);
+        }
+        else if (statement.kind === 'bounded-loop' || statement.kind === 'json-for-each') {
+            visitStatements(statement.body, routeId, maximum, targetId, diagnostics);
+        }
+    }
 }
 function normalizeGeneratedProject(files) {
     return Object.fromEntries(Object.entries(files)

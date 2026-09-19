@@ -25,10 +25,12 @@ turbowarp-http-server compile \
   --target cloudflare-workers
 ```
 
+同じIRをFirebase Functionsへ生成する場合は`--target firebase-functions`へ切り替えます。target固有のbinding／環境変数名は`--target-config`で指定し、IRは変更しません。
+
 - v2では`--target`を必須とし、targetを推測しません。
 - 現在のv2 CLI入力は`--format ir`だけです。TurboWarp project frontendとの接続は後続作業です。
 - `--target-config <file>`はadapter設定です。IRへmergeせず、secret値を受け取りません。
-- Cloudflare adapterのMVP設定は`{"recordDatabaseBinding":"DB"}`だけです。省略時は`DB`です。
+- Cloudflare adapterはD1／R2 binding名、Firebase adapterはfunction名／bucket環境変数名／Firestore collection名だけを受け取ります。secretやproject IDは受け取りません。詳細は[IR v2 platform storage adapter](platform-storage-adapters.ja.md)を参照してください。
 - v1は引き続き既存Cloudflare generatorを使用し、`--ir-version`省略時の動作もv1のままです。
 
 ## module責務
@@ -44,7 +46,7 @@ turbowarp-http-server compile \
 
 `PlatformAdapter.plan`と`generate`はnetwork、deploy、cloud resource作成を行わないpure filesystem artifact operationです。新しいadapterはregistryへ追加でき、frontendやopcode loweringを変更する必要はありません。
 
-共有coreはCloudflare、Firebase、D1、R2等の製品型を参照しません。たとえばclient addressは`CoreServices.clientAddress`、record永続化は`CoreServices.records`を介し、選択adapterがplatform APIへ結び付けます。
+共有coreはCloudflare、Firebase、D1、R2等の製品型を参照しません。たとえばclient addressは`CoreServices.clientAddress`、record永続化は`CoreServices.records`、binary objectは`CoreServices.objects`を介し、選択adapterがplatform APIへ結び付けます。
 
 ## diagnostic
 

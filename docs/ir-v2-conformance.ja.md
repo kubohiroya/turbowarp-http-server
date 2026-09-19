@@ -11,7 +11,7 @@ pnpm test:conformance:core
 pnpm test:conformance:target
 ```
 
-通常の`pnpm test`と`pnpm check`にも全layerが含まれます。target layerは生成Cloudflare projectの実typecheckまで実行します。cloud account、Emulator、課金resourceは使用しません。
+通常の`pnpm test`と`pnpm check`にも全layerが含まれます。target layerは生成Cloudflare／Firebase projectの実typecheckまで実行します。cloud account、Emulator、課金resourceは使用しません。
 
 ## fixture version 1
 
@@ -43,9 +43,9 @@ record IDはtest adapterが`record-0001`から決定的に採番します。cloc
 - Structured Data: immutable path更新、Unicode code point順serialize、nested iteration、安定422 error
 - Binary: file-backed put/get/delete、stream size limit、consume-once/error contract
 - v1→v2: status／header／bodyのobservable parity
-- Target: Cloudflare adapterのdeterministic artifact、manifest、TypeScript typecheck
+- Target: Cloudflare／Firebase adapterのdeterministic artifact、manifest、TypeScript typecheck
 
-新しいadapterをregistryへ登録する変更は、target matrixのentryと期待artifactを同じ変更で追加します。未完成targetをskipして成功扱いにはしません。Firebase adapter追加後は、core goldenを維持したままEmulator smoke testを任意の独立CI jobとして追加できます。
+新しいadapterをregistryへ登録する変更は、target matrixのentryと期待artifactを同じ変更で追加します。未完成targetをskipして成功扱いにはしません。Wrangler local runtimeとFirebase Emulator Suiteのsmoke testは、core goldenを維持したまま任意の独立CI jobとして追加できます。
 
 ## CIと失敗artifact
 

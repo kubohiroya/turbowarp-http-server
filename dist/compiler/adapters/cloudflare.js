@@ -1,8 +1,11 @@
 import { findCapabilityOrigin } from '../pipeline/requirements.js';
 export const cloudflareWorkersAdapter = {
     id: 'cloudflare-workers',
-    version: '1.0.0',
-    capabilities: () => ({ keys: ['record-store', 'request-metadata:client-address'] }),
+    version: '1.1.0',
+    capabilities: () => ({
+        keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
+        maxBinaryBytes: 16 * 1024 * 1024
+    }),
     plan({ ir, requirements, config }) {
         const unsupported = requirements.keys.filter((requirement) => !cloudflareWorkersAdapter.capabilities().keys.includes(requirement));
         if (unsupported.length > 0) {
@@ -20,7 +23,10 @@ export const cloudflareWorkersAdapter = {
                 targetId: cloudflareWorkersAdapter.id,
                 adapterVersion: cloudflareWorkersAdapter.version,
                 requirements: requirements.keys,
-                bindings: { recordDatabase: parsed.recordDatabaseBinding }
+                bindings: {
+                    ...(requirements.keys.includes('record-store') ? { recordDatabase: parsed.recordDatabaseBinding } : {}),
+                    ...(requirements.keys.includes('object-storage') ? { objectBucket: parsed.objectBucketBinding } : {})
+                }
             }
         };
     },
@@ -31,24 +37,31 @@ export const cloudflareWorkersAdapter = {
             'tsconfig.json': tsconfig(),
             'src/index.ts': indexSource(plan),
             'src/platform.ts': platformSource(),
-            'src/cloudflare.generated.d.ts': cloudflareTypes(),
             'wrangler.jsonc': wrangler(ir, plan),
-            'migrations/0001_init.sql': migration()
+            ...(plan.requirements.includes('record-store') ? { 'migrations/0001_init.sql': migration() } : {}),
+            'README.md': generatedReadme(ir, plan)
         };
     }
 };
 function parseConfig(config) {
     if (config === undefined || config === null)
-        return { recordDatabaseBinding: 'DB' };
+        return { recordDatabaseBinding: 'DB', objectBucketBinding: 'OBJECTS' };
     if (typeof config !== 'object' || Array.isArray(config))
         return { diagnostic: configDiagnostic() };
     const record = config;
-    if (Object.keys(record).some((key) => key !== 'recordDatabaseBinding'))
+    if (Object.keys(record).some((key) => key !== 'recordDatabaseBinding' && key !== 'objectBucketBinding')) {
         return { diagnostic: configDiagnostic() };
-    const value = record.recordDatabaseBinding ?? 'DB';
-    if (typeof value !== 'string' || !/^[A-Z][A-Z0-9_]*$/u.test(value))
+    }
+    const recordDatabaseBinding = record.recordDatabaseBinding ?? 'DB';
+    const objectBucketBinding = record.objectBucketBinding ?? 'OBJECTS';
+    if (typeof recordDatabaseBinding !== 'string' ||
+        typeof objectBucketBinding !== 'string' ||
+        !/^[A-Z][A-Z0-9_]*$/u.test(recordDatabaseBinding) ||
+        !/^[A-Z][A-Z0-9_]*$/u.test(objectBucketBinding) ||
+        recordDatabaseBinding === objectBucketBinding) {
         return { diagnostic: configDiagnostic() };
-    return { recordDatabaseBinding: value };
+    }
+    return { recordDatabaseBinding, objectBucketBinding };
 }
 function capabilityDiagnostic(requirement, ir) {
     const origin = findCapabilityOrigin(ir, requirement);
@@ -68,28 +81,41 @@ function configDiagnostic() {
         severity: 'error',
         code: 'TW2_TARGET_CONFIG_INVALID',
         message: 'Cloudflare target config is invalid.',
-        reason: 'Only a non-secret recordDatabaseBinding identifier is accepted.',
-        suggestion: 'Use {"recordDatabaseBinding":"DB"}.',
+        reason: 'Only distinct, non-secret D1 and R2 binding identifiers are accepted.',
+        suggestion: 'Use {"recordDatabaseBinding":"DB","objectBucketBinding":"OBJECTS"}.',
         targetId: 'cloudflare-workers'
     };
 }
 function indexSource(plan) {
-    const binding = plan.bindings.recordDatabase ?? 'DB';
+    const recordBinding = plan.bindings.recordDatabase;
+    const objectBinding = plan.bindings.objectBucket;
+    const bindingMembers = [
+        ...(recordBinding === undefined ? [] : [`${recordBinding}: D1Database`]),
+        ...(objectBinding === undefined ? [] : [`${objectBinding}: R2Bucket`])
+    ].join('; ');
+    const services = [
+        ...(recordBinding === undefined
+            ? []
+            : [`records: (context) => createRecordStore((context as {env: Bindings}).env.${recordBinding})`]),
+        ...(objectBinding === undefined
+            ? []
+            : [`objects: (context) => createObjectStore((context as {env: Bindings}).env.${objectBinding})`]),
+        "clientAddress: (context) => (context as {req: {header(name: string): string | undefined}}).req.header('cf-connecting-ip') ?? ''"
+    ].join(',\n  ');
     return `import {Hono} from 'hono';
 import {registerCoreRoutes} from './core.generated.js';
-import {createRecordStore} from './platform.js';
+import {createObjectStore, createRecordStore} from './platform.js';
 
-type Bindings = {${binding}: D1Database};
+type Bindings = {${bindingMembers}};
 const app = new Hono<{Bindings: Bindings}>();
 registerCoreRoutes(app, {
-  records: (context) => createRecordStore((context as {env: Bindings}).env.${binding}),
-  clientAddress: (context) => (context as {req: {header(name: string): string | undefined}}).req.header('cf-connecting-ip') ?? ''
+  ${services}
 });
 export default app;
 `;
 }
 function platformSource() {
-    return `import type {RecordStore} from './core.generated.js';
+    return `import type {BinaryBodySource, BinaryLocator, BinaryMetadata, BinaryObjectStore, BinaryRef, RecordStore} from './core.generated.js';
 
 type RecordRow = {id: string; collection: string; data_json: string; created_at: string; updated_at: string};
 export function createRecordStore(database: D1Database): RecordStore {
@@ -117,6 +143,93 @@ export function createRecordStore(database: D1Database): RecordStore {
 function fromRow(row: RecordRow): Record<string, unknown> {
   return {id: row.id, collection: row.collection, data: JSON.parse(row.data_json), createdAt: row.created_at, updatedAt: row.updated_at};
 }
+
+export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
+  return {
+    async resolve(locator) {
+      try {
+        const object = await bucket.head(storageKey(locator));
+        return object === null ? null : objectRef(locator, object);
+      } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
+    },
+    async get(ref) {
+      try {
+        const object = await bucket.get(storageKey(ref));
+        if (object === null || object.version !== ref.revision && ref.revision !== undefined) return null;
+        return {
+          chunks: readableChunks(object.body),
+          size: object.size,
+          ...(object.httpMetadata.contentType === undefined ? {} : {contentType: object.httpMetadata.contentType})
+        };
+      } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
+    },
+    async put(locator, source, metadata, maxBytes) {
+      try {
+        if (source.size !== undefined && source.size > maxBytes) throw binaryFault('BINARY_TOO_LARGE');
+        const integrity = metadata.integrity?.startsWith('sha256:') === true ? metadata.integrity.slice(7) : undefined;
+        const object = await bucket.put(storageKey(locator), binaryStream(limitedChunks(source.chunks, maxBytes)), {
+          ...(metadata.contentType === undefined ? {} : {httpMetadata: {contentType: metadata.contentType}}),
+          ...(metadata.integrity === undefined ? {} : {customMetadata: {twIntegrity: metadata.integrity}}),
+          ...(integrity === undefined ? {} : {sha256: integrity})
+        });
+        if (object === null) throw binaryFault('BINARY_STORAGE_FAILURE');
+        return objectRef(locator, object);
+      } catch (error) {
+        if (isBinaryFault(error)) throw error;
+        throw binaryFault(metadata.integrity !== undefined && isR2BadDigest(error) ? 'BINARY_INTEGRITY_MISMATCH' : 'BINARY_STORAGE_FAILURE');
+      }
+    },
+    async delete(target) {
+      try {
+        const key = storageKey(target);
+        const current = await bucket.head(key);
+        if (current === null || 'revision' in target && target.revision !== undefined && current.version !== target.revision) return false;
+        await bucket.delete(key);
+        return true;
+      } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
+    }
+  };
+}
+function storageKey(locator: BinaryLocator): string {
+  if (!/^[A-Za-z][A-Za-z0-9._-]{0,63}$/u.test(locator.namespace) || locator.key.length > 512 || locator.key.includes('\\0') || locator.key.startsWith('/') || locator.key.includes('\\\\') || locator.key.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
+    throw binaryFault('BINARY_INVALID_REF');
+  }
+  return 'v1/' + locator.namespace + '/' + locator.key;
+}
+function objectRef(locator: BinaryLocator, object: R2Object): BinaryRef {
+  const integrity = object.customMetadata.twIntegrity;
+  const contentType = object.httpMetadata.contentType;
+  return {
+    ...locator,
+    size: object.size,
+    revision: object.version,
+    ...(contentType === undefined ? {} : {contentType}),
+    ...(integrity === undefined ? {} : {integrity})
+  };
+}
+function binaryStream(chunks: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
+  const iterator = chunks[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {const item = await iterator.next(); if (item.done) controller.close(); else controller.enqueue(item.value);},
+    cancel() {return iterator.return?.().then(() => undefined)}
+  });
+}
+async function* readableChunks(stream: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
+  const reader = stream.getReader();
+  try {while (true) {const item = await reader.read(); if (item.done) return; yield item.value;}}
+  finally {reader.releaseLock()}
+}
+async function* limitedChunks(chunks: AsyncIterable<Uint8Array>, maximum: number): AsyncIterable<Uint8Array> {
+  let size = 0;
+  for await (const chunk of chunks) {
+    size += chunk.byteLength;
+    if (size > maximum) throw binaryFault('BINARY_TOO_LARGE');
+    yield chunk;
+  }
+}
+function binaryFault(code: string): Error & {code: string} {return Object.assign(new Error(code), {code})}
+function isBinaryFault(error: unknown): error is Error & {code: string} {return error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('BINARY_')}
+function isR2BadDigest(error: unknown): boolean {return error instanceof Error && /\\(10037\\)$/u.test(error.message)}
 `;
 }
 function packageJson(ir) {
@@ -125,36 +238,54 @@ function packageJson(ir) {
         private: true,
         type: 'module',
         scripts: { dev: 'wrangler dev', deploy: 'wrangler deploy', typecheck: 'tsc --noEmit' },
-        dependencies: { hono: '^4.10.7' },
-        devDependencies: { '@cloudflare/workers-types': '^5.20260918.1', typescript: '^5.9.3', wrangler: '^4.40.2' }
+        dependencies: { hono: '^4.13.8' },
+        devDependencies: { '@cloudflare/workers-types': '^5.20260919.1', typescript: '^5.9.3', wrangler: '^4.135.0' }
     }, null, 2)}\n`;
 }
 function tsconfig() {
     return `${JSON.stringify({
         compilerOptions: {
             target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022', 'WebWorker'],
-            strict: true, noEmit: true, skipLibCheck: true
+            strict: true, noEmit: true, skipLibCheck: true, types: ['@cloudflare/workers-types']
         },
         include: ['src/**/*.ts']
     }, null, 2)}\n`;
 }
-function cloudflareTypes() {
-    return `interface D1ResultMeta {changes: number}
-interface D1Result<T> {results: T[]; meta: D1ResultMeta}
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<D1Result<unknown>>;
-  all<T>(): Promise<D1Result<T>>;
-  first<T>(): Promise<T | null>;
-}
-interface D1Database {prepare(query: string): D1PreparedStatement}
-`;
-}
 function wrangler(ir, plan) {
-    const binding = plan.bindings.recordDatabase ?? 'DB';
-    return `// Generated by turbowarp-http-server.\n${JSON.stringify({ name: ir.name, main: 'src/index.ts', compatibility_date: '2025-09-01', d1_databases: [{ binding, database_name: `${ir.name}-db`, database_id: 'replace-me' }] }, null, 2)}\n`;
+    const recordBinding = plan.bindings.recordDatabase;
+    const objectBinding = plan.bindings.objectBucket;
+    const config = {
+        name: ir.name,
+        main: 'src/index.ts',
+        compatibility_date: '2026-09-01',
+        ...(recordBinding === undefined ? {} : { d1_databases: [{ binding: recordBinding, database_name: `${ir.name}-db`, database_id: 'replace-me' }] }),
+        ...(objectBinding === undefined ? {} : { r2_buckets: [{ binding: objectBinding, bucket_name: `${ir.name}-objects` }] })
+    };
+    return `// Generated by turbowarp-http-server.\n${JSON.stringify(config, null, 2)}\n`;
 }
 function migration() {
     return `CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, collection TEXT NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);\n`;
+}
+function generatedReadme(ir, plan) {
+    const resources = [
+        ...(plan.requirements.includes('record-store') ? [`the D1 database \`${ir.name}-db\``] : []),
+        ...(plan.requirements.includes('object-storage') ? [`the R2 bucket \`${ir.name}-objects\``] : [])
+    ];
+    const setup = resources.length === 0
+        ? 'review the generated `wrangler.jsonc`'
+        : `create ${resources.join(' and ')} named in \`wrangler.jsonc\``;
+    const migration = plan.requirements.includes('record-store')
+        ? ` Apply \`migrations/0001_init.sql\` with Wrangler before serving record routes.`
+        : '';
+    return `# Generated Cloudflare Workers application
+
+Run \`npm install\`, ${setup}, replace only placeholder resource IDs, then run \`npm run dev\` or \`npm run deploy\`.${migration}
+
+R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
+
+## Rollback and cleanup
+
+Stop traffic or roll back the Worker deployment first. Generated code never deletes cloud resources automatically. Export required data, inspect D1/R2 bindings and dependent services, then delete resources manually only when no deployment references them.
+`;
 }
 //# sourceMappingURL=cloudflare.js.map

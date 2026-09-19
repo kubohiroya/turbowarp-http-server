@@ -1,5 +1,5 @@
 import {execFile} from 'node:child_process';
-import {mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {pathToFileURL} from 'node:url';
@@ -37,7 +37,7 @@ describe('IR v2 platform pipeline', () => {
     expect(first.manifest).toMatchObject({
       formatVersion: 1,
       irVersion: 2,
-      adapter: {id: 'cloudflare-workers', version: '1.0.0'},
+      adapter: {id: 'cloudflare-workers', version: '1.1.0'},
       requirements: ['record-store'],
       plan: {requirements: ['record-store'], bindings: {recordDatabase: 'DB'}}
     });
@@ -47,25 +47,19 @@ describe('IR v2 platform pipeline', () => {
   });
 
   it('returns distinct unknown-target, capability, and config diagnostics', () => {
-    const unknown = compileDeployIrV2(messageApp(), {target: 'firebase-functions'});
+    const unknown = compileDeployIrV2(messageApp(), {target: 'unknown-platform'});
     expect(unknown).toEqual({
       ok: false,
-      diagnostics: [expect.objectContaining({code: 'TW2_UNKNOWN_TARGET', targetId: 'firebase-functions'})]
+      diagnostics: [expect.objectContaining({code: 'TW2_UNKNOWN_TARGET', targetId: 'unknown-platform'})]
     });
 
-    const binary = messageApp();
-    binary.capabilities = [{kind: 'record-store'}, {kind: 'object-storage'}];
-    const sourceRef = {targetIndex: 0, targetName: 'Stage', blockId: 'asset', opcode: 'asset_resolve'};
-    binary.routes[0]!.body.splice(-1, 0, {
-      kind: 'asset-resolve',
-      locator: {namespace: 'assets', key: 'hero.png'},
-      result: {
-        id: 'asset',
-        type: {kind: 'value', valueType: {kind: 'union', members: ['null', 'binary-ref']}}
-      },
-      sourceRef
-    });
-    const unsupported = compileDeployIrV2(binary, {target: 'cloudflare-workers'});
+    const unsupportedIr = messageApp();
+    unsupportedIr.auth = {kind: 'jwt', scheme: 'external-jwt'};
+    unsupportedIr.capabilities = [{kind: 'record-store'}, {kind: 'auth', scheme: 'external-jwt'}];
+    unsupportedIr.routes[0]!.auth = 'required';
+    const sourceRef = {targetIndex: 0, targetName: 'Stage', blockId: 'auth-route', opcode: 'http_auth_required'};
+    unsupportedIr.routes[0]!.sourceRef = sourceRef;
+    const unsupported = compileDeployIrV2(unsupportedIr, {target: 'cloudflare-workers'});
     expect(unsupported).toEqual({
       ok: false,
       diagnostics: [
@@ -131,7 +125,7 @@ describe('IR v2 platform pipeline', () => {
     expect(result.files).toContain('src/core.generated.ts');
     expect(await readFile(join(output, 'turbowarp-server.generated.json'), 'utf8')).toContain('cloudflare-workers');
 
-    await symlink(resolve('node_modules'), join(output, 'node_modules'));
+    await installCloudflareTypecheckDependencies(output);
     await execFileAsync(resolve('node_modules/.bin/tsc'), ['--project', join(output, 'tsconfig.json')], {
       cwd: resolve('.')
     });
@@ -142,6 +136,56 @@ describe('IR v2 platform pipeline', () => {
     const after = generateHonoCore(messageApp());
     expect(before).toEqual(after);
     expect(before.entryModule).toBe('./core.generated.js');
+  });
+
+  it.each([
+    ['cloudflare-workers', 'src/platform.ts'],
+    ['firebase-functions', 'functions/src/platform.ts']
+  ])('rejects an unsafe object key inside the %s adapter before SDK access', async (target, path) => {
+    const result = compileDeployIrV2(messageApp(), {target});
+    if (!result.ok) throw new Error(`Expected ${target} compilation to succeed.`);
+    const platform = await loadModule(result.files[path]!);
+    let accessed = false;
+    const sdk =
+      target === 'cloudflare-workers'
+        ? {head: async () => {accessed = true; return null;}}
+        : {file: () => {accessed = true; throw new Error('SDK must not be called.');}};
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      resolve(locator: {namespace: string; key: string}): Promise<unknown>;
+    };
+
+    await expect(createObjectStore(sdk).resolve({namespace: 'asset', key: '../private'})).rejects.toMatchObject({
+      code: 'BINARY_INVALID_REF'
+    });
+    expect(accessed).toBe(false);
+  });
+
+  it.each([
+    ['put: checksum does not match (10037)', 'BINARY_INTEGRITY_MISMATCH'],
+    ['put: access denied (10003)', 'BINARY_STORAGE_FAILURE']
+  ])('maps a documented R2 error without exposing its message', async (message, code) => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      put(
+        locator: {namespace: string; key: string},
+        source: {chunks: AsyncIterable<Uint8Array>; size: number},
+        metadata: {integrity: string},
+        maxBytes: number
+      ): Promise<unknown>;
+    };
+    const bucket = {put: async () => Promise.reject(new Error(message))};
+    const chunks = (async function* (): AsyncIterable<Uint8Array> {yield new Uint8Array([1]);})();
+
+    await expect(
+      createObjectStore(bucket).put(
+        {namespace: 'asset', key: 'fixture.bin'},
+        {chunks, size: 1},
+        {integrity: `sha256:${'0'.repeat(64)}`},
+        1024
+      )
+    ).rejects.toMatchObject({code, message: code});
   });
 
   it('preserves v1 HTTP route behavior after upgrading to the v2 core', async () => {
@@ -236,6 +280,40 @@ async function loadModule(
   return import(`${pathToFileURL(modulePath).href}?test=${temporaryDirectories.length}`) as Promise<
     Record<string, (...args: unknown[]) => unknown>
   >;
+}
+
+async function installCloudflareTypecheckDependencies(output: string): Promise<void> {
+  const typesDirectory = join(output, 'node_modules/@cloudflare/workers-types');
+  await mkdir(typesDirectory, {recursive: true});
+  await writeFile(
+    join(typesDirectory, 'package.json'),
+    JSON.stringify({name: '@cloudflare/workers-types', version: '0.0.0-test', types: 'index.d.ts'})
+  );
+  await writeFile(join(typesDirectory, 'index.d.ts'), cloudflareSdkStubs());
+  await symlink(resolve('node_modules/hono'), join(output, 'node_modules/hono'));
+}
+
+function cloudflareSdkStubs(): string {
+  return `interface D1ResultMeta {changes: number}
+interface D1Result<T> {results: T[]; meta: D1ResultMeta}
+interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement;
+  run(): Promise<D1Result<unknown>>;
+  all<T>(): Promise<D1Result<T>>;
+  first<T>(): Promise<T | null>;
+}
+interface D1Database {prepare(query: string): D1PreparedStatement}
+interface R2HTTPMetadata {contentType?: string}
+interface R2Object {version: string; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
+interface R2ObjectBody extends R2Object {body: ReadableStream<Uint8Array>}
+interface R2PutOptions {httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
+interface R2Bucket {
+  head(key: string): Promise<R2Object | null>;
+  get(key: string): Promise<R2ObjectBody | null>;
+  put(key: string, value: ReadableStream<Uint8Array>, options?: R2PutOptions): Promise<R2Object | null>;
+  delete(key: string): Promise<void>;
+}
+`;
 }
 
 function messageApp(): DeployIrV2 {

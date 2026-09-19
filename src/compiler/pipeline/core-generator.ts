@@ -14,11 +14,11 @@ function coreSource(ir: DeployIrV2): string {
 import type {Hono} from 'hono';
 
 type StoredRecord = Record<string, unknown>;
-type BinaryLocator = {namespace: string; key: string};
-type BinaryRef = BinaryLocator & {contentType?: string; size?: number; integrity?: string; revision?: string};
-type BinaryMetadata = {contentType?: string; size?: number; integrity?: string; revision?: string};
-interface BinaryBodySource {chunks: AsyncIterable<Uint8Array>; contentType?: string; size?: number}
-interface BinaryObjectStore {
+export type BinaryLocator = {namespace: string; key: string};
+export type BinaryRef = BinaryLocator & {contentType?: string; size?: number; integrity?: string; revision?: string};
+export type BinaryMetadata = {contentType?: string; size?: number; integrity?: string; revision?: string};
+export interface BinaryBodySource {chunks: AsyncIterable<Uint8Array>; contentType?: string; size?: number}
+export interface BinaryObjectStore {
   resolve(locator: BinaryLocator): Promise<BinaryRef | null>;
   get(ref: BinaryRef): Promise<BinaryBodySource | null>;
   put(locator: BinaryLocator, source: BinaryBodySource, metadata: BinaryMetadata, maxBytes: number): Promise<BinaryRef>;

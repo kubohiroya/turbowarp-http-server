@@ -77,6 +77,8 @@ HTTP JSON envelope化とstream開始後のabort処理はcompiler pipeline／adap
 
 `BinaryObjectStore`は`resolve/get/put/delete`をlogical locatorとstreamで提供します。getの未存在は`null`、deleteの未存在は`false`、storage failureは例外として区別します。targetは`object-storage`、`streaming-body`、最大byte数をcapability planで宣言します。IRやfrontendを変更せず別adapterを追加できます。
 
+Cloudflare R2／D1とFirebase Cloud Storage／Firestoreへの具体的なmapping、key prefix、設定、整合性、smoke test方針は[IR v2 platform storage adapter](platform-storage-adapters.ja.md)を参照してください。
+
 ## ロールバック
 
 `compilerIrV2=false`またはIR v1ではbinary resource statementを使用しません。rollbackは生成処理を停止するだけで、既存cloud objectやbrowser側Asset Manager dataを自動削除しません。
