@@ -3,6 +3,11 @@ node_modules/
 *.log
 .DS_Store
 coverage/
+.pnpm-store/
+
+# Archify's visual-check output: a report about the architecture page, regenerated
+# whenever it is run. The page and its source JSON are kept; these are not.
+docs/*.visual-check.*
 
 # Tool artifacts. These exist because of what a machine runs, not because of this
 # project. Listed here as well as globally, so the repository does not depend on

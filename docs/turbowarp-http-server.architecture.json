@@ -1,0 +1,1014 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "TurboWarp-HTTP-Server Detailed Architecture",
+    "output": "turbowarp-http-server.architecture.html",
+    "quality_profile": "standard",
+    "repository": {
+      "url": "https://github.com/kubohiroya/turbowarp-http-server",
+      "revision": "078a72ee1975cb678c9ed7175520f25b262a4f7a"
+    },
+    "viewBox": [
+      1390,
+      560
+    ],
+    "views": [
+      {
+        "id": "server-path",
+        "label": "Server request path",
+        "focus": [
+          "http-clients",
+          "cli-entry",
+          "node-server",
+          "hono-router",
+          "route-dispatch",
+          "bridge-message",
+          "ws-bridge",
+          "tw-runtime"
+        ],
+        "note": "HTTP requests are accepted by Hono, normalized, and forwarded to one localhost TurboWarp WebSocket peer."
+      },
+      {
+        "id": "resource-path",
+        "label": "Resource path",
+        "focus": [
+          "http-clients",
+          "route-dispatch",
+          "asset-router",
+          "resource-auth",
+          "body-limits",
+          "cache-metadata",
+          "resource-capability"
+        ],
+        "note": "/@assets requests remain server-side and are mediated by limits, authorization, metadata, and a pluggable capability."
+      },
+      {
+        "id": "extension-path",
+        "label": "Extension runtime",
+        "focus": [
+          "extension-entry",
+          "block-defs",
+          "ws-client",
+          "request-contexts",
+          "response-builder",
+          "content-builders",
+          "scratch-vm"
+        ],
+        "note": "The unsandboxed extension converts protocol messages into Scratch block state and sends validated responses back."
+      },
+      {
+        "id": "community-path",
+        "label": "Community app",
+        "focus": [
+          "community-router",
+          "session-csrf",
+          "password-auth",
+          "upload-validation",
+          "community-storage",
+          "oauth-provider"
+        ],
+        "note": "The learning-only app is optional and keeps demo auth, upload validation, and in-memory state separate from bridge forwarding."
+      },
+      {
+        "id": "build-path",
+        "label": "Build and verification",
+        "focus": [
+          "block-defs",
+          "extension-entry",
+          "tw-runtime"
+        ],
+        "note": "Vite, TypeScript, Vitest, ESLint, docs scripts, and manifest generation sit around the runtime graph rather than on the request path."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "http-clients",
+      "type": "external",
+      "label": "HTTP Clients",
+      "sublabel": "Browser/fetch/LAN",
+      "tag": "untrusted input",
+      "pos": [
+        25,
+        180
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "README.md",
+          "line": 45,
+          "label": "Routes"
+        }
+      ]
+    },
+    {
+      "id": "tw-runtime",
+      "type": "external",
+      "label": "TW Runtime",
+      "sublabel": "Desktop/Web",
+      "tag": "unsandboxed",
+      "pos": [
+        1213,
+        180
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "README.md",
+          "line": 12,
+          "end_line": 15,
+          "label": "Requirement"
+        }
+      ]
+    },
+    {
+      "id": "resource-capability",
+      "type": "external",
+      "label": "Resource Cap.",
+      "sublabel": "Asset adapter",
+      "tag": "snapshot API",
+      "pos": [
+        188,
+        310
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 82,
+          "end_line": 89,
+          "label": "Interface"
+        }
+      ]
+    },
+    {
+      "id": "oauth-provider",
+      "type": "external",
+      "label": "OAuth Provider",
+      "sublabel": "Demo auth URL",
+      "tag": "optional",
+      "pos": [
+        188,
+        439
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/community.ts",
+          "line": 158,
+          "end_line": 201,
+          "label": "OAuth routes"
+        }
+      ]
+    },
+    {
+      "id": "cli-entry",
+      "type": "backend",
+      "label": "CLI Entrypoint",
+      "sublabel": "--host, --port",
+      "tag": "src/cli.ts",
+      "pos": [
+        188,
+        50
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/cli.ts",
+          "line": 17,
+          "end_line": 21,
+          "label": "Start"
+        }
+      ]
+    },
+    {
+      "id": "digest-files",
+      "type": "database",
+      "label": "htdigest File",
+      "sublabel": "HA1 store",
+      "tag": "0600 rename",
+      "pos": [
+        350,
+        50
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/auth/digest-file.ts",
+          "line": 11,
+          "end_line": 52,
+          "label": "Store"
+        }
+      ]
+    },
+    {
+      "id": "node-server",
+      "type": "backend",
+      "label": "Node Server",
+      "sublabel": "@hono/node-server",
+      "tag": "HTTP/HTTPS",
+      "pos": [
+        188,
+        180
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 212,
+          "end_line": 222,
+          "label": "serve"
+        }
+      ]
+    },
+    {
+      "id": "digest-auth",
+      "type": "security",
+      "label": "Digest Auth",
+      "sublabel": "MD5 nonce",
+      "tag": "optional",
+      "pos": [
+        350,
+        252
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/auth/digest.ts",
+          "line": 36,
+          "end_line": 75,
+          "label": "Verify"
+        }
+      ]
+    },
+    {
+      "id": "hono-router",
+      "type": "backend",
+      "label": "Hono Router",
+      "sublabel": "/health /ws app.all",
+      "tag": "src/server.ts",
+      "pos": [
+        350,
+        180
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 138,
+          "end_line": 209,
+          "label": "App"
+        }
+      ]
+    },
+    {
+      "id": "route-dispatch",
+      "type": "backend",
+      "label": "Route Dispatch",
+      "sublabel": "assets then bridge",
+      "tag": "app.all('*')",
+      "pos": [
+        513,
+        180
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 182,
+          "end_line": 207,
+          "label": "Fallback"
+        }
+      ]
+    },
+    {
+      "id": "bridge-message",
+      "type": "backend",
+      "label": "Bridge Message",
+      "sublabel": "route/query/header/body",
+      "tag": "protocol v1",
+      "pos": [
+        675,
+        180
+      ],
+      "size": [
+        145,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 382,
+          "end_line": 410,
+          "label": "Request"
+        },
+        {
+          "path": "src/protocol.ts",
+          "line": 27,
+          "end_line": 42,
+          "label": "Schema"
+        }
+      ]
+    },
+    {
+      "id": "ws-bridge",
+      "type": "messagebus",
+      "label": "WS Bridge",
+      "sublabel": "pending + timeout",
+      "tag": "single socket",
+      "pos": [
+        850,
+        180
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 279,
+          "end_line": 361,
+          "label": "Bridge"
+        }
+      ]
+    },
+    {
+      "id": "ws-upgrade",
+      "type": "security",
+      "label": "WS Upgrade Gate",
+      "sublabel": "/ws loopback",
+      "tag": "noServer",
+      "pos": [
+        850,
+        115
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 224,
+          "end_line": 251,
+          "label": "Upgrade"
+        }
+      ]
+    },
+    {
+      "id": "asset-router",
+      "type": "backend",
+      "label": "Asset Router",
+      "sublabel": "/@assets dispatch",
+      "tag": "global ns",
+      "pos": [
+        675,
+        310
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 557,
+          "end_line": 592,
+          "label": "Asset dispatch"
+        }
+      ]
+    },
+    {
+      "id": "resource-auth",
+      "type": "security",
+      "label": "Resource Auth",
+      "sublabel": "operation hook",
+      "tag": "get/put/list",
+      "pos": [
+        513,
+        310
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 836,
+          "end_line": 844,
+          "label": "Authorize"
+        }
+      ]
+    },
+    {
+      "id": "body-limits",
+      "type": "security",
+      "label": "Body Limits",
+      "sublabel": "text/binary caps",
+      "tag": "413",
+      "pos": [
+        513,
+        374
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 463,
+          "end_line": 478,
+          "label": "Text body"
+        },
+        {
+          "path": "src/server.ts",
+          "line": 809,
+          "end_line": 833,
+          "label": "Binary body"
+        }
+      ]
+    },
+    {
+      "id": "cache-metadata",
+      "type": "backend",
+      "label": "Cache Metadata",
+      "sublabel": "ETag/Modified",
+      "tag": "304/no-store",
+      "pos": [
+        350,
+        310
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 766,
+          "end_line": 807,
+          "label": "Headers"
+        }
+      ]
+    },
+    {
+      "id": "extension-entry",
+      "type": "frontend",
+      "label": "Extension Entry",
+      "sublabel": "register check",
+      "tag": "src/index.ts",
+      "pos": [
+        1000,
+        50
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/index.ts",
+          "line": 1,
+          "end_line": 8,
+          "label": "Register"
+        }
+      ]
+    },
+    {
+      "id": "block-defs",
+      "type": "frontend",
+      "label": "Block Defs",
+      "sublabel": "JSON -> blocks",
+      "tag": "opcodes",
+      "pos": [
+        1163,
+        50
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/block-definitions.json",
+          "line": 1,
+          "label": "Definitions"
+        },
+        {
+          "path": "src/extension.ts",
+          "line": 116,
+          "end_line": 123,
+          "label": "getInfo"
+        }
+      ]
+    },
+    {
+      "id": "ws-client",
+      "type": "frontend",
+      "label": "WS Client",
+      "sublabel": "connect/send",
+      "tag": "WebSocket",
+      "pos": [
+        1013,
+        180
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/extension.ts",
+          "line": 126,
+          "end_line": 162,
+          "label": "Socket"
+        }
+      ]
+    },
+    {
+      "id": "request-contexts",
+      "type": "frontend",
+      "label": "Request Contexts",
+      "sublabel": "per-request state",
+      "tag": "Map",
+      "pos": [
+        1013,
+        245
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/extension.ts",
+          "line": 442,
+          "end_line": 486,
+          "label": "Context"
+        }
+      ]
+    },
+    {
+      "id": "response-builder",
+      "type": "frontend",
+      "label": "Response Builder",
+      "sublabel": "status/headers/body",
+      "tag": "blocks",
+      "pos": [
+        1013,
+        310
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/extension.ts",
+          "line": 246,
+          "end_line": 308,
+          "label": "Response blocks"
+        }
+      ]
+    },
+    {
+      "id": "content-builders",
+      "type": "frontend",
+      "label": "Content Builders",
+      "sublabel": "Markdown + HTML",
+      "tag": "handles",
+      "pos": [
+        850,
+        310
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/extension.ts",
+          "line": 330,
+          "end_line": 423,
+          "label": "Builders"
+        }
+      ]
+    },
+    {
+      "id": "scratch-vm",
+      "type": "frontend",
+      "label": "Scratch VM Hats",
+      "sublabel": "startHats",
+      "tag": "callback",
+      "pos": [
+        1163,
+        374
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/extension.ts",
+          "line": 493,
+          "end_line": 495,
+          "label": "Hat trigger"
+        }
+      ]
+    },
+    {
+      "id": "community-router",
+      "type": "backend",
+      "label": "Community Router",
+      "sublabel": "login/projects/auth",
+      "tag": "default off",
+      "pos": [
+        675,
+        439
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/community.ts",
+          "line": 87,
+          "end_line": 350,
+          "label": "Routes"
+        }
+      ]
+    },
+    {
+      "id": "session-csrf",
+      "type": "security",
+      "label": "Session + CSRF",
+      "sublabel": "HTTP-only cookie",
+      "tag": "forms",
+      "pos": [
+        513,
+        439
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/community.ts",
+          "line": 467,
+          "end_line": 512,
+          "label": "Session"
+        }
+      ]
+    },
+    {
+      "id": "password-auth",
+      "type": "security",
+      "label": "Password Auth",
+      "sublabel": "scrypt compare",
+      "tag": "demo",
+      "pos": [
+        350,
+        439
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/community.ts",
+          "line": 497,
+          "end_line": 508,
+          "label": "Password"
+        }
+      ]
+    },
+    {
+      "id": "upload-validation",
+      "type": "security",
+      "label": "Upload Checks",
+      "sublabel": "SB3/image check",
+      "tag": "multipart",
+      "pos": [
+        850,
+        439
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/community.ts",
+          "line": 529,
+          "end_line": 641,
+          "label": "Upload checks"
+        }
+      ]
+    },
+    {
+      "id": "community-storage",
+      "type": "database",
+      "label": "Community DB",
+      "sublabel": "users/sessions/SB3",
+      "tag": "in-memory",
+      "pos": [
+        1013,
+        439
+      ],
+      "size": [
+        130,
+        38
+      ],
+      "sources": [
+        {
+          "path": "src/community.ts",
+          "line": 353,
+          "end_line": 442,
+          "label": "Store"
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Local Node.js server process",
+      "wraps": [
+        "cli-entry",
+        "digest-files",
+        "node-server",
+        "digest-auth",
+        "hono-router",
+        "route-dispatch",
+        "bridge-message",
+        "ws-bridge",
+        "ws-upgrade",
+        "asset-router",
+        "resource-auth",
+        "body-limits",
+        "cache-metadata",
+        "community-router",
+        "session-csrf",
+        "password-auth",
+        "upload-validation",
+        "community-storage"
+      ],
+      "pad": 22
+    },
+    {
+      "kind": "security-group",
+      "label": "Public HTTP trust boundary",
+      "wraps": [
+        "http-clients",
+        "node-server",
+        "digest-auth",
+        "hono-router",
+        "route-dispatch"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "Localhost-only WebSocket boundary",
+      "wraps": [
+        "ws-upgrade",
+        "ws-bridge",
+        "ws-client",
+        "tw-runtime"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "Asset capability boundary",
+      "wraps": [
+        "resource-capability",
+        "cache-metadata",
+        "resource-auth",
+        "body-limits",
+        "asset-router"
+      ],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "Unsandboxed TurboWarp extension boundary",
+      "wraps": [
+        "tw-runtime",
+        "extension-entry",
+        "block-defs",
+        "ws-client",
+        "request-contexts",
+        "response-builder",
+        "content-builders",
+        "scratch-vm"
+      ],
+      "pad": 18
+    }
+  ],
+  "connections": [
+    {
+      "id": "cli-to-digest-file",
+      "from": "cli-entry",
+      "to": "digest-files",
+      "variant": "dashed"
+    },
+    {
+      "id": "cli-to-node",
+      "from": "cli-entry",
+      "to": "node-server"
+    },
+    {
+      "id": "clients-to-node",
+      "from": "http-clients",
+      "to": "node-server",
+      "variant": "emphasis"
+    },
+    {
+      "id": "node-to-router",
+      "from": "node-server",
+      "to": "hono-router"
+    },
+    {
+      "id": "digest-to-router",
+      "from": "digest-auth",
+      "to": "hono-router",
+      "variant": "security"
+    },
+    {
+      "id": "router-to-dispatch",
+      "from": "hono-router",
+      "to": "route-dispatch"
+    },
+    {
+      "id": "dispatch-to-bridge-message",
+      "from": "route-dispatch",
+      "to": "bridge-message"
+    },
+    {
+      "id": "bridge-message-to-ws",
+      "from": "bridge-message",
+      "to": "ws-bridge"
+    },
+    {
+      "id": "ws-upgrade-to-bridge",
+      "from": "ws-upgrade",
+      "to": "ws-bridge",
+      "variant": "security"
+    },
+    {
+      "id": "ws-bridge-to-client",
+      "from": "ws-bridge",
+      "to": "ws-client",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ws-client-to-runtime",
+      "from": "ws-client",
+      "to": "tw-runtime"
+    },
+    {
+      "id": "runtime-to-entry",
+      "from": "tw-runtime",
+      "to": "extension-entry",
+      "variant": "dashed"
+    },
+    {
+      "id": "entry-to-blocks",
+      "from": "extension-entry",
+      "to": "block-defs"
+    },
+    {
+      "id": "ws-client-to-contexts",
+      "from": "ws-client",
+      "to": "request-contexts"
+    },
+    {
+      "id": "contexts-to-hats",
+      "from": "request-contexts",
+      "to": "scratch-vm"
+    },
+    {
+      "id": "contexts-to-response",
+      "from": "request-contexts",
+      "to": "response-builder"
+    },
+    {
+      "id": "content-to-response",
+      "from": "content-builders",
+      "to": "response-builder"
+    },
+    {
+      "id": "dispatch-to-asset-router",
+      "from": "route-dispatch",
+      "to": "asset-router"
+    },
+    {
+      "id": "asset-to-auth",
+      "from": "asset-router",
+      "to": "resource-auth",
+      "variant": "security"
+    },
+    {
+      "id": "asset-to-limits",
+      "from": "asset-router",
+      "to": "body-limits",
+      "variant": "security"
+    },
+    {
+      "id": "cache-to-resource",
+      "from": "cache-metadata",
+      "to": "resource-capability"
+    },
+    {
+      "id": "dispatch-to-community",
+      "from": "route-dispatch",
+      "to": "community-router",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "right",
+      "via": [
+        [
+          578,
+          280
+        ],
+        [
+          830,
+          280
+        ],
+        [
+          830,
+          458
+        ]
+      ]
+    },
+    {
+      "id": "community-to-session",
+      "from": "community-router",
+      "to": "session-csrf",
+      "variant": "security"
+    },
+    {
+      "id": "community-to-upload",
+      "from": "community-router",
+      "to": "upload-validation",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "主要パス",
+      "items": [
+        "HTTP: client -> Node/Hono -> dispatch -> Bridge Message -> WS Bridge -> TurboWarp extension.",
+        "Assets and community routes stay server-side: /@assets uses auth/limits/cache/ResourceCapability; community uses session, password, upload, OAuth demo, and in-memory state."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "信頼境界と依存",
+      "items": [
+        "Untrusted public HTTP crosses optional Digest/TLS; /ws is loopback-only and keeps one active extension socket with request timeouts.",
+        "Runtime: Node.js 22+, hono, @hono/node-server, ws, node:https/crypto/fs. Tooling: Vite, TurboWarp Vite plugin, TypeScript, Vitest, ESLint."
+      ]
+    }
+  ]
+}
