@@ -81,4 +81,4 @@ Cloudflare R2／D1とFirebase Cloud Storage／Firestoreへの具体的なmapping
 
 ## ロールバック
 
-`compilerIrV2=false`またはIR v1ではbinary resource statementを使用しません。rollbackは生成処理を停止するだけで、既存cloud objectやbrowser側Asset Manager dataを自動削除しません。
+rollbackはbinary resourceを含む生成・deployを停止するだけで、既存cloud objectやbrowser側Asset Cache dataを自動削除しません。

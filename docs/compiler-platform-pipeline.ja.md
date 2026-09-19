@@ -1,6 +1,6 @@
 # IR v2 compiler／platform adapter境界
 
-Deploy IR v2の生成pipelineは、target-neutralな検証とHono core生成を、platform固有の計画・entrypoint・storage・deploy artifact生成から分離します。`compilerIrV2`は既定OFFであり、CLIで`--ir-version 2`を明示した場合だけこのpipelineを選択します。
+Deploy IR v2の生成pipelineは、target-neutralな検証とHono core生成を、platform固有の計画・entrypoint・storage・deploy artifact生成から分離します。compilerはIR v2だけを扱い、CLIではtargetを必ず明示します。
 
 ```text
 Deploy IR v2
@@ -21,7 +21,6 @@ turbowarp-http-server compile \
   --input deploy-ir-v2.json \
   --output generated-worker \
   --format ir \
-  --ir-version 2 \
   --target cloudflare-workers
 ```
 
@@ -34,18 +33,16 @@ turbowarp-http-server compile \
   --input project.json \
   --output generated-worker \
   --format turbowarp-json \
-  --ir-version 2 \
   --target cloudflare-workers \
   --manifest-lock turboWarp-server.lock.json
 ```
 
-- v2では`--target`を必須とし、targetを推測しません。
-- v2 CLI入力はcanonical `--format ir`に加え、既存built-in HTTP block subsetの`--format turbowarp-json`を受理します。
+- `--target`を必須とし、targetを推測しません。
+- CLI入力はcanonical `--format ir`に加え、built-in HTTP block subsetの`--format turbowarp-json`を受理します。
 - `--target-config <file>`はadapter設定です。IRへmergeせず、secret値を受け取りません。
 - `--enable-named-response-body`は実験的な`respond-named-body`だけを有効化し、既定OFFです。選択targetに`named-body-provider`がなければ生成しません。
-- `--format turbowarp-json --ir-version 2`はbuilt-in HTTP block、literal bounded repeat、named responseを直接IR v2へloweringします。`--manifest-lock`指定時はlock済みStructured Data reporter／loopとKVS 0.1.0の5操作も同じfrontendでloweringします。lockにないextension opcodeや旧Asset Manager操作を推測しません。
+- `--format turbowarp-json`はbuilt-in HTTP block、literal bounded repeat、named responseを直接IR v2へloweringします。`--manifest-lock`指定時はlock済みStructured Data reporter／loopとKVS 0.1.0の5操作も同じfrontendでloweringします。lockにないextension opcodeや旧Asset Manager操作を推測しません。
 - Cloudflare adapterはD1／R2 binding名、Firebase adapterはfunction名／bucket環境変数名／Firestore collection名だけを受け取ります。secretやproject IDは受け取りません。詳細は[IR v2 platform storage adapter](platform-storage-adapters.ja.md)を参照してください。
-- v1は引き続き既存Cloudflare generatorを使用し、`--ir-version`省略時の動作もv1のままです。
 
 ## module責務
 
@@ -94,4 +91,4 @@ Structured Dataのstatus mappingは[Structured Data lowering](structured-data-lo
 
 ## ロールバック
 
-問題時は`--ir-version 1`へ戻すか、`compilerIrV2=false`を維持します。生成処理はcloud resourceを変更しないため、rollback時にresource削除は行いません。既存v1 generatorの削除はadapter conformance完了後の別作業です。
+問題時は対象targetへの生成・deployを停止し、既存のbrowser bridgeを利用します。生成処理はcloud resourceを変更しないため、rollback時にresource削除は行いません。

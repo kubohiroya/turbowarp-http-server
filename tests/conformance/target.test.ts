@@ -38,7 +38,7 @@ describe('conformance target layer', () => {
     }
   });
 
-  it('rejects secrets and reports unsupported auth capability per target', () => {
+  it('rejects secret config and keeps authentication capability target-specific', () => {
     for (const target of ['cloudflare-workers', 'firebase-functions']) {
       const secret = compileDeployIrV2(targetIr(), {
         target,
@@ -54,19 +54,21 @@ describe('conformance target layer', () => {
     ir.auth = {kind: 'jwt', scheme: 'external-jwt'};
     ir.capabilities.push({kind: 'auth', scheme: 'external-jwt'});
     ir.routes[0]!.auth = 'required';
-    for (const target of ['cloudflare-workers', 'firebase-functions']) {
-      expect(compileDeployIrV2(ir, {target})).toEqual({
-        ok: false,
-        diagnostics: [
-          expect.objectContaining({
-            code: 'TW2_TARGET_CAPABILITY_UNSUPPORTED',
-            targetId: target,
-            routeId: 'create',
-            suggestion: expect.any(String)
-          })
-        ]
-      });
-    }
+    const cloudflare = compileDeployIrV2(ir, {target: 'cloudflare-workers'});
+    expect(cloudflare).toMatchObject({ok: true});
+    if (cloudflare.ok) expect(cloudflare.files).toHaveProperty('src/auth.ts');
+
+    expect(compileDeployIrV2(ir, {target: 'firebase-functions'})).toEqual({
+      ok: false,
+      diagnostics: [
+        expect.objectContaining({
+          code: 'TW2_TARGET_CAPABILITY_UNSUPPORTED',
+          targetId: 'firebase-functions',
+          routeId: 'create',
+          suggestion: expect.any(String)
+        })
+      ]
+    });
   });
 
   it('enforces a target-specific binary limit before generation', () => {

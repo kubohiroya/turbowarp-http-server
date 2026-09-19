@@ -1,11 +1,8 @@
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, resolve } from 'node:path';
-import { generateCloudflareWorker } from './generator.js';
-import { compileTurboWarpProject } from './turbowarp.js';
 import { compileTurboWarpProjectV2 } from './turbowarp-v2.js';
 import { resolveCompilerManifestLock } from './manifest/resolve.js';
-import { parseDeployIr } from './validate.js';
-import { parseDeployIrV2 } from './ir-v2/index.js';
+import { parseDeployIrV2Json } from './ir-v2/index.js';
 import { compileDeployIrV2 } from './pipeline/index.js';
 export * from './feature-flags.js';
 export * from './adapters/index.js';
@@ -22,48 +19,34 @@ export async function compileToDirectory(options) {
     if (extname(options.input).toLowerCase() === '.sb3') {
         throw new Error('Direct .sb3 input is not supported yet. Export or extract project.json first.');
     }
-    if (options.manifestLock !== undefined && (options.irVersion !== 2 || options.format !== 'turbowarp-json')) {
-        throw new Error('manifestLock requires IR v2 TurboWarp JSON input.');
+    if (options.manifestLock !== undefined && options.format !== 'turbowarp-json') {
+        throw new Error('manifestLock requires TurboWarp JSON input.');
     }
     const inputPath = resolve(options.input);
     const outputPath = resolve(options.output);
-    const raw = JSON.parse(await readFile(inputPath, 'utf8'));
-    if (options.irVersion === 2) {
-        if (!options.target)
-            throw new Error('IR v2 compilation requires --target <id>.');
-        const registry = options.format === 'turbowarp-json' && options.manifestLock !== undefined
-            ? (await resolveCompilerManifestLock(options.manifestLock)).registry
-            : undefined;
-        const frontend = options.format === 'ir'
-            ? { ir: parseDeployIrV2(raw), diagnostics: [] }
-            : compileTurboWarpProjectV2(raw, registry);
-        const frontendErrors = frontend.diagnostics.filter(({ severity }) => severity === 'error');
-        if (frontendErrors.length > 0)
-            throw new CompilerDiagnosticsError(frontendErrors);
-        const ir = frontend.ir;
-        const targetConfig = options.targetConfig === undefined
-            ? undefined
-            : JSON.parse(await readFile(resolve(options.targetConfig), 'utf8'));
-        const result = compileDeployIrV2(ir, {
-            target: options.target,
-            targetConfig,
-            featureFlags: { namedResponseBody: options.namedResponseBody === true }
-        });
-        if (!result.ok)
-            throw new CompilerDiagnosticsError(result.diagnostics);
-        await writeGeneratedFiles(outputPath, result.files, options.force === true);
-        return { ir, diagnostics: frontend.diagnostics, files: Object.keys(result.files).sort() };
-    }
-    const compiled = options.format === 'ir'
-        ? { ir: parseDeployIr(raw), diagnostics: [] }
-        : compileTurboWarpProject(raw);
-    const errors = compiled.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
-    if (errors.length > 0)
-        throw new CompilerDiagnosticsError(errors);
-    const ir = parseDeployIr(compiled.ir);
-    const files = generateCloudflareWorker(ir);
-    await writeGeneratedFiles(outputPath, files, options.force === true);
-    return { ir, diagnostics: compiled.diagnostics, files: Object.keys(files).sort() };
+    const source = await readFile(inputPath, 'utf8');
+    const registry = options.format === 'turbowarp-json' && options.manifestLock !== undefined
+        ? (await resolveCompilerManifestLock(options.manifestLock)).registry
+        : undefined;
+    const frontend = options.format === 'ir'
+        ? { ir: parseDeployIrV2Json(source), diagnostics: [] }
+        : compileTurboWarpProjectV2(JSON.parse(source), registry);
+    const frontendErrors = frontend.diagnostics.filter(({ severity }) => severity === 'error');
+    if (frontendErrors.length > 0)
+        throw new CompilerDiagnosticsError(frontendErrors);
+    const ir = frontend.ir;
+    const targetConfig = options.targetConfig === undefined
+        ? undefined
+        : JSON.parse(await readFile(resolve(options.targetConfig), 'utf8'));
+    const result = compileDeployIrV2(ir, {
+        target: options.target,
+        targetConfig,
+        featureFlags: { namedResponseBody: options.namedResponseBody === true }
+    });
+    if (!result.ok)
+        throw new CompilerDiagnosticsError(result.diagnostics);
+    await writeGeneratedFiles(outputPath, result.files, options.force === true);
+    return { ir, diagnostics: frontend.diagnostics, files: Object.keys(result.files).sort() };
 }
 async function writeGeneratedFiles(output, files, force) {
     await mkdir(output, { recursive: true });
@@ -96,7 +79,6 @@ function diagnosticLocation(diagnostic) {
         const sourceRef = diagnostic.sourceRef;
         return [sourceRef?.targetName, sourceRef?.blockId].filter(Boolean).join(':');
     }
-    const legacy = diagnostic;
-    return [legacy.target, legacy.blockId].filter(Boolean).join(':');
+    return '';
 }
 //# sourceMappingURL=index.js.map

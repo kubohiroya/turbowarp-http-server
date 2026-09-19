@@ -1,6 +1,5 @@
 import {readFile} from 'node:fs/promises';
 import {describe, expect, it} from 'vitest';
-import {parseDeployIr} from '../src/compiler/validate.js';
 import {
   canonicalizeDeployIrV2,
   canonicalizeJson,
@@ -10,13 +9,9 @@ import {
   IR_V2_STATEMENT_KINDS,
   parseDeployIrV2,
   parseDeployIrV2Json,
-  upgradeDeployIrV1,
   type DeployIrV2
 } from '../src/compiler/ir-v2/index.js';
-import {
-  compilerFeatureFlagsForIrVersion,
-  DEFAULT_COMPILER_FEATURE_FLAGS
-} from '../src/compiler/feature-flags.js';
+import {DEFAULT_COMPILER_FEATURE_FLAGS} from '../src/compiler/feature-flags.js';
 
 describe('Deploy IR v2 schema foundation', () => {
   it('strictly parses typed values and canonicalizes the document deterministically', () => {
@@ -71,6 +66,7 @@ describe('Deploy IR v2 schema foundation', () => {
   });
 
   it('returns stable diagnostic codes for invalid versions, nodes, values, and JSON', () => {
+    expectIrV2Error(() => parseDeployIrV2({...minimalV2(), version: 1}), 'TW2_IR_VERSION');
     expectIrV2Error(() => parseDeployIrV2({...minimalV2(), version: 3}), 'TW2_IR_VERSION');
     const unknownNode = minimalV2();
     unknownNode.routes[0]!.body[0] = {kind: 'unknown'} as never;
@@ -144,10 +140,8 @@ describe('Deploy IR v2 schema foundation', () => {
     expect(schema.$defs.pathSegment.oneOf.map((entry) => entry.properties.value.type)).toEqual(['string', 'integer']);
   });
 
-  it('keeps IR v2 disabled unless version 2 is explicitly selected', () => {
-    expect(DEFAULT_COMPILER_FEATURE_FLAGS).toEqual({compilerIrV2: false, namedResponseBody: false});
-    expect(compilerFeatureFlagsForIrVersion(1)).toEqual({compilerIrV2: false, namedResponseBody: false});
-    expect(compilerFeatureFlagsForIrVersion(2)).toEqual({compilerIrV2: true, namedResponseBody: false});
+  it('keeps optional named response bodies disabled by default', () => {
+    expect(DEFAULT_COMPILER_FEATURE_FLAGS).toEqual({namedResponseBody: false});
   });
 
   it('parses the committed v2 example and normalizes set-like type metadata', async () => {
@@ -167,84 +161,6 @@ describe('Deploy IR v2 schema foundation', () => {
     );
   });
 
-  it('upgrades v1 into platform-neutral capabilities and typed bindings', () => {
-    const v1 = parseDeployIr({
-      version: 1,
-      name: 'legacy-api',
-      auth: 'cloudflare-access',
-      routes: [
-        {
-          id: 'create',
-          method: 'POST',
-          path: '/records',
-          auth: 'required',
-          actions: [
-            {
-              kind: 'record-create',
-              collection: 'records',
-              data: {kind: 'request', source: 'body'},
-              result: 'created'
-            },
-            {
-              kind: 'set-header',
-              name: 'x-client',
-              value: {kind: 'request', source: 'client-address'}
-            },
-            {kind: 'respond', format: 'json', body: {kind: 'result', name: 'created'}}
-          ]
-        }
-      ]
-    });
-
-    const upgraded = upgradeDeployIrV1(v1, 'cloudflare-workers');
-    expect(upgraded.diagnostics).toEqual([]);
-    expect(upgraded.targetConfig).toEqual({
-      target: 'cloudflare-workers',
-      auth: {provider: 'cloudflare-access'}
-    });
-    expect(upgraded.ir.auth).toEqual({kind: 'jwt', scheme: 'trusted-access-jwt'});
-    expect(upgraded.ir.capabilities).toEqual(
-      expect.arrayContaining([
-        {kind: 'auth', scheme: 'trusted-access-jwt'},
-        {kind: 'record-store'},
-        {kind: 'request-metadata', field: 'client-address'}
-      ])
-    );
-    const create = upgraded.ir.routes[0]!.body[0];
-    expect(create).toMatchObject({
-      kind: 'record-create',
-      result: {id: 'created', type: {kind: 'value', valueType: 'json-object'}},
-      data: {kind: 'request', valueType: 'string', source: 'body-text'}
-    });
-    expect(upgraded.ir.routes[0]!.body[2]).toMatchObject({
-      kind: 'respond',
-      body: {kind: 'binding', binding: 'created', valueType: 'json-object'}
-    });
-    expect(parseDeployIrV2(upgraded.ir)).toEqual(upgraded.ir);
-  });
-
-  it('does not silently upgrade Cloudflare Access for another target', () => {
-    const v1 = parseDeployIr({
-      version: 1,
-      name: 'legacy-api',
-      auth: 'cloudflare-access',
-      routes: [
-        {
-          id: 'home',
-          method: 'GET',
-          path: '/',
-          auth: 'required',
-          actions: [{kind: 'respond', format: 'text', body: {kind: 'literal', value: 'hello'}}]
-        }
-      ]
-    });
-
-    const upgraded = upgradeDeployIrV1(v1, 'firebase-functions');
-    expect(upgraded.targetConfig).toBeUndefined();
-    expect(upgraded.diagnostics).toEqual([
-      expect.objectContaining({severity: 'error', code: 'TW2_V1_TARGET_CONSTRAINT'})
-    ]);
-  });
 });
 
 function minimalV2(): DeployIrV2 {

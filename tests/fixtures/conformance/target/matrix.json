@@ -3,7 +3,7 @@
   "targets": [
     {
       "id": "cloudflare-workers",
-      "adapterVersion": "1.4.0",
+      "adapterVersion": "1.5.0",
       "tsconfig": "tsconfig.json",
       "expectedFiles": [
         "README.md",

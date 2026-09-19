@@ -21,7 +21,7 @@ import {
 } from '../src/named-body.js';
 
 const temporaryDirectories: string[] = [];
-const enabled = {compilerIrV2: true, namedResponseBody: true} as const;
+const enabled = {namedResponseBody: true} as const;
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, {recursive: true, force: true})));
@@ -163,7 +163,6 @@ describe('named response body IR', () => {
         input,
         output: join(directory, 'disabled'),
         format: 'ir',
-        irVersion: 2,
         target: 'cloudflare-workers'
       })
     ).rejects.toMatchObject({
@@ -174,7 +173,6 @@ describe('named response body IR', () => {
         input,
         output: join(directory, 'enabled'),
         format: 'ir',
-        irVersion: 2,
         target: 'cloudflare-workers',
         namedResponseBody: true
       })

@@ -8,9 +8,17 @@ import {findCapabilityOrigin} from '../pipeline/requirements.js';
 
 export const cloudflareWorkersAdapter: PlatformAdapter = {
   id: 'cloudflare-workers',
-  version: '1.4.0',
+  version: '1.5.0',
   capabilities: () => ({
-    keys: ['key-value-store', 'object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
+    keys: [
+      'auth:external-jwt',
+      'auth:trusted-access-jwt',
+      'key-value-store',
+      'object-storage',
+      'record-store',
+      'request-metadata:client-address',
+      'streaming-body'
+    ],
     maxBinaryBytes: 16 * 1024 * 1024
   }),
   plan({ir, requirements, config}) {
@@ -49,6 +57,7 @@ export const cloudflareWorkersAdapter: PlatformAdapter = {
       'tsconfig.json': tsconfig(),
       'src/index.ts': indexSource(plan),
       'src/platform.ts': platformSource(),
+      ...(authRequirement(plan) === undefined ? {} : {'src/auth.ts': authSource()}),
       'wrangler.jsonc': wrangler(ir, plan),
       ...(plan.bindings.recordDatabase === undefined ? {} : {'migrations/0001_init.sql': migration(plan)}),
       'README.md': generatedReadme(ir, plan)
@@ -107,11 +116,23 @@ function configDiagnostic(): PipelineDiagnostic {
 function indexSource(plan: PlatformPlan): string {
   const recordBinding = plan.bindings.recordDatabase;
   const objectBinding = plan.bindings.objectBucket;
+  const authScheme = authRequirement(plan);
   const bindingMembers = [
     ...(recordBinding === undefined ? [] : [`${recordBinding}: D1Database`]),
-    ...(objectBinding === undefined ? [] : [`${objectBinding}: R2Bucket`])
+    ...(objectBinding === undefined ? [] : [`${objectBinding}: R2Bucket`]),
+    ...(authScheme === 'trusted-access-jwt'
+      ? ['CF_ACCESS_TEAM_DOMAIN: string', 'CF_ACCESS_AUD: string']
+      : authScheme === 'external-jwt'
+        ? ['JWT_ISSUER: string', 'JWT_AUDIENCE: string', 'JWT_JWKS_URL: string']
+        : [])
   ].join('; ');
   const services = [
+    ...(authScheme === undefined
+      ? []
+      : [`authenticate: (context) => {
+    const current = context as {req: {raw: Request}; env: Bindings};
+    return authenticateRequest(current.req.raw, current.env, '${authScheme}');
+  }`]),
     ...(recordBinding === undefined || !plan.requirements.includes('record-store')
       ? []
       : [`records: (context) => createRecordStore((context as {env: Bindings}).env.${recordBinding})`]),
@@ -126,6 +147,7 @@ function indexSource(plan: PlatformPlan): string {
   return `import {Hono} from 'hono';
 import {registerCoreRoutes} from './core.generated.js';
 import {createKeyValueStore, createObjectStore, createRecordStore} from './platform.js';
+${authScheme === undefined ? '' : "import {authenticateRequest} from './auth.js';"}
 
 type Bindings = {${bindingMembers}};
 const app = new Hono<{Bindings: Bindings}>();
@@ -133,6 +155,62 @@ registerCoreRoutes(app, {
   ${services}
 });
 export default app;
+`;
+}
+
+function authRequirement(plan: PlatformPlan): 'external-jwt' | 'trusted-access-jwt' | undefined {
+  if (plan.requirements.includes('auth:external-jwt')) return 'external-jwt';
+  if (plan.requirements.includes('auth:trusted-access-jwt')) return 'trusted-access-jwt';
+  return undefined;
+}
+
+function authSource(): string {
+  return `import {createRemoteJWKSet, jwtVerify} from 'jose';
+import type {AuthIdentity, AuthScheme} from './core.generated.js';
+
+type AuthEnv = {
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
+  JWT_ISSUER?: string;
+  JWT_AUDIENCE?: string;
+  JWT_JWKS_URL?: string;
+};
+
+export async function authenticateRequest(
+  request: Request,
+  env: AuthEnv,
+  scheme: AuthScheme
+): Promise<AuthIdentity | null> {
+  const token = scheme === 'trusted-access-jwt'
+    ? request.headers.get('cf-access-jwt-assertion')
+    : bearerToken(request.headers.get('authorization'));
+  if (token === null) return null;
+  const issuer = scheme === 'trusted-access-jwt'
+    ? optional(env.CF_ACCESS_TEAM_DOMAIN)?.replace(/\\/$/u, '')
+    : optional(env.JWT_ISSUER);
+  const audience = scheme === 'trusted-access-jwt'
+    ? optional(env.CF_ACCESS_AUD)
+    : optional(env.JWT_AUDIENCE);
+  const jwksText = scheme === 'trusted-access-jwt'
+    ? issuer === undefined ? undefined : new URL('/cdn-cgi/access/certs', issuer).href
+    : optional(env.JWT_JWKS_URL);
+  if (issuer === undefined || audience === undefined || jwksText === undefined) return null;
+  try {
+    const {payload} = await jwtVerify(token, createRemoteJWKSet(new URL(jwksText)), {issuer, audience});
+    return typeof payload.sub === 'string' ? {id: payload.sub, claims: {...payload}} : null;
+  } catch {
+    return null;
+  }
+}
+
+function bearerToken(value: string | null): string | null {
+  const match = value?.match(/^Bearer\\s+(.+)$/iu);
+  return match?.[1] ?? null;
+}
+
+function optional(value: string | undefined): string | undefined {
+  return value === undefined || value.length === 0 ? undefined : value;
+}
 `;
 }
 
@@ -348,13 +426,14 @@ function isR2BadDigest(error: unknown): boolean {return error instanceof Error &
 }
 
 function packageJson(ir: DeployIrV2): string {
+  const usesAuth = ir.auth.kind === 'jwt';
   return `${JSON.stringify(
     {
       name: ir.name.toLowerCase().replace(/[^a-z0-9._-]+/gu, '-'),
       private: true,
       type: 'module',
       scripts: {dev: 'wrangler dev', deploy: 'wrangler deploy', typecheck: 'tsc --noEmit'},
-      dependencies: {hono: '^4.13.8'},
+      dependencies: {hono: '^4.13.8', ...(usesAuth ? {jose: '^6.1.0'} : {})},
       devDependencies: {'@cloudflare/workers-types': '^5.20260919.1', typescript: '^5.9.3', wrangler: '^4.135.0'}
     },
     null,
@@ -415,9 +494,14 @@ function generatedReadme(ir: DeployIrV2, plan: PlatformPlan): string {
   const migration = plan.requirements.includes('record-store') || plan.requirements.includes('key-value-store')
     ? ` Apply \`migrations/0001_init.sql\` with Wrangler before serving storage-backed routes.`
     : '';
+  const auth = authRequirement(plan) === 'trusted-access-jwt'
+    ? ' Configure `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as deployment variables or secrets.'
+    : authRequirement(plan) === 'external-jwt'
+      ? ' Configure `JWT_ISSUER`, `JWT_AUDIENCE`, and `JWT_JWKS_URL` as deployment variables or secrets.'
+      : '';
   return `# Generated Cloudflare Workers application
 
-Run \`npm install\`, ${setup}, replace only placeholder resource IDs, then run \`npm run dev\` or \`npm run deploy\`.${migration}
+Run \`npm install\`, ${setup}, replace only placeholder resource IDs, then run \`npm run dev\` or \`npm run deploy\`.${migration}${auth}
 
 R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. Revisions combine R2's unique upload version, ETag, and upload timestamp. Deletes use ETag-and-time-conditional zero-byte \`twDeleted\` tombstones that resolve/get treat as absent; locator deletes retry when a concurrent write wins, and a later put replaces the tombstone. D1 stores queryable records and KVS text entries; KVS key listing is lexicographically ordered. Cloudflare KV is deliberately not used because this contract requires read-after-write consistency.
 

@@ -108,7 +108,6 @@ function parseCompileArgs(args) {
     let output = '';
     let format = 'turbowarp-json';
     let force = false;
-    let irVersion = 1;
     let target;
     let targetConfig;
     let manifestLock;
@@ -132,13 +131,6 @@ function parseCompileArgs(args) {
         }
         else if (arg === '--force') {
             force = true;
-        }
-        else if (arg === '--ir-version') {
-            const value = requireValue(args, index, '--ir-version');
-            if (value !== '1' && value !== '2')
-                throw new Error(`Invalid IR version: ${value}`);
-            irVersion = Number(value);
-            index += 1;
         }
         else if (arg === '--target') {
             target = requireValue(args, index, '--target');
@@ -167,22 +159,18 @@ function parseCompileArgs(args) {
         throw new Error('compile requires --input <file>.');
     if (!output)
         throw new Error('compile requires --output <directory>.');
-    if (irVersion === 2 && target === undefined)
-        throw new Error('IR v2 compilation requires --target <id>.');
-    if (namedResponseBody && irVersion !== 2) {
-        throw new Error('--enable-named-response-body requires --ir-version 2.');
-    }
-    if (manifestLock !== undefined && (irVersion !== 2 || format !== 'turbowarp-json')) {
-        throw new Error('--manifest-lock requires --ir-version 2 and --format turbowarp-json.');
+    if (target === undefined)
+        throw new Error('compile requires --target <id>.');
+    if (manifestLock !== undefined && format !== 'turbowarp-json') {
+        throw new Error('--manifest-lock requires --format turbowarp-json.');
     }
     return {
         input,
         output,
         format,
         force,
-        irVersion,
+        target,
         namedResponseBody,
-        ...(target === undefined ? {} : { target }),
         ...(targetConfig === undefined ? {} : { targetConfig }),
         ...(manifestLock === undefined ? {} : { manifestLock })
     };
@@ -271,8 +259,7 @@ Options:
   --input <file>       TurboWarp project.json or deploy IR JSON.
   --output <directory> Generated project directory.
   --format <format>    turbowarp-json (default) or ir.
-  --ir-version <1|2>  Select compiler pipeline. Defaults to 1.
-  --target <id>        Required for IR v2; for example cloudflare-workers.
+  --target <id>        Required deployment target; for example cloudflare-workers.
   --target-config <file> Adapter config containing binding names, never secrets.
   --manifest-lock <file> Locked extension manifests for TurboWarp project input.
   --enable-named-response-body Enable the experimental named body IR operation (default OFF).

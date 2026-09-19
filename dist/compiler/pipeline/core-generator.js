@@ -10,6 +10,8 @@ function coreSource(ir) {
 import type {Hono} from 'hono';
 
 type StoredRecord = Record<string, unknown>;
+export type AuthScheme = 'external-jwt' | 'trusted-access-jwt';
+export type AuthIdentity = {id: string; claims: Record<string, unknown>};
 export type BinaryLocator = {namespace: string; key: string};
 export type BinaryRef = BinaryLocator & {contentType?: string; size?: number; integrity?: string; revision?: string};
 export type BinaryMetadata = {contentType?: string; size?: number; integrity?: string; revision?: string};
@@ -39,6 +41,7 @@ export interface KeyValueStore {
   list(namespace: string): Promise<string[]>;
 }
 export interface CoreServices {
+  authenticate?: (context: unknown, scheme: AuthScheme) => Promise<AuthIdentity | null>;
   records?: (context: unknown) => RecordStore;
   keyValues?: (context: unknown) => KeyValueStore;
   objects?: (context: unknown) => BinaryObjectStore;
@@ -63,6 +66,16 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
   const iterations = new Map<string, {key: string; index: number; value: unknown}>();
   let bodyText: string | undefined;
   try {
+    if (route.auth === 'required') {
+      if (ir.auth.kind !== 'jwt' || services.authenticate === undefined) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
+      const identity = await services.authenticate(c, ir.auth.scheme);
+      if (identity === null) {
+        return new Response(JSON.stringify({error: {code: 'UNAUTHORIZED'}}), {
+          status: 401,
+          headers: {'content-type': 'application/json; charset=utf-8'}
+        });
+      }
+    }
     const terminal = await statements(route.body);
     if (terminal !== undefined) return terminal;
     throw runtimeError('IR_MISSING_RESPONSE');

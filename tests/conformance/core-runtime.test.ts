@@ -4,16 +4,13 @@ import {describe, expect, it} from 'vitest';
 import {
   BinaryBodyHandle,
   parseDeployIrV2,
-  upgradeDeployIrV1,
   validateDeployIrV2Subset,
   type BinaryBodySource
 } from '../../src/compiler/index.js';
-import {parseDeployIr} from '../../src/compiler/validate.js';
 import {
   readCoreFixture,
   runBinaryVector,
   runGeneratedCore,
-  runLegacyCore,
   sha256,
   type EffectTrace
 } from './harness.js';
@@ -56,31 +53,6 @@ describe('conformance core runtime layer', () => {
     expect(() => handle.take()).toThrow(expect.objectContaining({code: 'BINARY_BODY_CONSUMED'}));
   });
 
-  it('matches v1 and upgraded v2 observable HTTP behavior', async () => {
-    const legacy = parseDeployIr({
-      version: 1,
-      name: 'parity-fixture',
-      auth: 'none',
-      routes: [
-        {
-          id: 'parity',
-          method: 'GET',
-          path: '/parity',
-          auth: 'public',
-          actions: [
-            {kind: 'set-status', status: 202},
-            {kind: 'set-header', name: 'x-parity', value: {kind: 'literal', value: 'v1-v2'}},
-            {kind: 'respond', format: 'text', body: {kind: 'literal', value: 'same'}}
-          ]
-        }
-      ]
-    });
-    const upgraded = upgradeDeployIrV1(legacy, 'cloudflare-workers');
-    expect(upgraded.diagnostics).toEqual([]);
-    const request = {method: 'GET', url: 'http://conformance.test/parity'};
-    const [v1, v2] = await Promise.all([runLegacyCore(legacy, request), runGeneratedCore(upgraded.ir, request)]);
-    expect(v2).toEqual(v1);
-  });
 });
 
 function binarySource(bytes: Uint8Array): BinaryBodySource {
