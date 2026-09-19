@@ -22,6 +22,9 @@ export async function compileToDirectory(options) {
     if (extname(options.input).toLowerCase() === '.sb3') {
         throw new Error('Direct .sb3 input is not supported yet. Export or extract project.json first.');
     }
+    if (options.manifestLock !== undefined && (options.irVersion !== 2 || options.format !== 'turbowarp-json')) {
+        throw new Error('manifestLock requires IR v2 TurboWarp JSON input.');
+    }
     const inputPath = resolve(options.input);
     const outputPath = resolve(options.output);
     const raw = JSON.parse(await readFile(inputPath, 'utf8'));

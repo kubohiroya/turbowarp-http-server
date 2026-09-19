@@ -37,6 +37,8 @@ turbowarp-http-server compile \
 
 ## TurboWarp project.json の受け入れサブセット
 
+この節は後方互換のIR v1 frontendを記述します。`--ir-version 2`のサブセットとliteral bounded repeatは[Server-executable subset](server-executable-subset.ja.md)を正本とします。
+
 ### route と method
 
 | TurboWarp 構造 | IR |
