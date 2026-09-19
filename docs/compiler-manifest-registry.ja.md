@@ -2,7 +2,7 @@
 
 Deploy IR v2 frontendは、外部TurboWarp extensionのopcodeをcompiler内の手書き定義だけから推測しません。明示された`turboWarp-server.lock.json`、lockが指すmanifestのexact bytes、compiler側allowlistの3つが一致した場合だけopcode registryへ登録します。
 
-このmoduleは`compilerIrV2`配下の実験機能です。既存IR v1 frontendの組込みopcode mappingは変更しません。
+manifest registryはTurboWarp projectをIR v2へ変換する唯一の外部extension解決経路です。
 
 ## 対応形式
 
@@ -44,7 +44,7 @@ sourceは次の2種類だけです。
 
 URL、npm registry、cwd探索、暗黙downloadはありません。resolver順は常に「lock entry → entryが指すbundled/local source」です。
 
-CLIではTurboWarp project入力に限り`--manifest-lock <file>`でlockを指定します。このoptionは`--format turbowarp-json --ir-version 2`と組み合わせ、direct IR入力やIR v1では受理しません。
+CLIではTurboWarp project入力に限り`--manifest-lock <file>`でlockを指定します。このoptionは`--format turbowarp-json`と組み合わせ、direct IR入力では受理しません。
 
 local sourceはabsolute path、lock directory外への`..`、symlink componentを拒否します。realpath後にもlock directory内であることを再確認します。
 
@@ -68,14 +68,12 @@ project opcodeは`<extensionId>_<opcode>`で一意に解決します。lockに�
 
 失敗は`CompilerManifestError`と安定した`TW2_MANIFEST_*` codeで返します。runtime error codeとは別namespaceです。
 
-## 既存mappingからの移行
+## Lowering境界
 
-1. IR v1の`src/compiler/turbowarp.ts`は変更せず維持します。
-2. v2 frontendはprojectで使われるnon-core extensionにlock entryを要求します。
-3. registryでblock signatureとoperation hintを検証してから、既知loweringへ渡します。
-4. parity fixtureが揃ったopcode単位でv2の手書き重複定義を削除します。
-5. manifest version不一致時に旧定義へfallbackしません。
+1. frontendはprojectで使われるnon-core extensionにlock entryを要求します。
+2. registryでblock signatureとoperation hintを検証してから、既知loweringへ渡します。
+3. manifest version不一致時に旧定義や類似operationへfallbackしません。
 
 ## ロールバック
 
-`compilerIrV2=false`またはIR v1 pipelineを選ぶとregistryを使用しません。lockは診断・再現用artifactとして保持でき、既存v1 generatorへ影響しません。
+問題時は該当manifest lockを使う生成を停止します。lockは診断・再現用artifactとして保持し、compilerは外部packageやcloud resourceを変更しません。

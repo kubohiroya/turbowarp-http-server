@@ -2,7 +2,7 @@
 
 Deploy IR v2 pipelineは、TurboWarp projectをそのままserver runtimeとして実行しません。frontendでHTTP handlerから到達するblockをallowlist検証し、lowering後のIRをtarget-neutral validatorで再検証します。validatorを迂回してv2 code generationするoptionは提供しません。
 
-この機能は`compilerIrV2`が明示的に選択された場合だけ使います。IR v1の既存compiler validationは変更しません。
+このvalidatorはすべてのDeploy IR v2生成で必ず実行し、検証を迂回するCLI経路を提供しません。
 
 ## TurboWarp block subset
 
@@ -85,4 +85,4 @@ target-neutral diagnosticはcode、route ID、理由、修正候補を必須と�
 
 ## ロールバック
 
-問題時は`compilerIrV2=false`または`--ir-version 1`へ戻します。v2 validatorだけを無効化して未検証IRを生成する経路は作りません。
+問題時は生成を停止してbrowser bridgeを利用します。validatorだけを無効化して未検証IRを生成する経路は作りません。

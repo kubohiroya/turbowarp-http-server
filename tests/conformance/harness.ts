@@ -16,8 +16,6 @@ import {
   type BinaryRefDescriptorV2,
   type DeployIrV2
 } from '../../src/compiler/index.js';
-import {generateCloudflareWorker} from '../../src/compiler/generator.js';
-import type {DeployIr} from '../../src/compiler/ir.js';
 
 export interface ConformanceRequest {
   method: string;
@@ -97,40 +95,6 @@ export async function runGeneratedCore(irInput: unknown, request: ConformanceReq
       ...(request.bodyText === undefined ? {} : {body: request.bodyText})
     });
     return {response: await responseTrace(response), effects};
-  } finally {
-    await rm(directory, {recursive: true, force: true});
-  }
-}
-
-export async function runLegacyCore(ir: DeployIr, request: ConformanceRequest): Promise<CoreTrace> {
-  const source = generateCloudflareWorker(ir)['src/routes.generated.ts']!
-    .replace("'./auth'", "'./auth.mjs'")
-    .replace("'./storage'", "'./storage.mjs'");
-  const directory = await mkdtemp(join(tmpdir(), 'tw-conformance-v1-'));
-  try {
-    await writeFile(join(directory, 'auth.mjs'), 'export async function authenticate() { return null; }\n');
-    await writeFile(
-      join(directory, 'storage.mjs'),
-      'export async function createRecord() {}\nexport async function deleteRecord() {}\nexport async function getRecord() {}\nexport async function listRecords() {}\n'
-    );
-    const modulePath = join(directory, 'routes.mjs');
-    await writeFile(
-      modulePath,
-      transpileModule(source, {
-        compilerOptions: {target: ScriptTarget.ES2022, module: ModuleKind.ES2022}
-      }).outputText
-    );
-    const routes = (await import(`${pathToFileURL(modulePath).href}?name=${encodeURIComponent(ir.name)}`)) as {
-      registerGeneratedRoutes(app: Hono): void;
-    };
-    const app = new Hono();
-    routes.registerGeneratedRoutes(app);
-    const response = await app.request(request.url, {
-      method: request.method,
-      ...(request.headers === undefined ? {} : {headers: request.headers}),
-      ...(request.bodyText === undefined ? {} : {body: request.bodyText})
-    });
-    return {response: await responseTrace(response), effects: []};
   } finally {
     await rm(directory, {recursive: true, force: true});
   }

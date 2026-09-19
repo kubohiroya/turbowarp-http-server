@@ -1,8 +1,8 @@
 # Deploy IR v2 基礎仕様
 
-Deploy IR v2は、TurboWarpのHTTP handlerをplatform-neutralな型付き表現へ変換するための実験的な中間表現です。IR v1とCloudflare generatorは移行期間中も維持し、v2を暗黙に選択しません。
+Deploy IR v2は、TurboWarpのHTTP handlerをplatform-neutralな型付き表現へ変換する中間表現です。compilerが受理するIR versionはv2だけです。
 
-型、strict parser、JSON Schema、canonical serializer、v1 upgraderに加え、明示的なtargetを選択するv2 CLI pipelineを提供します。[Compiler／platform adapter境界](compiler-platform-pipeline.ja.md)を参照してください。
+型、strict parser、JSON Schema、canonical serializerに加え、明示的なtargetを選択するCLI pipelineを提供します。[Compiler／platform adapter境界](compiler-platform-pipeline.ja.md)を参照してください。
 
 外部extension manifestのlock／offline解決仕様は[Compiler extension manifest registry](compiler-manifest-registry.ja.md)を参照してください。
 
@@ -22,9 +22,8 @@ Structured／document／binaryを共通HTTP bodyとして返すprovider contract
 
 - rootの`version`は整数`2`です。
 - manifest schema version、extension package version、adapter versionとは独立しています。
-- `compilerIrV2`の既定値はfalseです。
-- CLIでは`--ir-version 2`と`--target`を明示した場合だけ有効化します。
-- `--ir-version`省略時の`compile` commandは引き続きIR v1を処理します。
+- CLIでは`--target`を必須とし、targetを暗黙選択しません。
+- rootのversionが2以外なら`TW2_IR_VERSION`で拒否します。
 
 ## 型
 
@@ -61,7 +60,7 @@ statementのeffectは入力側が自由に申告するfieldにはせず、statem
 
 JSON pathは`PathSegmentV2`とschemaの`pathSegment`で、string keyと非負整数indexを別のvariantとして定義します。`json-for-each`はlexical `loopId`を作り、そのbody内だけでiteration key／index／value reporterから参照できます。
 
-`sourceRef`はtarget index/name、block ID、opcode、任意のinput名を保持します。diagnostic用であり、生成コードの意味には影響しません。v1 upgraderでは元情報がないため省略できます。
+`sourceRef`はtarget index/name、block ID、opcode、任意のinput名を保持します。diagnostic用であり、生成コードの意味には影響しません。direct IRでは省略できます。
 
 ## Strict parsing
 
@@ -110,28 +109,15 @@ D1、Cloudflare KV、R2、Firestore、Cloud Storage等の選択はIRへ書かず
 
 capabilityとunion typeのmemberはsetとして扱い、parserが重複を拒否して決定的な順序へ正規化します。routeとstatementの配列順は実行順なので保持します。
 
-## IR v1 upgrader
-
-`upgradeDeployIrV1`は既存v1 route/actionをv2へ変換し、必要なcapabilityを導出します。
-
-- `record-*` → logical `record-store`
-- request body → typed `body-text`
-- client address → logical request metadata capability
-- storage result →型付きbinding
-- `external-jwt` → platform-neutral JWT requirement
-
-v1の`cloudflare-access`はplatform固有設定を含むため、`cloudflare-workers` targetを指定した場合だけ、IRの`trusted-access-jwt` requirementとtarget config sidecarへ分離します。他targetでは`TW2_V1_TARGET_CONSTRAINT` diagnosticを返し、類似認証へ置き換えません。
-
 ## ファイル
 
 - `src/compiler/ir-v2/types.ts`: TypeScript型
 - `src/compiler/ir-v2/parse.ts`: strict object parser
 - `src/compiler/ir-v2/strict-json.ts`: duplicate-keyを拒否するJSON text parser
 - `src/compiler/ir-v2/canonical.ts`: canonical serializer
-- `src/compiler/ir-v2/upgrade-v1.ts`: v1 upgrader
 - `schemas/deploy-ir-v2.schema.json`: JSON Schema
 - `examples/compiler/message-app.v2.ir.json`: v2 example
 
 ## ロールバック
 
-IR v2は追加moduleであり、既存IR v1 parserとCloudflare generatorを置換しません。問題時はv2を選択せず、既存のv1 pipelineを利用します。
+問題時は生成・deployを停止し、既存のbrowser bridgeを利用します。compilerはcloud resourceを変更しないため、自動削除は行いません。

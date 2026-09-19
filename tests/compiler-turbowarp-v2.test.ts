@@ -127,7 +127,6 @@ describe('TurboWarp IR v2 frontend', () => {
       input: legacyInput,
       output,
       format: 'turbowarp-json',
-      irVersion: 2,
       target: 'cloudflare-workers'
     });
     expect(compiled.ir.version).toBe(2);
@@ -140,7 +139,6 @@ describe('TurboWarp IR v2 frontend', () => {
         input: namedInput,
         output: join(directory, 'named-disabled'),
         format: 'turbowarp-json',
-        irVersion: 2,
         target: 'cloudflare-workers'
       })
     ).rejects.toThrow(/TW2_NAMED_RESPONSE_BODY_DISABLED/u);
@@ -149,7 +147,6 @@ describe('TurboWarp IR v2 frontend', () => {
         input: namedInput,
         output: join(directory, 'named-enabled'),
         format: 'turbowarp-json',
-        irVersion: 2,
         target: 'cloudflare-workers',
         namedResponseBody: true
       })
@@ -229,7 +226,6 @@ describe('TurboWarp IR v2 frontend', () => {
       input,
       output,
       format: 'turbowarp-json',
-      irVersion: 2,
       target: 'cloudflare-workers',
       manifestLock: 'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
     });
@@ -302,7 +298,6 @@ describe('TurboWarp IR v2 frontend', () => {
       input,
       output,
       format: 'turbowarp-json',
-      irVersion: 2,
       target: 'cloudflare-workers',
       manifestLock: 'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
     });

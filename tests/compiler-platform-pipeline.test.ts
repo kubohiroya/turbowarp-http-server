@@ -11,12 +11,9 @@ import {
   compileDeployIrV2,
   compileToDirectory,
   generateHonoCore,
-  upgradeDeployIrV1,
   type DeployIrV2,
   type PlatformAdapter
 } from '../src/compiler/index.js';
-import {generateCloudflareWorker} from '../src/compiler/generator.js';
-import {parseDeployIr} from '../src/compiler/validate.js';
 
 const execFileAsync = promisify(execFile);
 const temporaryDirectories: string[] = [];
@@ -37,8 +34,7 @@ describe('IR v2 platform pipeline', () => {
     expect(Object.values(first.files).every((source) => source.endsWith('\n') && !source.includes('\r'))).toBe(true);
     expect(first.manifest).toMatchObject({
       formatVersion: 1,
-      irVersion: 2,
-      adapter: {id: 'cloudflare-workers', version: '1.4.0'},
+      adapter: {id: 'cloudflare-workers', version: '1.5.0'},
       requirements: ['record-store'],
       plan: {requirements: ['record-store'], bindings: {recordDatabase: 'DB'}}
     });
@@ -55,11 +51,7 @@ describe('IR v2 platform pipeline', () => {
     });
 
     const unsupportedIr = messageApp();
-    unsupportedIr.auth = {kind: 'jwt', scheme: 'external-jwt'};
-    unsupportedIr.capabilities = [{kind: 'record-store'}, {kind: 'auth', scheme: 'external-jwt'}];
-    unsupportedIr.routes[0]!.auth = 'required';
-    const sourceRef = {targetIndex: 0, targetName: 'Stage', blockId: 'auth-route', opcode: 'http_auth_required'};
-    unsupportedIr.routes[0]!.sourceRef = sourceRef;
+    unsupportedIr.capabilities = [{kind: 'record-store'}, {kind: 'named-body-provider'}];
     const unsupported = compileDeployIrV2(unsupportedIr, {target: 'cloudflare-workers'});
     expect(unsupported).toEqual({
       ok: false,
@@ -67,8 +59,6 @@ describe('IR v2 platform pipeline', () => {
         expect.objectContaining({
           code: 'TW2_TARGET_CAPABILITY_UNSUPPORTED',
           targetId: 'cloudflare-workers',
-          routeId: 'create',
-          sourceRef,
           reason: expect.any(String),
           suggestion: expect.any(String)
         })
@@ -82,6 +72,54 @@ describe('IR v2 platform pipeline', () => {
     expect(config).toEqual({
       ok: false,
       diagnostics: [expect.objectContaining({code: 'TW2_TARGET_CONFIG_INVALID'})]
+    });
+  });
+
+  it.each([
+    ['external-jwt', 'JWT_JWKS_URL'],
+    ['trusted-access-jwt', 'CF_ACCESS_TEAM_DOMAIN']
+  ] as const)('generates Cloudflare %s authentication at the adapter boundary', (scheme, environmentName) => {
+    const ir = authApp(scheme);
+    if (scheme === 'trusted-access-jwt') ir.capabilities.push({kind: 'auth', scheme: 'external-jwt'});
+    const result = compileDeployIrV2(ir, {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error(`Expected ${scheme} compilation to succeed.`);
+
+    expect(result.manifest.requirements).toContain(`auth:${scheme}`);
+    expect(result.files['src/core.generated.ts']).toContain("route.auth === 'required'");
+    expect(result.files['src/index.ts']).toContain('authenticateRequest');
+    expect(result.files['src/index.ts']).toContain(environmentName);
+    if (scheme === 'trusted-access-jwt') expect(result.files['src/index.ts']).not.toContain('JWT_JWKS_URL');
+    expect(result.files['src/auth.ts']).toContain('jwtVerify');
+    expect(JSON.parse(result.files['package.json']!)).toMatchObject({dependencies: {jose: '^6.1.0'}});
+  });
+
+  it('enforces required authentication in the core and typechecks the Cloudflare JWT scaffold', async () => {
+    const ir = authApp('external-jwt');
+    const generated = compileDeployIrV2(ir, {target: 'cloudflare-workers'});
+    if (!generated.ok) throw new Error('Expected authenticated Cloudflare compilation to succeed.');
+    const core = await loadModule(generated.files['src/core.generated.ts']!);
+
+    const denied = new Hono();
+    core.registerCoreRoutes!(denied, {authenticate: async () => null});
+    const deniedResponse = await denied.request('http://local.test/private');
+    expect(deniedResponse.status).toBe(401);
+    expect(await deniedResponse.json()).toEqual({error: {code: 'UNAUTHORIZED'}});
+
+    const allowed = new Hono();
+    core.registerCoreRoutes!(allowed, {authenticate: async () => ({id: 'user-1', claims: {sub: 'user-1'}})});
+    const allowedResponse = await allowed.request('http://local.test/private');
+    expect(allowedResponse.status).toBe(200);
+    expect(await allowedResponse.json()).toEqual({ok: true});
+
+    const directory = await mkdtemp(join(resolve('tests'), '.generated-auth-v2-'));
+    temporaryDirectories.push(directory);
+    const input = join(directory, 'input.json');
+    const output = join(directory, 'output');
+    await writeFile(input, JSON.stringify(ir));
+    await compileToDirectory({input, output, format: 'ir', target: 'cloudflare-workers'});
+    await installCloudflareTypecheckDependencies(output);
+    await execFileAsync(resolve('node_modules/.bin/tsc'), ['--project', join(output, 'tsconfig.json')], {
+      cwd: resolve('.')
     });
   });
 
@@ -113,14 +151,10 @@ describe('IR v2 platform pipeline', () => {
     const output = join(directory, 'output');
     await writeFile(input, JSON.stringify(messageApp()));
 
-    await expect(
-      compileToDirectory({input, output, format: 'ir', irVersion: 2})
-    ).rejects.toThrow(/requires --target/);
     const result = await compileToDirectory({
       input,
       output,
       format: 'ir',
-      irVersion: 2,
       target: 'cloudflare-workers'
     });
     expect(result.files).toContain('src/core.generated.ts');
@@ -145,7 +179,7 @@ describe('IR v2 platform pipeline', () => {
     if (!cloudflare.ok || !firebase.ok) throw new Error('Expected both KVS targets to compile.');
 
     expect(cloudflare.manifest).toMatchObject({
-      adapter: {id: 'cloudflare-workers', version: '1.4.0'},
+      adapter: {id: 'cloudflare-workers', version: '1.5.0'},
       requirements: ['key-value-store'],
       plan: {bindings: {recordDatabase: 'DB'}}
     });
@@ -641,53 +675,6 @@ describe('IR v2 platform pipeline', () => {
     expect(remove).toHaveBeenCalledWith({ifGenerationMatch: '7'});
   });
 
-  it('preserves v1 HTTP route behavior after upgrading to the v2 core', async () => {
-    const legacy = parseDeployIr({
-      version: 1,
-      name: 'parity',
-      auth: 'none',
-      routes: [
-        {
-          id: 'hello',
-          method: 'GET',
-          path: '/hello',
-          auth: 'public',
-          actions: [
-            {kind: 'set-status', status: 202},
-            {kind: 'set-header', name: 'x-parity', value: {kind: 'literal', value: 'yes'}},
-            {kind: 'respond', format: 'text', body: {kind: 'literal', value: 'hello'}}
-          ]
-        }
-      ]
-    });
-    const legacySource = generateCloudflareWorker(legacy)['src/routes.generated.ts']!
-      .replace("'./auth'", "'./auth.mjs'")
-      .replace("'./storage'", "'./storage.mjs'");
-    const legacyModule = await loadModule(legacySource, {
-      'auth.mjs': 'export async function authenticate() { return null; }\n',
-      'storage.mjs':
-        'export async function createRecord() {}\nexport async function deleteRecord() {}\nexport async function getRecord() {}\nexport async function listRecords() {}\n'
-    });
-    const upgraded = upgradeDeployIrV1(legacy, 'cloudflare-workers');
-    expect(upgraded.diagnostics).toEqual([]);
-    const coreModule = await loadModule(generateHonoCore(upgraded.ir).files['src/core.generated.ts']!);
-
-    const legacyApp = new Hono();
-    legacyModule.registerGeneratedRoutes!(legacyApp);
-    const v2App = new Hono();
-    coreModule.registerCoreRoutes!(v2App, {});
-    const [legacyResponse, v2Response] = await Promise.all([
-      legacyApp.request('http://local.test/hello'),
-      v2App.request('http://local.test/hello')
-    ]);
-
-    expect({status: v2Response.status, header: v2Response.headers.get('x-parity'), body: await v2Response.text()}).toEqual({
-      status: legacyResponse.status,
-      header: legacyResponse.headers.get('x-parity'),
-      body: await legacyResponse.text()
-    });
-  });
-
   it.each([
     ['INVALID_JSON', 422],
     ['PATH_NOT_FOUND', 422],
@@ -766,6 +753,30 @@ function messageApp(): DeployIrV2 {
             kind: 'respond',
             format: 'json',
             body: {kind: 'binding', valueType: 'json-object', binding: 'created'}
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function authApp(scheme: 'external-jwt' | 'trusted-access-jwt'): DeployIrV2 {
+  return {
+    version: 2,
+    name: 'authenticated-app',
+    auth: {kind: 'jwt', scheme},
+    capabilities: [{kind: 'auth', scheme}],
+    routes: [
+      {
+        id: 'private',
+        method: 'GET',
+        path: '/private',
+        auth: 'required',
+        body: [
+          {
+            kind: 'respond',
+            format: 'json',
+            body: {kind: 'literal', valueType: 'json-object', value: {ok: true}}
           }
         ]
       }

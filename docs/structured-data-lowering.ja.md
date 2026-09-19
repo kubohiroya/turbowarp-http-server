@@ -2,7 +2,7 @@
 
 Deploy IR v2 frontendは、lockされた`@kubohiroya/turbowarp-structured-data` 0.4.0／manifest format 2のserver operationを、platform-neutralなIRとruntime helperへ変換します。Cloudflare Workers、Firebase等のSDKはこの層から参照しません。
 
-この機能は`compilerIrV2=true`かつmanifest lockのversion・integrity・signature検証が成功した場合だけ利用します。未対応versionやoperationを類似処理へfallbackしません。
+この機能はmanifest lockのversion・integrity・signature検証が成功した場合だけ利用します。未対応versionやoperationを類似処理へfallbackしません。
 
 ## Operation mapping
 
@@ -60,4 +60,4 @@ application JSONのobject keyはUnicode code point順に再帰的にserializeし
 
 ## ロールバック
 
-`compilerIrV2=false`またはIR v1を選択すると、このloweringとruntime nodeを使用しません。manifest version不一致時はcompileを停止し、旧意味論へfallbackしません。
+問題時は該当manifest lockを使う生成を停止します。manifest version不一致時はcompileを停止し、旧意味論へfallbackしません。

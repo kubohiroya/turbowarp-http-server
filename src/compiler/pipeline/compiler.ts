@@ -30,8 +30,7 @@ export function compileDeployIrV2(
 ): CompileDeployIrV2Result {
   const featureFlags: CompilerFeatureFlags = {
     ...DEFAULT_COMPILER_FEATURE_FLAGS,
-    ...options.featureFlags,
-    compilerIrV2: true
+    ...options.featureFlags
   };
   const targetNeutral = validateDeployIrV2Subset(ir, undefined, featureFlags);
   if (targetNeutral.length > 0) return {ok: false, diagnostics: targetNeutral};

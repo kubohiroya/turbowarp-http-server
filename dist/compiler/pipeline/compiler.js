@@ -8,8 +8,7 @@ import { extractCapabilityRequirements } from './requirements.js';
 export function compileDeployIrV2(ir, options) {
     const featureFlags = {
         ...DEFAULT_COMPILER_FEATURE_FLAGS,
-        ...options.featureFlags,
-        compilerIrV2: true
+        ...options.featureFlags
     };
     const targetNeutral = validateDeployIrV2Subset(ir, undefined, featureFlags);
     if (targetNeutral.length > 0)

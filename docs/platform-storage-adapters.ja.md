@@ -94,6 +94,6 @@ Firebase生成handlerはAdmin SDKと実行service accountのIAMでFirestore／Cl
 
 ## ロールバックとcleanup
 
-IR v2は明示的な`--ir-version 2 --target ...`でだけ選択されます。問題のあるtargetを選択せず、`compilerIrV2=false`または既存IR v1／browser bridgeへ戻せます。生成はdeployやresource作成・削除を行いません。
+targetは明示的な`--target ...`でだけ選択されます。問題のあるtargetへの生成・deployを停止し、browser bridgeへ戻せます。生成はdeployやresource作成・削除を行いません。
 
 deploymentをrollbackまたは停止してから、必要なD1／R2／Firestore／Cloud Storage dataをexportし、binding、IAM、依存functionを確認します。cloud resourceはgenerated READMEの手順に従い手動でcleanupし、generatorから自動削除しません。
