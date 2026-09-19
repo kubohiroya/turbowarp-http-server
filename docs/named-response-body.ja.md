@@ -2,7 +2,7 @@
 
 Named response bodyは、Structured Data、将来のDocument Data、binary／Asset Manager dataを、HTTP Serverから同じsnapshot／stream契約で返すための実験的な内部APIです。各extensionのprivate state、IndexedDB／OPFS layout、platform SDK objectはHTTP Serverへ公開しません。
 
-現時点ではprovider contract、共通Response builder、Deploy IR v2のcanonical terminal statementを提供します。TurboWarp blockと実Structured Data／Asset Manager providerへの接続は未実装です。`namedResponseBody`は既定falseで、`--enable-named-response-body`を指定したcompiler呼び出しだけが新statementを受理します。
+現時点ではprovider contract、共通Response builder、Deploy IR v2のcanonical terminal statementを提供します。Node側の既存`ResourceCapability`は`createAssetManagerNamedBodyProvider`でAsset Manager providerへ適合できます。TurboWarp block、実Structured Data provider、生成Cloudflare／Firebase targetへのprovider接続は未実装です。`namedResponseBody`は既定falseで、`--enable-named-response-body`を指定したcompiler呼び出しだけが新statementを受理します。
 
 ## 参照とscope
 
@@ -88,6 +88,12 @@ feature無効時は`NAMED_RESPONSE_BODY_DISABLED`、provider metadata contract�
 IRは`named-body-provider` capabilityを明示しなければなりません。生成Hono coreは`CoreServices.namedBodies`だけに依存し、provider SDKや保存形式をimportしません。現在のCloudflare／Firebase adapterは実providerを持たないため、flagを有効にしても`TW2_TARGET_CAPABILITY_UNSUPPORTED`でcompileを停止します。test adapterとfake providerでJSON／raw binary／HEADのsemantic parityを検証します。
 
 requestのaffine `binary-body`はnamed snapshotへ暗黙変換せず、明示import operationが定義されるまで既存`respond-binary`と別型のまま維持します。text／base64 fallbackは行いません。
+
+## Asset Manager ResourceCapability adapter
+
+`createAssetManagerNamedBodyProvider(resources)`は、既存の公開`ResourceCapability`だけを使用し、Asset Manager extensionのprivate fieldやIndexedDB／OPFS layoutを読みません。`asset-manager` namespaceの`asset`／`binary` kindと`raw` representationだけを受理します。project scopeはglobal resource namespace（既定`routeName = ""`）、target scopeはruntimeの`targetId`へ写像します。
+
+`HEAD`は`listResources`が利用可能ならmetadataだけを参照し、`GET`は`getResource`が返したbytesをcopyしてsnapshotを分離します。未公開namespaceはnot foundとして扱い、kind／representation不一致とabortは共通のstable errorへ変換します。このadapterはNode runtime向けであり、生成targetが`named-body-provider` capabilityを宣言する根拠にはしません。
 
 ## ロールバック
 

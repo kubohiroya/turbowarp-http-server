@@ -43,6 +43,8 @@ export type {
   NamedDataScope,
   NamedResponseBodyFeatureFlags
 } from './named-body.js';
+export {createAssetManagerNamedBodyProvider} from './resource-named-body-provider.js';
+export type {AssetManagerNamedBodyProviderOptions} from './resource-named-body-provider.js';
 
 export interface ServerOptions {
   hostname: string;
