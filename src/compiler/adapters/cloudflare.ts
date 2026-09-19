@@ -8,7 +8,7 @@ import {findCapabilityOrigin} from '../pipeline/requirements.js';
 
 export const cloudflareWorkersAdapter: PlatformAdapter = {
   id: 'cloudflare-workers',
-  version: '1.2.0',
+  version: '1.3.0',
   capabilities: () => ({
     keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
     maxBinaryBytes: 16 * 1024 * 1024
@@ -169,10 +169,18 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
     },
     async get(ref) {
       try {
-        const object = ref.revision === undefined
-          ? await bucket.get(storageKey(ref))
-          : await bucket.get(storageKey(ref), {onlyIf: {etagMatches: ref.revision}});
+        const key = storageKey(ref);
+        let object: R2ObjectBody | R2Object | null;
+        let expected: R2Revision | undefined;
+        if (ref.revision === undefined) {
+          object = await bucket.get(key);
+        } else {
+          expected = parseR2Revision(ref.revision);
+          if (expected === undefined) return null;
+          object = await bucket.get(key, {onlyIf: revisionCondition(expected)});
+        }
         if (object === null || !hasR2Body(object) || isTombstone(object)) return null;
+        if (expected !== undefined && !matchesRevision(object, expected)) return null;
         return {
           chunks: readableChunks(object.body),
           size: object.size,
@@ -200,12 +208,16 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
       try {
         const key = storageKey(target);
         if ('revision' in target && target.revision !== undefined) {
-          return putTombstone(bucket, key, target.revision);
+          const expected = parseR2Revision(target.revision);
+          if (expected === undefined) return false;
+          const current = await bucket.head(key);
+          if (current === null || isTombstone(current) || !matchesRevision(current, expected)) return false;
+          return putTombstone(bucket, key, current);
         }
         for (let attempt = 0; attempt < 8; attempt += 1) {
           const current = await bucket.head(key);
           if (current === null || isTombstone(current)) return false;
-          if (await putTombstone(bucket, key, current.etag)) return true;
+          if (await putTombstone(bucket, key, current)) return true;
         }
         throw binaryFault('BINARY_STORAGE_FAILURE');
       } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
@@ -224,15 +236,40 @@ function objectRef(locator: BinaryLocator, object: R2Object): BinaryRef {
   return {
     ...locator,
     size: object.size,
-    revision: object.etag,
+    revision: encodeR2Revision(object),
     ...(contentType === undefined ? {} : {contentType}),
     ...(integrity === undefined ? {} : {integrity})
   };
 }
+interface R2Revision {version: string; etag: string; uploaded: number}
 function isTombstone(object: R2Object): boolean {return object.customMetadata.twDeleted === '1'}
-async function putTombstone(bucket: R2Bucket, key: string, etag: string): Promise<boolean> {
+function encodeR2Revision(object: R2Object): string {
+  const revision = 'r2:' + JSON.stringify([object.version, object.etag, object.uploaded.getTime()]);
+  if (revision.length > 256) throw binaryFault('BINARY_STORAGE_FAILURE');
+  return revision;
+}
+function parseR2Revision(value: string): R2Revision | undefined {
+  if (!value.startsWith('r2:')) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value.slice(3));
+    if (!Array.isArray(parsed) || parsed.length !== 3 || typeof parsed[0] !== 'string' || parsed[0].length === 0 || typeof parsed[1] !== 'string' || parsed[1].length === 0 || typeof parsed[2] !== 'number' || !Number.isSafeInteger(parsed[2]) || new Date(parsed[2]).getTime() !== parsed[2] || new Date(parsed[2] + 1).getTime() !== parsed[2] + 1) return undefined;
+    return {version: parsed[0], etag: parsed[1], uploaded: parsed[2]};
+  } catch {return undefined}
+}
+function matchesRevision(object: R2Object, revision: R2Revision): boolean {
+  return object.version === revision.version && object.etag === revision.etag && object.uploaded.getTime() === revision.uploaded;
+}
+function revisionCondition(revision: R2Revision): R2Conditional {
+  return {
+    etagMatches: revision.etag,
+    uploadedAfter: new Date(revision.uploaded - 1),
+    uploadedBefore: new Date(revision.uploaded + 1)
+  };
+}
+async function putTombstone(bucket: R2Bucket, key: string, current: R2Object): Promise<boolean> {
+  const revision = {version: current.version, etag: current.etag, uploaded: current.uploaded.getTime()};
   return await bucket.put(key, new Uint8Array(), {
-    onlyIf: {etagMatches: etag},
+    onlyIf: revisionCondition(revision),
     customMetadata: {twDeleted: '1'}
   }) !== null;
 }
@@ -324,7 +361,7 @@ function generatedReadme(ir: DeployIrV2, plan: PlatformPlan): string {
 
 Run \`npm install\`, ${setup}, replace only placeholder resource IDs, then run \`npm run dev\` or \`npm run deploy\`.${migration}
 
-R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. Deletes use an ETag-conditional zero-byte \`twDeleted\` tombstone that resolve/get treat as absent; locator deletes retry when a concurrent write wins, and a later put replaces the tombstone. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
+R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. Revisions combine R2's unique upload version, ETag, and upload timestamp. Deletes use ETag-and-time-conditional zero-byte \`twDeleted\` tombstones that resolve/get treat as absent; locator deletes retry when a concurrent write wins, and a later put replaces the tombstone. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
 
 ## Rollback and cleanup
 

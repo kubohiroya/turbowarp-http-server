@@ -38,7 +38,7 @@ describe('IR v2 platform pipeline', () => {
     expect(first.manifest).toMatchObject({
       formatVersion: 1,
       irVersion: 2,
-      adapter: {id: 'cloudflare-workers', version: '1.2.0'},
+      adapter: {id: 'cloudflare-workers', version: '1.3.0'},
       requirements: ['record-store'],
       plan: {requirements: ['record-store'], bindings: {recordDatabase: 'DB'}}
     });
@@ -194,12 +194,21 @@ describe('IR v2 platform pipeline', () => {
     if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
     const platform = await loadModule(result.files['src/platform.ts']!);
     const puts: Array<{key: string; value: unknown; options: unknown}> = [];
+    const uploaded = new Date('2026-09-19T00:00:00.000Z');
+    const current = {
+      etag: 'etag-1',
+      version: 'version-1',
+      uploaded,
+      size: 1,
+      httpMetadata: {},
+      customMetadata: {}
+    };
     const bucket = {
-      head: async () => {throw new Error('revision delete must not use head');},
+      head: async () => current,
       delete: async () => {throw new Error('revision delete must not use unconditional delete');},
       put: async (key: string, value: unknown, options: unknown) => {
         puts.push({key, value, options});
-        return {etag: 'tombstone', version: 'v2', size: 0, httpMetadata: {}, customMetadata: {twDeleted: '1'}};
+        return {etag: 'tombstone', version: 'v2', uploaded: new Date(), size: 0, httpMetadata: {}, customMetadata: {twDeleted: '1'}};
       }
     };
     const createObjectStore = platform.createObjectStore as (value: unknown) => {
@@ -207,35 +216,107 @@ describe('IR v2 platform pipeline', () => {
     };
 
     await expect(
-      createObjectStore(bucket).delete({namespace: 'asset', key: 'fixture.bin', revision: 'etag-1'})
+      createObjectStore(bucket).delete({
+        namespace: 'asset',
+        key: 'fixture.bin',
+        revision: `r2:${JSON.stringify(['version-1', 'etag-1', uploaded.getTime()])}`
+      })
     ).resolves.toBe(true);
     expect(puts).toEqual([
       expect.objectContaining({
         key: 'v1/asset/fixture.bin',
-        options: {onlyIf: {etagMatches: 'etag-1'}, customMetadata: {twDeleted: '1'}}
+        options: {
+          onlyIf: {
+            etagMatches: 'etag-1',
+            uploadedAfter: new Date(uploaded.getTime() - 1),
+            uploadedBefore: new Date(uploaded.getTime() + 1)
+          },
+          customMetadata: {twDeleted: '1'}
+        }
       })
     ]);
+  });
+
+  it('does not delete a later R2 upload that reuses an earlier ETag', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const previous = new Date('2026-09-19T00:00:00.000Z');
+    const replacement = new Date('2026-09-19T00:00:01.000Z');
+    const put = vi.fn();
+    const bucket = {
+      head: async () => ({
+        etag: 'same-etag',
+        version: 'version-2',
+        uploaded: replacement,
+        size: 1,
+        httpMetadata: {},
+        customMetadata: {}
+      }),
+      put
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      delete(target: {namespace: string; key: string; revision: string}): Promise<boolean>;
+    };
+
+    await expect(createObjectStore(bucket).delete({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      revision: `r2:${JSON.stringify(['version-1', 'same-etag', previous.getTime()])}`
+    })).resolves.toBe(false);
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('does not read a later R2 upload that reuses an earlier ETag', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const previous = new Date('2026-09-19T00:00:00.000Z');
+    const replacement = new Date('2026-09-19T00:00:01.000Z');
+    const bucket = {
+      get: async () => ({
+        etag: 'same-etag',
+        version: 'version-2',
+        uploaded: replacement,
+        size: 1,
+        httpMetadata: {},
+        customMetadata: {},
+        body: new ReadableStream<Uint8Array>()
+      })
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      get(target: {namespace: string; key: string; revision: string}): Promise<unknown>;
+    };
+
+    await expect(createObjectStore(bucket).get({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      revision: `r2:${JSON.stringify(['version-1', 'same-etag', previous.getTime()])}`
+    })).resolves.toBeNull();
   });
 
   it('retries an R2 locator delete with the latest ETag instead of issuing an unconditional delete', async () => {
     const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
     if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
     const platform = await loadModule(result.files['src/platform.ts']!);
-    const revisions = ['etag-1', 'etag-2'];
-    const matches: string[] = [];
+    const revisions = [
+      {etag: 'etag-1', version: 'version-1', uploaded: new Date('2026-09-19T00:00:00.000Z')},
+      {etag: 'etag-2', version: 'version-2', uploaded: new Date('2026-09-19T00:00:01.000Z')}
+    ];
+    const matches: Array<{etagMatches: string}> = [];
     const bucket = {
       head: async () => ({
-        etag: revisions[matches.length]!,
+        ...revisions[matches.length]!,
         size: 1,
         httpMetadata: {},
         customMetadata: {}
       }),
       delete: async () => {throw new Error('locator delete must not use unconditional delete');},
       put: async (_key: string, _value: unknown, options: {onlyIf: {etagMatches: string}}) => {
-        matches.push(options.onlyIf.etagMatches);
+        matches.push(options.onlyIf);
         return matches.length === 1
           ? null
-          : {etag: 'tombstone', size: 0, httpMetadata: {}, customMetadata: {twDeleted: '1'}};
+          : {etag: 'tombstone', version: 'v3', uploaded: new Date(), size: 0, httpMetadata: {}, customMetadata: {twDeleted: '1'}};
       }
     };
     const createObjectStore = platform.createObjectStore as (value: unknown) => {
@@ -243,7 +324,7 @@ describe('IR v2 platform pipeline', () => {
     };
 
     await expect(createObjectStore(bucket).delete({namespace: 'asset', key: 'fixture.bin'})).resolves.toBe(true);
-    expect(matches).toEqual(['etag-1', 'etag-2']);
+    expect(matches.map(({etagMatches}) => etagMatches)).toEqual(['etag-1', 'etag-2']);
   });
 
   it('keeps an existing Firebase object when staged upload integrity fails', async () => {
@@ -294,10 +375,13 @@ describe('IR v2 platform pipeline', () => {
       getMetadata: async () => [{generation: 'stage-1', metadata: {}}],
       setMetadata: async () => [{}],
       copy: async (target: unknown) => [target, {
-        generation: 'destination-7',
-        size: '3',
-        contentType: 'application/octet-stream',
-        metadata: {twIntegrity: integrity}
+        done: true,
+        resource: {
+          generation: 'destination-7',
+          size: '3',
+          contentType: 'application/octet-stream',
+          metadata: {twIntegrity: integrity}
+        }
       }],
       delete: stagingDelete
     };
@@ -324,6 +408,39 @@ describe('IR v2 platform pipeline', () => {
       integrity
     });
     expect(stagingDelete).toHaveBeenCalledWith({ignoreNotFound: true, ifGenerationMatch: 'stage-1'});
+  });
+
+  it('pins a Firebase body stream to the metadata generation', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'firebase-functions'});
+    if (!result.ok) throw new Error('Expected Firebase compilation to succeed.');
+    const platform = await loadModule(result.files['functions/src/platform.ts']!);
+    const calls: Array<{generation?: string | number} | undefined> = [];
+    const latest = {
+      getMetadata: async () => [{generation: '7', size: '2', contentType: 'application/octet-stream'}]
+    };
+    const pinned = {
+      createReadStream: async function* (): AsyncIterable<Uint8Array> {yield new Uint8Array([1, 2]);}
+    };
+    const bucket = {
+      file: (_key: string, options?: {generation?: string | number}) => {
+        calls.push(options);
+        return options === undefined ? latest : pinned;
+      }
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      get(ref: {namespace: string; key: string; revision: string}): Promise<{
+        chunks: AsyncIterable<Uint8Array>;
+        size: number;
+        contentType: string;
+      } | null>;
+    };
+
+    const source = await createObjectStore(bucket).get({namespace: 'asset', key: 'fixture.bin', revision: '7'});
+    expect(source).not.toBeNull();
+    const chunks: number[] = [];
+    for await (const chunk of source!.chunks) chunks.push(...chunk);
+    expect(chunks).toEqual([1, 2]);
+    expect(calls).toEqual([undefined, {generation: '7'}]);
   });
 
   it('uses a Firebase generation precondition for revision-aware delete', async () => {
@@ -461,9 +578,9 @@ interface D1PreparedStatement {
 }
 interface D1Database {prepare(query: string): D1PreparedStatement}
 interface R2HTTPMetadata {contentType?: string}
-interface R2Object {version: string; etag: string; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
+interface R2Object {version: string; etag: string; uploaded: Date; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
 interface R2ObjectBody extends R2Object {body: ReadableStream<Uint8Array>}
-interface R2Conditional {etagMatches?: string}
+interface R2Conditional {etagMatches?: string; uploadedAfter?: Date; uploadedBefore?: Date}
 interface R2PutOptions {onlyIf?: R2Conditional; httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
 interface R2Bucket {
   head(key: string): Promise<R2Object | null>;

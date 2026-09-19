@@ -149,9 +149,9 @@ interface D1PreparedStatement {
 }
 interface D1Database {prepare(query: string): D1PreparedStatement}
 interface R2HTTPMetadata {contentType?: string}
-interface R2Object {version: string; etag: string; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
+interface R2Object {version: string; etag: string; uploaded: Date; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
 interface R2ObjectBody extends R2Object {body: ReadableStream<Uint8Array>}
-interface R2Conditional {etagMatches?: string}
+interface R2Conditional {etagMatches?: string; uploadedAfter?: Date; uploadedBefore?: Date}
 interface R2PutOptions {onlyIf?: R2Conditional; httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
 interface R2Bucket {
   head(key: string): Promise<R2Object | null>;
@@ -165,7 +165,19 @@ interface R2Bucket {
 function firebaseSdkStubs(): string {
   return `declare module 'firebase-admin/app' {export function initializeApp(): unknown}
 declare module 'firebase-admin/firestore' {export function getFirestore(): import('./platform.js').FirestoreLike}
-declare module 'firebase-admin/storage' {export function getStorage(): {bucket(name?: string): import('./platform.js').BucketLike}}
+declare module 'firebase-admin/storage' {
+  interface StorageMetadata {size?: string | number; contentType?: string; generation?: string | number; metadata?: Record<string, string>}
+  interface File {
+    getMetadata(): Promise<[StorageMetadata, unknown]>;
+    createReadStream(): import('node:stream').Readable;
+    createWriteStream(options: {resumable: boolean; metadata: {contentType?: string; metadata?: Record<string, string>}}): import('node:stream').Writable;
+    setMetadata(metadata: {metadata: Record<string, string>}): Promise<[StorageMetadata, unknown]>;
+    copy(destination: File): Promise<[File, unknown]>;
+    delete(options?: {ignoreNotFound?: boolean; ifGenerationMatch?: string | number}): Promise<[unknown]>;
+  }
+  interface Bucket {file(key: string, options?: {generation?: string | number}): File}
+  export function getStorage(): {bucket(name?: string): Bucket};
+}
 declare module 'firebase-functions/v2/https' {
   import type {IncomingMessage, ServerResponse} from 'node:http';
   export function onRequest(handler: (request: IncomingMessage, response: ServerResponse) => void | Promise<void>): unknown;

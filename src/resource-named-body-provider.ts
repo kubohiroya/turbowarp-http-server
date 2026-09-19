@@ -24,7 +24,8 @@ export function createAssetManagerNamedBodyProvider(
   if (!isNamedDataNamespace(namespace)) throw new TypeError('Asset Manager provider namespace is invalid.');
 
   return {
-    canResolve: (request) => request.reference.namespace === namespace,
+    canResolve: (request) =>
+      request.reference.namespace === namespace && request.reference.kind === 'asset',
     async stat(request, signal) {
       assertSupportedRequest(request);
       throwIfAborted(signal);

@@ -75,10 +75,46 @@ describe('Asset Manager named body provider', () => {
       {featureFlags: enabled, signal: abort.signal}
     );
 
-    await expect(wrongKind.json()).resolves.toEqual({error: 'NAMED_DATA_KIND_MISMATCH'});
+    await expect(wrongKind.json()).resolves.toEqual({error: 'NAMED_DATA_PROVIDER_NOT_FOUND'});
     await expect(wrongRepresentation.json()).resolves.toEqual({error: 'NAMED_DATA_REPRESENTATION_UNSUPPORTED'});
     await expect(unpublished.json()).resolves.toEqual({error: 'NAMED_DATA_NOT_FOUND'});
     await expect(aborted.json()).resolves.toEqual({error: 'NAMED_DATA_ABORTED'});
+  });
+
+  it('does not shadow another kind registered in the same direct resolver namespace', async () => {
+    const reference = {namespace: 'asset', name: 'profile', kind: 'structured' as const, scope: 'project' as const};
+    const metadata = {
+      reference,
+      nativeRepresentation: 'json' as const,
+      representation: 'json' as const,
+      mediaType: 'application/json',
+      byteLength: 11,
+      revision: 'structured-v1',
+      replayable: true
+    };
+    const structured = {
+      canResolve: (candidate: {reference: {namespace: string; kind: string}}) =>
+        candidate.reference.namespace === 'asset' && candidate.reference.kind === 'structured',
+      stat: () => metadata,
+      openBody: () => ({
+        metadata,
+        body: new TextEncoder().encode('{"ok":true}'),
+        release: () => undefined
+      })
+    };
+    const resolver = new NamedBodyResolver([
+      createAssetManagerNamedBodyProvider(new MemoryResources()),
+      structured
+    ]);
+
+    const response = await createNamedBodyResponse(
+      resolver,
+      {reference, representation: 'json'},
+      {featureFlags: enabled}
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ok: true});
   });
 
   it('rejects resources that cannot provide a content revision', async () => {

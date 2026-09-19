@@ -161,10 +161,10 @@ interface FileLike {
   createReadStream(): AsyncIterable<Uint8Array>;
   createWriteStream(options: {resumable: boolean; metadata: {contentType?: string; metadata?: Record<string, string>}}): WritableLike;
   setMetadata(metadata: {metadata: Record<string, string>}): Promise<[StorageMetadata, ...unknown[]]>;
-  copy(destination: FileLike): Promise<[FileLike, StorageMetadata]>;
+  copy(destination: FileLike): Promise<[FileLike, unknown]>;
   delete(options?: {ignoreNotFound?: boolean; ifGenerationMatch?: string | number}): Promise<unknown>;
 }
-export interface BucketLike {file(key: string): FileLike}
+export interface BucketLike {file(key: string, options?: {generation?: string | number}): FileLike}
 
 export function createRecordStore(database: FirestoreLike, root: string): RecordStore {
   const records = database.collection(root);
@@ -202,9 +202,11 @@ export function createObjectStore(bucket: BucketLike): BinaryObjectStore {
     },
     async get(ref) {
       try {
-        const file = bucket.file(storageKey(ref));
-        const metadata = (await file.getMetadata())[0];
-        if (ref.revision !== undefined && String(metadata.generation) !== ref.revision) return null;
+        const key = storageKey(ref);
+        const metadata = (await bucket.file(key).getMetadata())[0];
+        const generation = metadataGeneration(metadata);
+        if (ref.revision !== undefined && generation !== ref.revision) return null;
+        const file = bucket.file(key, {generation});
         const size = metadataSize(metadata);
         const source: BinaryBodySource = {
           chunks: file.createReadStream(),
@@ -242,7 +244,8 @@ export function createObjectStore(bucket: BucketLike): BinaryObjectStore {
         const initial = (await staging.getMetadata())[0];
         stagingGeneration = initial.generation;
         await staging.setMetadata({metadata: {...initial.metadata, twIntegrity: integrity}});
-        const [, stored] = await staging.copy(destination);
+        const [, response] = await staging.copy(destination);
+        const stored = copiedMetadata(response);
         return {...metadataRef(locator, stored), integrity, size};
       } catch (error) {
         output.destroy();
@@ -276,12 +279,12 @@ function storageKey(locator: BinaryLocator): string {
 }
 function metadataRef(locator: BinaryLocator, metadata: StorageMetadata): BinaryRef {
   const integrity = metadata.metadata?.twIntegrity;
-  const revision = metadata.generation === undefined ? undefined : String(metadata.generation);
+  const revision = metadataGeneration(metadata);
   const size = metadataSize(metadata);
   return {
     ...locator,
     ...(size === undefined ? {} : {size}),
-    ...(revision === undefined ? {} : {revision}),
+    revision,
     ...(metadata.contentType === undefined ? {} : {contentType: metadata.contentType}),
     ...(integrity === undefined ? {} : {integrity})
   };
@@ -289,6 +292,24 @@ function metadataRef(locator: BinaryLocator, metadata: StorageMetadata): BinaryR
 function metadataSize(metadata: StorageMetadata): number | undefined {
   const size = metadata.size === undefined ? undefined : Number(metadata.size);
   return size !== undefined && Number.isSafeInteger(size) && size >= 0 ? size : undefined;
+}
+function metadataGeneration(metadata: StorageMetadata): string {
+  if ((typeof metadata.generation !== 'string' && typeof metadata.generation !== 'number') || String(metadata.generation).length === 0) {
+    throw binaryFault('BINARY_STORAGE_FAILURE');
+  }
+  return String(metadata.generation);
+}
+function copiedMetadata(response: unknown): StorageMetadata {
+  if (typeof response !== 'object' || response === null || !('resource' in response)) {
+    throw binaryFault('BINARY_STORAGE_FAILURE');
+  }
+  const resource = response.resource;
+  if (typeof resource !== 'object' || resource === null || Array.isArray(resource)) {
+    throw binaryFault('BINARY_STORAGE_FAILURE');
+  }
+  const metadata = resource as StorageMetadata;
+  metadataGeneration(metadata);
+  return metadata;
 }
 function binaryFault(code: string): Error & {code: string} {return Object.assign(new Error(code), {code})}
 function isBinaryFault(error: unknown): error is Error & {code: string} {return error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('BINARY_')}
