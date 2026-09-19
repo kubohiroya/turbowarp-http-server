@@ -1,5 +1,8 @@
 allowBuilds:
+  '@firebase/util': false
   esbuild: false
+  protobufjs: false
 minimumReleaseAgeExclude:
   - '@kubohiroya/vite-plugin-turbowarp-extension@0.1.0'
   - '@kubohiroya/turbowarp-named-data@0.1.0'
+  - '@cloudflare/workers-types@5.20260919.1'

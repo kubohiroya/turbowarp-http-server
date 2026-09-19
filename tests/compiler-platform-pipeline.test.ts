@@ -1,5 +1,5 @@
 import {execFile} from 'node:child_process';
-import {mkdir, mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {pathToFileURL} from 'node:url';
@@ -159,6 +159,43 @@ describe('IR v2 platform pipeline', () => {
       code: 'BINARY_INVALID_REF'
     });
     expect(accessed).toBe(false);
+  });
+
+  it('accepts R2 objects whose optional metadata maps are absent', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const uploaded = new Date('2026-09-19T00:00:00.000Z');
+    const bucket = {
+      head: async () => ({etag: 'etag-1', version: 'version-1', uploaded, size: 3})
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      resolve(locator: {namespace: string; key: string}): Promise<Record<string, unknown> | null>;
+    };
+
+    await expect(createObjectStore(bucket).resolve({namespace: 'asset', key: 'fixture.bin'})).resolves.toEqual({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      size: 3,
+      revision: `r2:${JSON.stringify(['version-1', 'etag-1', uploaded.getTime()])}`
+    });
+  });
+
+  it('rejects an R2 revision whose condition window exceeds the Date range', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const get = vi.fn();
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      get(ref: {namespace: string; key: string; revision: string}): Promise<unknown>;
+    };
+
+    await expect(createObjectStore({get}).get({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      revision: `r2:${JSON.stringify(['version-1', 'etag-1', -8_640_000_000_000_000])}`
+    })).resolves.toBeNull();
+    expect(get).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -557,38 +594,7 @@ async function loadModule(
 }
 
 async function installCloudflareTypecheckDependencies(output: string): Promise<void> {
-  const typesDirectory = join(output, 'node_modules/@cloudflare/workers-types');
-  await mkdir(typesDirectory, {recursive: true});
-  await writeFile(
-    join(typesDirectory, 'package.json'),
-    JSON.stringify({name: '@cloudflare/workers-types', version: '0.0.0-test', types: 'index.d.ts'})
-  );
-  await writeFile(join(typesDirectory, 'index.d.ts'), cloudflareSdkStubs());
-  await symlink(resolve('node_modules/hono'), join(output, 'node_modules/hono'));
-}
-
-function cloudflareSdkStubs(): string {
-  return `interface D1ResultMeta {changes: number}
-interface D1Result<T> {results: T[]; meta: D1ResultMeta}
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<D1Result<unknown>>;
-  all<T>(): Promise<D1Result<T>>;
-  first<T>(): Promise<T | null>;
-}
-interface D1Database {prepare(query: string): D1PreparedStatement}
-interface R2HTTPMetadata {contentType?: string}
-interface R2Object {version: string; etag: string; uploaded: Date; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
-interface R2ObjectBody extends R2Object {body: ReadableStream<Uint8Array>}
-interface R2Conditional {etagMatches?: string; uploadedAfter?: Date; uploadedBefore?: Date}
-interface R2PutOptions {onlyIf?: R2Conditional; httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
-interface R2Bucket {
-  head(key: string): Promise<R2Object | null>;
-  get(key: string, options?: {onlyIf?: R2Conditional}): Promise<R2ObjectBody | R2Object | null>;
-  put(key: string, value: ReadableStream<Uint8Array> | Uint8Array, options?: R2PutOptions): Promise<R2Object | null>;
-  delete(key: string): Promise<void>;
-}
-`;
+  await symlink(resolve('node_modules'), join(output, 'node_modules'));
 }
 
 function messageApp(): DeployIrV2 {

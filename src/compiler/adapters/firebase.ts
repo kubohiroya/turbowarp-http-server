@@ -10,7 +10,7 @@ import type {
 
 export const firebaseFunctionsAdapter: PlatformAdapter = {
   id: 'firebase-functions',
-  version: '1.1.0',
+  version: '1.2.0',
   capabilities: () => ({
     keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
     maxBinaryBytes: 10_000_000
@@ -170,6 +170,7 @@ export const ${functionName} = onRequest((request, response) => listener(request
 function platformSource(): string {
   return `import {createHash} from 'node:crypto';
 import {once} from 'node:events';
+import type {Storage} from 'firebase-admin/storage';
 import type {BinaryBodySource, BinaryLocator, BinaryMetadata, BinaryObjectStore, BinaryRef, RecordStore} from './core.generated.js';
 
 interface DocumentSnapshot {exists: boolean; id: string; data(): Record<string, unknown> | undefined}
@@ -183,17 +184,9 @@ interface QueryLike {
 }
 interface CollectionReference extends QueryLike {doc(id?: string): DocumentReference}
 export interface FirestoreLike {collection(name: string): CollectionReference}
-interface StorageMetadata {size?: string | number; contentType?: string; generation?: string | number; metadata?: Record<string, string>}
-interface WritableLike extends NodeJS.WritableStream {destroy(): void}
-interface FileLike {
-  getMetadata(): Promise<[StorageMetadata, ...unknown[]]>;
-  createReadStream(): AsyncIterable<Uint8Array>;
-  createWriteStream(options: {resumable: boolean; metadata: {contentType?: string; metadata?: Record<string, string>}}): WritableLike;
-  setMetadata(metadata: {metadata: Record<string, string>}): Promise<[StorageMetadata, ...unknown[]]>;
-  copy(destination: FileLike): Promise<[FileLike, unknown]>;
-  delete(options?: {ignoreNotFound?: boolean; ifGenerationMatch?: string | number}): Promise<unknown>;
-}
-export interface BucketLike {file(key: string, options?: {generation?: string | number}): FileLike}
+export type BucketLike = ReturnType<Storage['bucket']>;
+type StorageMetadataValue = string | boolean | number | null;
+interface StorageMetadata {size?: string | number; contentType?: string; generation?: string | number; metadata?: Record<string, StorageMetadataValue>}
 
 export function createRecordStore(database: FirestoreLike, root: string): RecordStore {
   const records = database.collection(root);
@@ -307,7 +300,8 @@ function storageKey(locator: BinaryLocator): string {
   return 'v1/' + locator.namespace + '/' + locator.key;
 }
 function metadataRef(locator: BinaryLocator, metadata: StorageMetadata): BinaryRef {
-  const integrity = metadata.metadata?.twIntegrity;
+  const integrityValue = metadata.metadata?.twIntegrity;
+  const integrity = typeof integrityValue === 'string' ? integrityValue : undefined;
   const revision = metadataGeneration(metadata);
   const size = metadataSize(metadata);
   return {

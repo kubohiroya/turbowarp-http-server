@@ -184,7 +184,7 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
         return {
           chunks: readableChunks(object.body),
           size: object.size,
-          ...(object.httpMetadata.contentType === undefined ? {} : {contentType: object.httpMetadata.contentType})
+          ...(object.httpMetadata?.contentType === undefined ? {} : {contentType: object.httpMetadata.contentType})
         };
       } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
     },
@@ -231,8 +231,8 @@ function storageKey(locator: BinaryLocator): string {
   return 'v1/' + locator.namespace + '/' + locator.key;
 }
 function objectRef(locator: BinaryLocator, object: R2Object): BinaryRef {
-  const integrity = object.customMetadata.twIntegrity;
-  const contentType = object.httpMetadata.contentType;
+  const integrity = object.customMetadata?.twIntegrity;
+  const contentType = object.httpMetadata?.contentType;
   return {
     ...locator,
     size: object.size,
@@ -242,7 +242,7 @@ function objectRef(locator: BinaryLocator, object: R2Object): BinaryRef {
   };
 }
 interface R2Revision {version: string; etag: string; uploaded: number}
-function isTombstone(object: R2Object): boolean {return object.customMetadata.twDeleted === '1'}
+function isTombstone(object: R2Object): boolean {return object.customMetadata?.twDeleted === '1'}
 function encodeR2Revision(object: R2Object): string {
   const revision = 'r2:' + JSON.stringify([object.version, object.etag, object.uploaded.getTime()]);
   if (revision.length > 256) throw binaryFault('BINARY_STORAGE_FAILURE');
@@ -252,7 +252,7 @@ function parseR2Revision(value: string): R2Revision | undefined {
   if (!value.startsWith('r2:')) return undefined;
   try {
     const parsed: unknown = JSON.parse(value.slice(3));
-    if (!Array.isArray(parsed) || parsed.length !== 3 || typeof parsed[0] !== 'string' || parsed[0].length === 0 || typeof parsed[1] !== 'string' || parsed[1].length === 0 || typeof parsed[2] !== 'number' || !Number.isSafeInteger(parsed[2]) || new Date(parsed[2]).getTime() !== parsed[2] || new Date(parsed[2] + 1).getTime() !== parsed[2] + 1) return undefined;
+    if (!Array.isArray(parsed) || parsed.length !== 3 || typeof parsed[0] !== 'string' || parsed[0].length === 0 || typeof parsed[1] !== 'string' || parsed[1].length === 0 || typeof parsed[2] !== 'number' || !Number.isSafeInteger(parsed[2]) || new Date(parsed[2] - 1).getTime() !== parsed[2] - 1 || new Date(parsed[2]).getTime() !== parsed[2] || new Date(parsed[2] + 1).getTime() !== parsed[2] + 1) return undefined;
     return {version: parsed[0], etag: parsed[1], uploaded: parsed[2]};
   } catch {return undefined}
 }
@@ -319,7 +319,7 @@ function tsconfig(): string {
   return `${JSON.stringify(
     {
       compilerOptions: {
-        target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022', 'WebWorker'],
+        target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022'],
         strict: true, noEmit: true, skipLibCheck: true, types: ['@cloudflare/workers-types']
       },
       include: ['src/**/*.ts']

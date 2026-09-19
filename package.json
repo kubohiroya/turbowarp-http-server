@@ -62,20 +62,23 @@
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run examples:check && pnpm run docs:check && pnpm run check:dist && pnpm run pack:check"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.6",
-    "hono": "^4.10.7",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.8",
     "ws": "^8.18.3"
   },
   "peerDependencies": {
     "@kubohiroya/turbowarp-named-data": "^0.1.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260919.1",
     "@kubohiroya/turbowarp-named-data": "0.1.0",
     "@eslint/js": "^9.39.5",
     "@kubohiroya/vite-plugin-turbowarp-extension": "0.1.1",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",
     "eslint": "^9.39.5",
+    "firebase-admin": "^14.4.0",
+    "firebase-functions": "^7.4.0",
     "typescript": "^5.9.3",
     "tsx": "^4.21.0",
     "typescript-eslint": "^8.66.0",
