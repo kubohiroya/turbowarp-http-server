@@ -3,7 +3,7 @@
   "targets": [
     {
       "id": "cloudflare-workers",
-      "adapterVersion": "1.1.0",
+      "adapterVersion": "1.2.0",
       "tsconfig": "tsconfig.json",
       "expectedFiles": [
         "README.md",
@@ -19,7 +19,7 @@
     },
     {
       "id": "firebase-functions",
-      "adapterVersion": "1.0.0",
+      "adapterVersion": "1.1.0",
       "tsconfig": "functions/tsconfig.json",
       "expectedFiles": [
         ".firebaserc.example",

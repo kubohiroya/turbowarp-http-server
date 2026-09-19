@@ -10,7 +10,7 @@ import type {
 
 export const firebaseFunctionsAdapter: PlatformAdapter = {
   id: 'firebase-functions',
-  version: '1.0.0',
+  version: '1.1.0',
   capabilities: () => ({
     keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
     maxBinaryBytes: 10_000_000
@@ -190,7 +190,8 @@ interface FileLike {
   createReadStream(): AsyncIterable<Uint8Array>;
   createWriteStream(options: {resumable: boolean; metadata: {contentType?: string; metadata?: Record<string, string>}}): WritableLike;
   setMetadata(metadata: {metadata: Record<string, string>}): Promise<[StorageMetadata, ...unknown[]]>;
-  delete(options?: {ignoreNotFound?: boolean}): Promise<unknown>;
+  copy(destination: FileLike): Promise<[FileLike, StorageMetadata]>;
+  delete(options?: {ignoreNotFound?: boolean; ifGenerationMatch?: string | number}): Promise<unknown>;
 }
 export interface BucketLike {file(key: string): FileLike}
 
@@ -242,9 +243,10 @@ export function createObjectStore(bucket: BucketLike): BinaryObjectStore {
       } catch (error) {if (isBinaryFault(error)) throw error; if (isNotFound(error)) return null; throw binaryFault('BINARY_STORAGE_FAILURE')}
     },
     async put(locator, source, metadata, maxBytes) {
-      const file = bucket.file(storageKey(locator));
+      const destination = bucket.file(storageKey(locator));
+      const staging = bucket.file('v1/.staging/' + crypto.randomUUID());
       const hash = createHash('sha256');
-      const output = file.createWriteStream({
+      const output = staging.createWriteStream({
         resumable: false,
         metadata: {
           ...(metadata.contentType === undefined ? {} : {contentType: metadata.contentType}),
@@ -252,6 +254,7 @@ export function createObjectStore(bucket: BucketLike): BinaryObjectStore {
         }
       });
       let size = 0;
+      let stagingGeneration: string | number | undefined;
       try {
         for await (const chunk of source.chunks) {
           size += chunk.byteLength;
@@ -263,32 +266,39 @@ export function createObjectStore(bucket: BucketLike): BinaryObjectStore {
         await once(output, 'finish');
         const integrity = 'sha256:' + hash.digest('hex');
         if (metadata.size !== undefined && metadata.size !== size || metadata.integrity !== undefined && metadata.integrity !== integrity) {
-          await file.delete({ignoreNotFound: true});
           throw binaryFault('BINARY_INTEGRITY_MISMATCH');
         }
-        const initial = (await file.getMetadata())[0];
-        const stored = (await file.setMetadata({metadata: {...initial.metadata, twIntegrity: integrity}}))[0];
+        const initial = (await staging.getMetadata())[0];
+        stagingGeneration = initial.generation;
+        await staging.setMetadata({metadata: {...initial.metadata, twIntegrity: integrity}});
+        const [, stored] = await staging.copy(destination);
         return {...metadataRef(locator, stored), integrity, size};
       } catch (error) {
         output.destroy();
-        await file.delete({ignoreNotFound: true}).catch(() => undefined);
         if (isBinaryFault(error)) throw error;
         throw binaryFault('BINARY_STORAGE_FAILURE');
+      } finally {
+        await staging.delete({
+          ignoreNotFound: true,
+          ...(stagingGeneration === undefined ? {} : {ifGenerationMatch: stagingGeneration})
+        }).catch(() => undefined);
       }
     },
     async delete(target) {
       const file = bucket.file(storageKey(target));
       try {
-        const metadata = (await file.getMetadata())[0];
-        if ('revision' in target && target.revision !== undefined && String(metadata.generation) !== target.revision) return false;
-        await file.delete();
+        await file.delete(
+          'revision' in target && target.revision !== undefined
+            ? {ifGenerationMatch: target.revision}
+            : undefined
+        );
         return true;
-      } catch (error) {if (isBinaryFault(error)) throw error; if (isNotFound(error)) return false; throw binaryFault('BINARY_STORAGE_FAILURE')}
+      } catch (error) {if (isBinaryFault(error)) throw error; if (isNotFound(error) || isPreconditionFailed(error)) return false; throw binaryFault('BINARY_STORAGE_FAILURE')}
     }
   };
 }
 function storageKey(locator: BinaryLocator): string {
-  if (!/^[A-Za-z][A-Za-z0-9._-]{0,63}$/u.test(locator.namespace) || locator.key.length > 512 || locator.key.includes('\\0') || locator.key.startsWith('/') || locator.key.includes('\\\\') || locator.key.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
+  if (!/^[a-z][a-z0-9.-]{0,63}$/u.test(locator.namespace) || locator.key.length > 512 || locator.key.includes('\\0') || locator.key.startsWith('/') || locator.key.includes('\\\\') || locator.key.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
     throw binaryFault('BINARY_INVALID_REF');
   }
   return 'v1/' + locator.namespace + '/' + locator.key;
@@ -312,6 +322,7 @@ function metadataSize(metadata: StorageMetadata): number | undefined {
 function binaryFault(code: string): Error & {code: string} {return Object.assign(new Error(code), {code})}
 function isBinaryFault(error: unknown): error is Error & {code: string} {return error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('BINARY_')}
 function isNotFound(error: unknown): boolean {return typeof error === 'object' && error !== null && 'code' in error && (error.code === 404 || error.code === '404')}
+function isPreconditionFailed(error: unknown): boolean {return typeof error === 'object' && error !== null && 'code' in error && (error.code === 412 || error.code === '412')}
 `;
 }
 
@@ -411,7 +422,7 @@ function generatedReadme(plan: PlatformPlan): string {
 
 Run \`npm --prefix functions install\`, copy \`.firebaserc.example\` to \`.firebaserc\`, and replace \`replace-me\` with the Firebase project alias. When using a non-default Storage bucket, configure the bucket name through the \`${bucketEnvironment ?? 'ASSET_BUCKET'}\` environment variable; never commit credentials.
 
-The generated HTTP function uses the Admin SDK and IAM. Firestore and Storage client Rules deny all access by default and do not authorize the Admin SDK. Use \`npm --prefix functions run serve\` for the Emulator Suite boundary and \`npm --prefix functions run deploy\` only after reviewing billing and IAM.
+The generated HTTP function uses the Admin SDK and IAM. Firestore and Storage client Rules deny all access by default and do not authorize the Admin SDK. Binary uploads are validated under \`v1/.staging/\` before being copied to their destination; cleanup is best effort, so configure a lifecycle rule for abandoned staging objects. Use \`npm --prefix functions run serve\` for the Emulator Suite boundary and \`npm --prefix functions run deploy\` only after reviewing billing and IAM.
 
 ## Rollback and cleanup
 

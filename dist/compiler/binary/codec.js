@@ -1,8 +1,7 @@
 import { binaryError } from './error.js';
+import { isNamedDataNamespace } from '../../named-data-namespace.js';
 export function validateBinaryLocator(locator) {
-    if (locator.namespace.length < 1 ||
-        locator.namespace.length > 64 ||
-        !/^[A-Za-z][A-Za-z0-9._-]*$/u.test(locator.namespace)) {
+    if (!isNamedDataNamespace(locator.namespace)) {
         binaryError('BINARY_INVALID_REF', 'Binary namespace is invalid.');
     }
     if (locator.key.length < 1 ||

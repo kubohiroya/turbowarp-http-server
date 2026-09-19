@@ -8,7 +8,7 @@ import {findCapabilityOrigin} from '../pipeline/requirements.js';
 
 export const cloudflareWorkersAdapter: PlatformAdapter = {
   id: 'cloudflare-workers',
-  version: '1.1.0',
+  version: '1.2.0',
   capabilities: () => ({
     keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
     maxBinaryBytes: 16 * 1024 * 1024
@@ -164,13 +164,15 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
     async resolve(locator) {
       try {
         const object = await bucket.head(storageKey(locator));
-        return object === null ? null : objectRef(locator, object);
+        return object === null || isTombstone(object) ? null : objectRef(locator, object);
       } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
     },
     async get(ref) {
       try {
-        const object = await bucket.get(storageKey(ref));
-        if (object === null || object.version !== ref.revision && ref.revision !== undefined) return null;
+        const object = ref.revision === undefined
+          ? await bucket.get(storageKey(ref))
+          : await bucket.get(storageKey(ref), {onlyIf: {etagMatches: ref.revision}});
+        if (object === null || !hasR2Body(object) || isTombstone(object)) return null;
         return {
           chunks: readableChunks(object.body),
           size: object.size,
@@ -197,16 +199,21 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
     async delete(target) {
       try {
         const key = storageKey(target);
-        const current = await bucket.head(key);
-        if (current === null || 'revision' in target && target.revision !== undefined && current.version !== target.revision) return false;
-        await bucket.delete(key);
-        return true;
+        if ('revision' in target && target.revision !== undefined) {
+          return putTombstone(bucket, key, target.revision);
+        }
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const current = await bucket.head(key);
+          if (current === null || isTombstone(current)) return false;
+          if (await putTombstone(bucket, key, current.etag)) return true;
+        }
+        throw binaryFault('BINARY_STORAGE_FAILURE');
       } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
     }
   };
 }
 function storageKey(locator: BinaryLocator): string {
-  if (!/^[A-Za-z][A-Za-z0-9._-]{0,63}$/u.test(locator.namespace) || locator.key.length > 512 || locator.key.includes('\\0') || locator.key.startsWith('/') || locator.key.includes('\\\\') || locator.key.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
+  if (!/^[a-z][a-z0-9.-]{0,63}$/u.test(locator.namespace) || locator.key.length > 512 || locator.key.includes('\\0') || locator.key.startsWith('/') || locator.key.includes('\\\\') || locator.key.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
     throw binaryFault('BINARY_INVALID_REF');
   }
   return 'v1/' + locator.namespace + '/' + locator.key;
@@ -217,11 +224,19 @@ function objectRef(locator: BinaryLocator, object: R2Object): BinaryRef {
   return {
     ...locator,
     size: object.size,
-    revision: object.version,
+    revision: object.etag,
     ...(contentType === undefined ? {} : {contentType}),
     ...(integrity === undefined ? {} : {integrity})
   };
 }
+function isTombstone(object: R2Object): boolean {return object.customMetadata.twDeleted === '1'}
+async function putTombstone(bucket: R2Bucket, key: string, etag: string): Promise<boolean> {
+  return await bucket.put(key, new Uint8Array(), {
+    onlyIf: {etagMatches: etag},
+    customMetadata: {twDeleted: '1'}
+  }) !== null;
+}
+function hasR2Body(object: R2Object): object is R2ObjectBody {return 'body' in object}
 function binaryStream(chunks: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
   const iterator = chunks[Symbol.asyncIterator]();
   return new ReadableStream<Uint8Array>({
@@ -309,7 +324,7 @@ function generatedReadme(ir: DeployIrV2, plan: PlatformPlan): string {
 
 Run \`npm install\`, ${setup}, replace only placeholder resource IDs, then run \`npm run dev\` or \`npm run deploy\`.${migration}
 
-R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
+R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. Deletes use an ETag-conditional zero-byte \`twDeleted\` tombstone that resolve/get treat as absent; locator deletes retry when a concurrent write wins, and a later put replaces the tombstone. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
 
 ## Rollback and cleanup
 

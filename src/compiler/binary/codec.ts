@@ -4,12 +4,11 @@ import type {
   BinaryMetadataV2
 } from '../ir-v2/types.js';
 import {binaryError} from './error.js';
+import {isNamedDataNamespace} from '../../named-data-namespace.js';
 
 export function validateBinaryLocator(locator: BinaryLocatorV2): BinaryLocatorV2 {
   if (
-    locator.namespace.length < 1 ||
-    locator.namespace.length > 64 ||
-    !/^[A-Za-z][A-Za-z0-9._-]*$/u.test(locator.namespace)
+    !isNamedDataNamespace(locator.namespace)
   ) {
     binaryError('BINARY_INVALID_REF', 'Binary namespace is invalid.');
   }

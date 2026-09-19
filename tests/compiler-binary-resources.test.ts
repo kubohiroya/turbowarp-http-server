@@ -80,6 +80,20 @@ describe('IR v2 binary resource contract', () => {
         ])
       )
     ).toThrow(/unsafe path segment/);
+    for (const namespace of ['Asset', 'asset_data']) {
+      expect(() =>
+        parseDeployIrV2(
+          fixture([
+            {
+              kind: 'asset-resolve',
+              locator: {namespace, key: 'hero.png'},
+              result: {id: 'ref', type: {kind: 'value', valueType: {kind: 'union', members: ['null', 'binary-ref']}}}
+            },
+            textResponse()
+          ])
+        )
+      ).toThrow(/logical namespace identifier/);
+    }
     expect(() =>
       parseDeployIrV2(
         fixture([{kind: 'request-body-binary', maxBytes: DEFAULT_MAX_BINARY_BYTES + 1, result: binaryBodyBinding}, textResponse()])

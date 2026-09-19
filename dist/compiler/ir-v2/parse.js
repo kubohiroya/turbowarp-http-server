@@ -1,7 +1,7 @@
 import { parseJsonWithoutDuplicateKeys } from './strict-json.js';
+import { isNamedDataNamespace } from '../../named-data-namespace.js';
 import { DEPLOY_IR_V2_VERSION, JSON_VALUE_TYPE_V2 } from './types.js';
 const METHODS = new Set(['ALL', 'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
-const NAMED_NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
 const NAMED_TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const ATOMIC_TYPES = new Set([
     'null',
@@ -286,7 +286,7 @@ function parseStatement(value, location) {
         const referenceValue = object(statement.reference, `${location}.reference`);
         exactKeys(referenceValue, ['namespace', 'name', 'kind', 'scope'], `${location}.reference`);
         const namespace = nonEmptyString(referenceValue.namespace, `${location}.reference.namespace`);
-        if (!NAMED_NAMESPACE.test(namespace))
+        if (!isNamedDataNamespace(namespace))
             throw new Error(`${location}.reference.namespace is invalid.`);
         const name = nonEmptyString(referenceValue.name, `${location}.reference.name`);
         if (name.length > 256 || [...name].some(isControlCharacter)) {
@@ -586,7 +586,7 @@ function parseBinaryLocator(value, location, includesMetadata = false) {
         ? ['namespace', 'key', 'contentType', 'size', 'integrity', 'revision']
         : ['namespace', 'key'], location);
     const namespace = nonEmptyString(locator.namespace, `${location}.namespace`);
-    if (namespace.length > 64 || !/^[A-Za-z][A-Za-z0-9._-]*$/.test(namespace)) {
+    if (!isNamedDataNamespace(namespace)) {
         throw new Error(`${location}.namespace must be a logical namespace identifier of at most 64 characters.`);
     }
     const key = nonEmptyString(locator.key, `${location}.key`);

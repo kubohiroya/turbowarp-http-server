@@ -149,13 +149,14 @@ interface D1PreparedStatement {
 }
 interface D1Database {prepare(query: string): D1PreparedStatement}
 interface R2HTTPMetadata {contentType?: string}
-interface R2Object {version: string; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
+interface R2Object {version: string; etag: string; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
 interface R2ObjectBody extends R2Object {body: ReadableStream<Uint8Array>}
-interface R2PutOptions {httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
+interface R2Conditional {etagMatches?: string}
+interface R2PutOptions {onlyIf?: R2Conditional; httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
 interface R2Bucket {
   head(key: string): Promise<R2Object | null>;
-  get(key: string): Promise<R2ObjectBody | null>;
-  put(key: string, value: ReadableStream<Uint8Array>, options?: R2PutOptions): Promise<R2Object | null>;
+  get(key: string, options?: {onlyIf?: R2Conditional}): Promise<R2ObjectBody | R2Object | null>;
+  put(key: string, value: ReadableStream<Uint8Array> | Uint8Array, options?: R2PutOptions): Promise<R2Object | null>;
   delete(key: string): Promise<void>;
 }
 `;
