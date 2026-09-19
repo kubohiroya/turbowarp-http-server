@@ -1,8 +1,12 @@
 import type { CompilerDiagnostic, DeployIr } from './ir.js';
+import { type DeployIrV2 } from './ir-v2/index.js';
+import { type PipelineDiagnostic } from './pipeline/index.js';
 export * from './feature-flags.js';
+export * from './adapters/index.js';
 export * from './binary/index.js';
 export * from './ir-v2/index.js';
 export * from './manifest/index.js';
+export * from './pipeline/index.js';
 export * from './runtime/index.js';
 export * from './structured-data/index.js';
 export * from './validator/index.js';
@@ -12,14 +16,18 @@ export interface CompileOptions {
     output: string;
     format: CompilerInputFormat;
     force?: boolean;
+    irVersion?: 1 | 2;
+    target?: string;
+    targetConfig?: string;
 }
 export interface CompilerOutput {
-    ir: DeployIr;
-    diagnostics: CompilerDiagnostic[];
+    ir: DeployIr | DeployIrV2;
+    diagnostics: Array<CompilerDiagnostic | PipelineDiagnostic>;
     files: string[];
 }
 export declare function compileToDirectory(options: CompileOptions): Promise<CompilerOutput>;
+type AnyCompilerDiagnostic = CompilerDiagnostic | PipelineDiagnostic;
 export declare class CompilerDiagnosticsError extends Error {
-    readonly diagnostics: CompilerDiagnostic[];
-    constructor(diagnostics: CompilerDiagnostic[]);
+    readonly diagnostics: AnyCompilerDiagnostic[];
+    constructor(diagnostics: AnyCompilerDiagnostic[]);
 }

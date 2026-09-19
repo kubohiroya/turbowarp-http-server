@@ -2,7 +2,7 @@
 
 Deploy IR v2は、TurboWarpのHTTP handlerをplatform-neutralな型付き表現へ変換するための実験的な中間表現です。IR v1とCloudflare generatorは移行期間中も維持し、v2を暗黙に選択しません。
 
-現段階では型、strict parser、JSON Schema、canonical serializer、v1 upgraderを提供します。v2 CLI pipelineとcode generatorへの接続は後続Issueで行います。
+型、strict parser、JSON Schema、canonical serializer、v1 upgraderに加え、明示的なtargetを選択するv2 CLI pipelineを提供します。[Compiler／platform adapter境界](compiler-platform-pipeline.ja.md)を参照してください。
 
 外部extension manifestのlock／offline解決仕様は[Compiler extension manifest registry](compiler-manifest-registry.ja.md)を参照してください。
 
@@ -17,8 +17,8 @@ binary resourceの所有権、上限、storage contractは[Binary resource seman
 - rootの`version`は整数`2`です。
 - manifest schema version、extension package version、adapter versionとは独立しています。
 - `compilerIrV2`の既定値はfalseです。
-- 将来のCLIでは`--ir-version 2`と`--target`を明示した場合だけ有効化します。
-- 現在の`compile` commandは引き続きIR v1を処理します。
+- CLIでは`--ir-version 2`と`--target`を明示した場合だけ有効化します。
+- `--ir-version`省略時の`compile` commandは引き続きIR v1を処理します。
 
 ## 型
 

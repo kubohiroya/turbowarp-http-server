@@ -3,10 +3,14 @@ import { dirname, extname, join, resolve } from 'node:path';
 import { generateCloudflareWorker } from './generator.js';
 import { compileTurboWarpProject } from './turbowarp.js';
 import { parseDeployIr } from './validate.js';
+import { parseDeployIrV2 } from './ir-v2/index.js';
+import { compileDeployIrV2 } from './pipeline/index.js';
 export * from './feature-flags.js';
+export * from './adapters/index.js';
 export * from './binary/index.js';
 export * from './ir-v2/index.js';
 export * from './manifest/index.js';
+export * from './pipeline/index.js';
 export * from './runtime/index.js';
 export * from './structured-data/index.js';
 export * from './validator/index.js';
@@ -17,6 +21,22 @@ export async function compileToDirectory(options) {
     const inputPath = resolve(options.input);
     const outputPath = resolve(options.output);
     const raw = JSON.parse(await readFile(inputPath, 'utf8'));
+    if (options.irVersion === 2) {
+        if (!options.target)
+            throw new Error('IR v2 compilation requires --target <id>.');
+        if (options.format !== 'ir') {
+            throw new Error('IR v2 TurboWarp frontend is not connected yet; use --format ir.');
+        }
+        const ir = parseDeployIrV2(raw);
+        const targetConfig = options.targetConfig === undefined
+            ? undefined
+            : JSON.parse(await readFile(resolve(options.targetConfig), 'utf8'));
+        const result = compileDeployIrV2(ir, { target: options.target, targetConfig });
+        if (!result.ok)
+            throw new CompilerDiagnosticsError(result.diagnostics);
+        await writeGeneratedFiles(outputPath, result.files, options.force === true);
+        return { ir, diagnostics: [], files: Object.keys(result.files).sort() };
+    }
     const compiled = options.format === 'ir'
         ? { ir: parseDeployIr(raw), diagnostics: [] }
         : compileTurboWarpProject(raw);
@@ -48,7 +68,9 @@ export class CompilerDiagnosticsError extends Error {
     }
 }
 function formatDiagnostic(diagnostic) {
-    const location = [diagnostic.target, diagnostic.blockId].filter(Boolean).join(':');
+    const location = 'reason' in diagnostic
+        ? [diagnostic.targetId, diagnostic.routeId, diagnostic.sourceRef?.blockId].filter(Boolean).join(':')
+        : [diagnostic.target, diagnostic.blockId].filter(Boolean).join(':');
     return `[${diagnostic.code}]${location ? ` ${location}` : ''} ${diagnostic.message}`;
 }
 //# sourceMappingURL=index.js.map

@@ -78,11 +78,17 @@ function parseCompileArgs(args: readonly string[]): {
   output: string;
   format: CompilerInputFormat;
   force: boolean;
+  irVersion: 1 | 2;
+  target?: string;
+  targetConfig?: string;
 } {
   let input = '';
   let output = '';
   let format: CompilerInputFormat = 'turbowarp-json';
   let force = false;
+  let irVersion: 1 | 2 = 1;
+  let target: string | undefined;
+  let targetConfig: string | undefined;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--input') {
@@ -98,6 +104,17 @@ function parseCompileArgs(args: readonly string[]): {
       index += 1;
     } else if (arg === '--force') {
       force = true;
+    } else if (arg === '--ir-version') {
+      const value = requireValue(args, index, '--ir-version');
+      if (value !== '1' && value !== '2') throw new Error(`Invalid IR version: ${value}`);
+      irVersion = Number(value) as 1 | 2;
+      index += 1;
+    } else if (arg === '--target') {
+      target = requireValue(args, index, '--target');
+      index += 1;
+    } else if (arg === '--target-config') {
+      targetConfig = requireValue(args, index, '--target-config');
+      index += 1;
     } else if (arg === '--help' || arg === '-h') {
       printCompileHelp();
       process.exit(0);
@@ -107,7 +124,16 @@ function parseCompileArgs(args: readonly string[]): {
   }
   if (!input) throw new Error('compile requires --input <file>.');
   if (!output) throw new Error('compile requires --output <directory>.');
-  return {input, output, format, force};
+  if (irVersion === 2 && target === undefined) throw new Error('IR v2 compilation requires --target <id>.');
+  return {
+    input,
+    output,
+    format,
+    force,
+    irVersion,
+    ...(target === undefined ? {} : {target}),
+    ...(targetConfig === undefined ? {} : {targetConfig})
+  };
 }
 
 function requireValue(args: readonly string[], index: number, name: string): string {
@@ -148,12 +174,15 @@ Options:
 function printCompileHelp(): void {
   console.log(`Usage: turbowarp-http-server compile --input <file> --output <directory> [options]
 
-Compiles an accepted TurboWarp project.json subset or deploy IR to Cloudflare Workers + Hono.
+Compiles an accepted TurboWarp project.json subset or deploy IR to Hono deployment artifacts.
 
 Options:
   --input <file>       TurboWarp project.json or deploy IR JSON.
   --output <directory> Generated project directory.
   --format <format>    turbowarp-json (default) or ir.
+  --ir-version <1|2>  Select compiler pipeline. Defaults to 1.
+  --target <id>        Required for IR v2; for example cloudflare-workers.
+  --target-config <file> Adapter config containing binding names, never secrets.
   --force              Replace generated files in a non-empty output directory.
   -h, --help           Show this help.
 `);
