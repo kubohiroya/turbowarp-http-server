@@ -12,6 +12,7 @@ export * from './adapters/index.js';
 export * from './binary/index.js';
 export * from './ir-v2/index.js';
 export * from './manifest/index.js';
+export * from './named-body/index.js';
 export * from './pipeline/index.js';
 export * from './runtime/index.js';
 export * from './structured-data/index.js';

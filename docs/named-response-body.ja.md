@@ -101,6 +101,8 @@ requestのaffine `binary-body`はnamed snapshotへ暗黙変換せず、明示imp
 
 同じblock messageをGETで受けるとsnapshot bodyを返し、HEADではproviderの`stat`を使用してbodyを返しません。feature flag未指定時はproviderへアクセスせず501 `NAMED_RESPONSE_BODY_DISABLED`です。Structured Dataなど別namespaceは対応providerが登録されるまで`NAMED_DATA_PROVIDER_NOT_FOUND`となります。
 
+server compiler向けの`lowerNamedBodyResponse`は、同じblock引数をcanonical `respond-named-body` statementへ変換します。namespace、name、kind、scope、target ID、representation、最大byte数はcompile-time literalだけを受理します。これによりprovider capability、scope、target上限をcode generation前に検証できます。project scopeではblockの`TARGET_ID`入力をIRへ含めず、target scopeの場合だけ必須にします。TurboWarp project全体を走査するIR v2 frontendへの接続は後続です。
+
 ## ロールバック
 
 compiler flagがOFFの場合は`TW2_NAMED_RESPONSE_BODY_DISABLED`で生成前に拒否します。runtimeの`namedResponseBody=false`ではproviderを参照せず501 `NAMED_RESPONSE_BODY_DISABLED`を返します。既存`respond`／`respond-binary`、IR v1、browser runtime、cloud objectは変更・削除しません。問題時は新しい呼び出し経路だけを停止できます。
