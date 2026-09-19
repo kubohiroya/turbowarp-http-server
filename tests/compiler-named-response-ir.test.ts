@@ -33,7 +33,8 @@ describe('named response body IR', () => {
     expect(ir.routes[0]!.method).toBe('ALL');
     expect(ir.routes[0]!.body[0]).toMatchObject({
       kind: 'respond-named-body',
-      reference: {namespace: 'structured-data', name: 'profile', kind: 'structured', scope: 'project'},
+      reference: {namespace: 'structured', name: 'profile', kind: 'structured', scope: 'target'},
+      targetId: 'Stage:1',
       representation: 'json',
       maxBytes: 1024
     });
@@ -62,11 +63,13 @@ describe('named response body IR', () => {
     const missingStatement = missing.routes[0]!.body[0]!;
     if (missingStatement.kind !== 'respond-named-body') throw new Error('Expected named response fixture.');
     missingStatement.reference.scope = 'target';
+    delete missingStatement.targetId;
     expect(() => parseDeployIrV2(missing)).toThrow(/targetId is required/u);
 
     const extra = fixture();
     const extraStatement = extra.routes[0]!.body[0]!;
     if (extraStatement.kind !== 'respond-named-body') throw new Error('Expected named response fixture.');
+    extraStatement.reference.scope = 'project';
     extraStatement.targetId = 'Stage:1';
     expect(() => parseDeployIrV2(extra)).toThrow(/targetId is not allowed/u);
   });
@@ -75,21 +78,21 @@ describe('named response body IR', () => {
     const ir = parseDeployIrV2(fixture());
     const module = await loadModule(generateHonoCore(ir).files['src/core.generated.ts']!);
     const bodies = new Map([
-      ['structured-data\0profile\0json', {mediaType: 'application/json', bytes: new TextEncoder().encode('{"name":"Ada"}')}],
-      ['asset-manager\0avatar\0raw', {mediaType: 'image/png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47])}]
+      ['structured\0profile\0json', {mediaType: 'application/json', bytes: new TextEncoder().encode('{"name":"Ada"}')}],
+      ['asset\0avatar\0raw', {mediaType: 'image/png', bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47])}]
     ]);
     const provider: NamedBodyProvider = {
       canResolve: () => true,
       stat: (request) => {
         const item = bodies.get(bodyKey(request));
-        return item === undefined ? null : {mediaType: item.mediaType, byteLength: item.bytes.byteLength};
+        return item === undefined ? null : metadata(request, item.mediaType, item.bytes.byteLength);
       },
       openBody: (request) => {
         const item = bodies.get(bodyKey(request));
         return item === undefined
           ? null
           : {
-              metadata: {mediaType: item.mediaType, byteLength: item.bytes.byteLength},
+              metadata: metadata(request, item.mediaType, item.bytes.byteLength),
               body: item.bytes,
               release: () => undefined
             };
@@ -211,7 +214,8 @@ function fixture(): DeployIrV2 {
         body: [
           {
             kind: 'respond-named-body',
-            reference: {namespace: 'structured-data', name: 'profile', kind: 'structured', scope: 'project'},
+            reference: {namespace: 'structured', name: 'profile', kind: 'structured', scope: 'target'},
+            targetId: 'Stage:1',
             representation: 'json',
             maxBytes: 1024
           }
@@ -225,7 +229,7 @@ function fixture(): DeployIrV2 {
         body: [
           {
             kind: 'respond-named-body',
-            reference: {namespace: 'asset-manager', name: 'avatar', kind: 'asset', scope: 'project'},
+            reference: {namespace: 'asset', name: 'avatar', kind: 'asset', scope: 'project'},
             representation: 'raw',
             maxBytes: 1024
           }
@@ -237,4 +241,16 @@ function fixture(): DeployIrV2 {
 
 function bodyKey(request: NamedBodyRequest): string {
   return `${request.reference.namespace}\0${request.reference.name}\0${request.representation}`;
+}
+
+function metadata(request: NamedBodyRequest, mediaType: string, byteLength: number) {
+  return {
+    reference: {...request.reference},
+    nativeRepresentation: request.representation,
+    representation: request.representation,
+    mediaType,
+    byteLength,
+    revision: 'fixture:1',
+    replayable: true
+  } as const;
 }

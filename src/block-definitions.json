@@ -295,7 +295,7 @@
       "text": "respond with named [NAMESPACE] [NAME] kind [KIND] scope [SCOPE] target [TARGET_ID] as [REPRESENTATION] max bytes [MAX_BYTES]",
       "description": "Completes the response with a named structured, document, binary, or asset snapshot resolved by the server.",
       "arguments": {
-        "NAMESPACE": {"type": "STRING", "defaultValue": "asset-manager"},
+        "NAMESPACE": {"type": "STRING", "defaultValue": "asset"},
         "NAME": {"type": "STRING", "defaultValue": "avatar"},
         "KIND": {"type": "STRING", "defaultValue": "asset"},
         "SCOPE": {"type": "STRING", "defaultValue": "project"},

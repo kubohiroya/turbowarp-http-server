@@ -27,11 +27,23 @@ turbowarp-http-server compile \
 
 同じIRをFirebase Functionsへ生成する場合は`--target firebase-functions`へ切り替えます。target固有のbinding／環境変数名は`--target-config`で指定し、IRは変更しません。
 
+TurboWarp `project.json`と外部extensionをcompileする場合は、検証済みmanifest lockを明示します。
+
+```sh
+turbowarp-http-server compile \
+  --input project.json \
+  --output generated-worker \
+  --format turbowarp-json \
+  --ir-version 2 \
+  --target cloudflare-workers \
+  --manifest-lock turboWarp-server.lock.json
+```
+
 - v2では`--target`を必須とし、targetを推測しません。
 - v2 CLI入力はcanonical `--format ir`に加え、既存built-in HTTP block subsetの`--format turbowarp-json`を受理します。
 - `--target-config <file>`はadapter設定です。IRへmergeせず、secret値を受け取りません。
 - `--enable-named-response-body`は実験的な`respond-named-body`だけを有効化し、既定OFFです。選択targetに`named-body-provider`がなければ生成しません。
-- `--format turbowarp-json --ir-version 2`は既存built-in HTTP block subsetをv1互換frontend経由でv2へupgradeし、`respondWithNamedBody`だけをcanonical statementへ差し替えます。extension manifest由来blockのproject-wide loweringは後続です。
+- `--format turbowarp-json --ir-version 2`はbuilt-in HTTP block、literal bounded repeat、named responseを直接IR v2へloweringします。`--manifest-lock`指定時はlock済みStructured Data reporter／loopも同じfrontendでloweringします。lockにないextension opcodeを推測しません。
 - Cloudflare adapterはD1／R2 binding名、Firebase adapterはfunction名／bucket環境変数名／Firestore collection名だけを受け取ります。secretやproject IDは受け取りません。詳細は[IR v2 platform storage adapter](platform-storage-adapters.ja.md)を参照してください。
 - v1は引き続き既存Cloudflare generatorを使用し、`--ir-version`省略時の動作もv1のままです。
 

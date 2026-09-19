@@ -61,11 +61,21 @@ metadataの`mediaType`、`byteLength`、`etag`／`revision`を検証し、Conten
 | `NAMED_DATA_KIND_MISMATCH` | 400 |
 | `NAMED_DATA_SCOPE_MISMATCH` | 400 |
 | `NAMED_DATA_REPRESENTATION_UNSUPPORTED` | 415 |
+| `NAMED_DATA_INVALID_METADATA` | 502 |
 | `NAMED_DATA_BODY_TOO_LARGE` | 413 |
 | `NAMED_DATA_ABORTED` | 499 |
 | `NAMED_DATA_PROVIDER_RELEASED` | 503 |
+| `NAMED_DATA_INCOMPATIBLE_VERSION`／`NAMED_DATA_NAMESPACE_CONFLICT` | 500 |
 
 feature無効時は`NAMED_RESPONSE_BODY_DISABLED`、provider metadata contract違反は`NAMED_RESPONSE_INVALID_METADATA`です。
+
+## 共通Named Data registry
+
+`NamedDataRegistryResolver`は`@kubohiroya/turbowarp-named-data`のcanonical registryをHTTP response境界へ接続します。constructorのcontext resolverは、`targetId`を実際のTurboWarp target objectへ解決し、project scopeではruntime固有のproject objectを返します。文字列IDをprovider contextの代用にはしません。
+
+実サーバーでは`startServer({namedBodyResolver: new NamedDataRegistryResolver(...)})`として明示的に注入します。HTTP ServerがTurboWarpとは別processで動作する場合、browser runtimeのregistry objectを直接共有することはできないため、server側providerを登録するか、検証済みのprocess間adapterを用意する必要があります。descriptorだけからbrowser内のWeakMapやasset stateを推測しません。
+
+registryから返された`reference`、`kind`、`scope`、`nativeRepresentation`、出力`representation`、MIME、digest、revision、replayable属性はHTTP境界まで保持されます。HTTP Serverはprovider内部のJSON tree、document AST、binary storage、asset registryを参照しません。
 
 ## IR統合
 
@@ -75,11 +85,12 @@ feature無効時は`NAMED_RESPONSE_BODY_DISABLED`、provider metadata contract�
 {
   "kind": "respond-named-body",
   "reference": {
-    "namespace": "structured-data",
+    "namespace": "structured",
     "name": "profile",
     "kind": "structured",
-    "scope": "project"
+    "scope": "target"
   },
+  "targetId": "Stage:1",
   "representation": "json",
   "maxBytes": 1048576
 }
@@ -91,9 +102,9 @@ requestのaffine `binary-body`はnamed snapshotへ暗黙変換せず、明示imp
 
 ## Asset Manager ResourceCapability adapter
 
-`createAssetManagerNamedBodyProvider(resources)`は、既存の公開`ResourceCapability`だけを使用し、Asset Manager extensionのprivate fieldやIndexedDB／OPFS layoutを読みません。`asset-manager` namespaceの`asset`／`binary` kindと`raw` representationだけを受理します。project scopeはglobal resource namespace（既定`routeName = ""`）、target scopeはruntimeの`targetId`へ写像します。
+`createAssetManagerNamedBodyProvider(resources)`は、既存の公開`ResourceCapability`だけを使用し、Asset Manager extensionのprivate fieldやIndexedDB／OPFS layoutを読みません。canonicalな`asset` namespaceの`asset` kindと`raw` representationだけを受理します。project scopeはglobal resource namespace（既定`routeName = ""`）、target scopeはruntimeの`targetId`へ写像します。
 
-`HEAD`は`listResources`が利用可能ならmetadataだけを参照し、`GET`は`getResource`が返したbytesをcopyしてsnapshotを分離します。未公開namespaceはnot foundとして扱い、kind／representation不一致とabortは共通のstable errorへ変換します。このadapterはNode runtime向けであり、生成targetが`named-body-provider` capabilityを宣言する根拠にはしません。
+`HEAD`は`listResources`が利用可能ならmetadataだけを参照し、`GET`は`getResource`が返したbytesをcopyしてsnapshotを分離します。`replacementId`または`etag`をcanonical revisionとして必須にし、同名resourceから偽のETagを生成しません。未公開namespaceはnot foundとして扱い、kind／representation不一致とabortは共通のstable errorへ変換します。このadapterはNode runtime向けであり、生成targetが`named-body-provider` capabilityを宣言する根拠にはしません。
 
 ## TurboWarp bridge block
 
@@ -101,7 +112,7 @@ requestのaffine `binary-body`はnamed snapshotへ暗黙変換せず、明示imp
 
 同じblock messageをGETで受けるとsnapshot bodyを返し、HEADではproviderの`stat`を使用してbodyを返しません。feature flag未指定時はproviderへアクセスせず501 `NAMED_RESPONSE_BODY_DISABLED`です。Structured Dataなど別namespaceは対応providerが登録されるまで`NAMED_DATA_PROVIDER_NOT_FOUND`となります。
 
-server compiler向けの`lowerNamedBodyResponse`は、同じblock引数をcanonical `respond-named-body` statementへ変換します。namespace、name、kind、scope、target ID、representation、最大byte数はcompile-time literalだけを受理します。これによりprovider capability、scope、target上限をcode generation前に検証できます。project scopeではblockの`TARGET_ID`入力をIRへ含めず、target scopeの場合だけ必須にします。TurboWarp project全体を走査するIR v2 frontendへの接続は後続です。
+server compiler向けの`lowerNamedBodyResponse`は、同じblock引数をcanonical `respond-named-body` statementへ変換します。namespace、name、kind、scope、target ID、representation、最大byte数はcompile-time literalだけを受理します。これによりprovider capability、scope、target上限をcode generation前に検証できます。project scopeではblockの`TARGET_ID`入力をIRへ含めず、target scopeの場合だけ必須にします。IR v2 frontendはTurboWarp project全体を走査し、source位置と`named-body-provider` capabilityを保持してこのloweringへ接続します。
 
 ## ロールバック
 

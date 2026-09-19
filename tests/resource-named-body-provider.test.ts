@@ -58,7 +58,7 @@ describe('Asset Manager named body provider', () => {
 
     const wrongKind = await createNamedBodyResponse(
       resolver,
-      {...request('avatar'), reference: {...request('avatar').reference, kind: 'structured'}},
+      {...request('avatar'), reference: {...request('avatar').reference, kind: 'binary'}},
       {featureFlags: enabled}
     );
     const wrongRepresentation = await createNamedBodyResponse(
@@ -79,6 +79,22 @@ describe('Asset Manager named body provider', () => {
     await expect(wrongRepresentation.json()).resolves.toEqual({error: 'NAMED_DATA_REPRESENTATION_UNSUPPORTED'});
     await expect(unpublished.json()).resolves.toEqual({error: 'NAMED_DATA_NOT_FOUND'});
     await expect(aborted.json()).resolves.toEqual({error: 'NAMED_DATA_ABORTED'});
+  });
+
+  it('rejects resources that cannot provide a content revision', async () => {
+    const resources = new MemoryResources();
+    resources.seed('', {
+      name: 'unstable',
+      mimeType: 'application/octet-stream',
+      bytes: new Uint8Array([1])
+    });
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([createAssetManagerNamedBodyProvider(resources)]),
+      request('unstable'),
+      {featureFlags: enabled}
+    );
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({error: 'NAMED_DATA_INVALID_METADATA'});
   });
 });
 
@@ -113,7 +129,7 @@ class MemoryResources implements ResourceCapability {
 
 function request(name: string, scope: 'project' | 'target' = 'project', targetId?: string) {
   return {
-    reference: {namespace: 'asset-manager', name, kind: 'asset' as const, scope},
+    reference: {namespace: 'asset', name, kind: 'asset' as const, scope},
     representation: 'raw' as const,
     ...(targetId === undefined ? {} : {targetId})
   };

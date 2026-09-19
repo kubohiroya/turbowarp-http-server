@@ -3,6 +3,7 @@ import { dirname, extname, join, resolve } from 'node:path';
 import { generateCloudflareWorker } from './generator.js';
 import { compileTurboWarpProject } from './turbowarp.js';
 import { compileTurboWarpProjectV2 } from './turbowarp-v2.js';
+import { resolveCompilerManifestLock } from './manifest/resolve.js';
 import { parseDeployIr } from './validate.js';
 import { parseDeployIrV2 } from './ir-v2/index.js';
 import { compileDeployIrV2 } from './pipeline/index.js';
@@ -27,9 +28,12 @@ export async function compileToDirectory(options) {
     if (options.irVersion === 2) {
         if (!options.target)
             throw new Error('IR v2 compilation requires --target <id>.');
+        const registry = options.format === 'turbowarp-json' && options.manifestLock !== undefined
+            ? (await resolveCompilerManifestLock(options.manifestLock)).registry
+            : undefined;
         const frontend = options.format === 'ir'
             ? { ir: parseDeployIrV2(raw), diagnostics: [] }
-            : compileTurboWarpProjectV2(raw);
+            : compileTurboWarpProjectV2(raw, registry);
         const frontendErrors = frontend.diagnostics.filter(({ severity }) => severity === 'error');
         if (frontendErrors.length > 0)
             throw new CompilerDiagnosticsError(frontendErrors);

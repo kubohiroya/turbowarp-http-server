@@ -44,6 +44,8 @@ sourceは次の2種類だけです。
 
 URL、npm registry、cwd探索、暗黙downloadはありません。resolver順は常に「lock entry → entryが指すbundled/local source」です。
 
+CLIではTurboWarp project入力に限り`--manifest-lock <file>`でlockを指定します。このoptionは`--format turbowarp-json --ir-version 2`と組み合わせ、direct IR入力やIR v1では受理しません。
+
 local sourceはabsolute path、lock directory外への`..`、symlink componentを拒否します。realpath後にもlock directory内であることを再確認します。
 
 ## Registryとoperation hint

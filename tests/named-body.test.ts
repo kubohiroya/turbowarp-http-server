@@ -1,7 +1,9 @@
 import {describe, expect, it, vi} from 'vitest';
+import {NamedDataRegistry, type NamedDataResolveContext} from '@kubohiroya/turbowarp-named-data/composition';
 import {
   createNamedBodyResponse,
-  NamedBodyResolver
+  NamedBodyResolver,
+  NamedDataRegistryResolver
 } from '../src/named-body.js';
 import type {
   NamedBodyHandle,
@@ -15,6 +17,42 @@ const enabled = {namedResponseBody: true} as const;
 const encoder = new TextEncoder();
 
 describe('named response body', () => {
+  it('serves canonical registry providers while retaining type metadata', async () => {
+    const target = {};
+    const registry = new NamedDataRegistry();
+    const contexts: NamedDataResolveContext[] = [];
+    registry.registerProvider({
+      namespace: 'structured',
+      kind: 'structured',
+      canResolve: (reference, representation) =>
+        reference.namespace === 'structured' && representation === 'json',
+      stat: (reference, representation, context) => {
+        contexts.push(context);
+        return canonicalMetadata(reference, representation);
+      },
+      openBody: (reference, representation, context) => {
+        contexts.push(context);
+        return {
+          ...canonicalMetadata(reference, representation),
+          body: encoder.encode('{"ok":true}'),
+          release: () => undefined
+        };
+      },
+      release: () => undefined
+    }, {lifetime: 'persistent'});
+    const resolver = new NamedDataRegistryResolver(registry, () => ({target}));
+    const response = await createNamedBodyResponse(resolver, {
+      reference: {namespace: 'structured', name: 'profile', kind: 'structured', scope: 'target'},
+      representation: 'json',
+      targetId: 'Stage:1'
+    }, {featureFlags: enabled});
+
+    expect(await response.json()).toEqual({ok: true});
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0]?.target).toBe(target);
+  });
+
   it.each([
     ['json', 'profile', 'application/json; charset=utf-8', '{"name":"Ada"}'],
     ['yaml', 'profile', 'application/yaml; charset=utf-8', 'name: Ada\n'],
@@ -38,20 +76,20 @@ describe('named response body', () => {
   });
 
   it('dispatches structured and asset namespaces through one resolver contract', async () => {
-    const structured = new FakeNamedBodyProvider('structured-data');
-    const assets = new FakeNamedBodyProvider('asset-manager');
+    const structured = new FakeNamedBodyProvider('structured');
+    const assets = new FakeNamedBodyProvider('asset');
     structured.seed('profile', 'json', {mediaType: 'application/json'}, encoder.encode('{"name":"Ada"}'));
     assets.seed('avatar', 'raw', {mediaType: 'image/png'}, new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
     const resolver = new NamedBodyResolver([structured, assets]);
 
     const jsonResponse = await createNamedBodyResponse(
       resolver,
-      request('profile', 'json', {namespace: 'structured-data', kind: 'structured'}),
+      request('profile', 'json', {namespace: 'structured', kind: 'structured'}),
       {featureFlags: enabled}
     );
     const assetResponse = await createNamedBodyResponse(
       resolver,
-      request('avatar', 'raw', {namespace: 'asset-manager', kind: 'asset'}),
+      request('avatar', 'raw', {namespace: 'asset', kind: 'asset'}),
       {featureFlags: enabled}
     );
 
@@ -282,12 +320,39 @@ describe('named response body', () => {
     expect(JSON.parse(body)).toEqual({error: 'NAMED_DATA_PROVIDER_RELEASED'});
     expect(body).not.toContain('private release detail');
   });
+
+  it('classifies canonical provider metadata failures as an upstream error', async () => {
+    const error = Object.assign(new Error('private metadata detail'), {
+      code: 'NAMED_DATA_INVALID_METADATA' as const
+    });
+    const provider: NamedBodyProvider = {
+      canResolve: () => true,
+      stat: async () => {
+        throw error;
+      },
+      openBody: async () => {
+        throw error;
+      }
+    };
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('profile', 'json'),
+      {featureFlags: enabled}
+    );
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({error: 'NAMED_DATA_INVALID_METADATA'});
+  });
 });
 
 interface SeededBody {
   metadata: NamedBodyMetadata;
   body: Uint8Array | ReadableStream<Uint8Array>;
 }
+
+type SeedMetadata = Pick<NamedBodyMetadata, 'mediaType'> &
+  Partial<Omit<NamedBodyMetadata, 'mediaType'>>;
 
 class FakeNamedBodyProvider implements NamedBodyProvider {
   private readonly bodies = new Map<string, SeededBody>();
@@ -301,10 +366,21 @@ class FakeNamedBodyProvider implements NamedBodyProvider {
   public seed(
     name: string,
     representation: NamedBodyRequest['representation'],
-    metadata: NamedBodyMetadata,
+    metadata: SeedMetadata,
     body: SeededBody['body']
   ): void {
-    this.bodies.set(`${name}\0${representation}`, {metadata, body});
+    const kind = this.namespace === 'asset' ? 'asset' : representation === 'raw' ? 'binary' : 'structured';
+    this.bodies.set(`${name}\0${representation}`, {
+      metadata: {
+        reference: {namespace: this.namespace, name, kind, scope: 'project'},
+        nativeRepresentation: representation,
+        representation,
+        revision: 'fixture:1',
+        replayable: true,
+        ...metadata
+      },
+      body
+    });
   }
 
   public canResolve(requestValue: NamedBodyRequest): boolean {
@@ -358,4 +434,19 @@ function streamOf(bytes: number[]): ReadableStream<Uint8Array> {
       controller.close();
     }
   });
+}
+
+function canonicalMetadata(
+  reference: NamedBodyRequest['reference'],
+  representation: NamedBodyRequest['representation']
+): NamedBodyMetadata {
+  return {
+    reference: {...reference},
+    nativeRepresentation: 'json',
+    representation,
+    mediaType: 'application/json; charset=utf-8',
+    byteLength: 11,
+    revision: 'fixture:canonical:1',
+    replayable: true
+  };
 }

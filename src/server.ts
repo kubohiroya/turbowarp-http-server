@@ -28,7 +28,8 @@ export {
   DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS,
   NAMED_DATA_ERROR_CODES,
   NamedBodyResponder,
-  NamedBodyResolver
+  NamedBodyResolver,
+  NamedDataRegistryResolver
 } from './named-body.js';
 export type {
   NamedBodyErrorCode,
@@ -40,6 +41,7 @@ export type {
   NamedBodyResponseOptions,
   NamedBodyRepresentation,
   NamedDataKind,
+  NamedDataContextResolver,
   NamedDataErrorCode,
   NamedDataReference,
   NamedDataScope,
@@ -58,6 +60,8 @@ export interface ServerOptions {
   authorizeResource?: ResourceAuthorizer;
   requestTimeoutMs?: number;
   namedResponseBody?: boolean;
+  /** Overrides the built-in ResourceCapability adapter for canonical named-data registries or custom providers. */
+  namedBodyResolver?: NamedBodyResolver;
   maxNamedResponseBodyBytes?: number;
   routes?: readonly string[];
   community?: false | CommunityServerOptions;
@@ -212,7 +216,8 @@ export function createApp(options: ServerAppOptions = {}): Hono {
 
 export function startServer(options: ServerOptions): RunningServer {
   const namedBodies = new NamedBodyResponder(
-    new NamedBodyResolver(options.resources ? [createAssetManagerNamedBodyProvider(options.resources)] : []),
+    options.namedBodyResolver ??
+      new NamedBodyResolver(options.resources ? [createAssetManagerNamedBodyProvider(options.resources)] : []),
     {namedResponseBody: options.namedResponseBody === true}
   );
   const bridge = new WebSocketHttpRequestBridge(options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, {

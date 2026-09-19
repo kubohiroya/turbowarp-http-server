@@ -1,34 +1,25 @@
-export type NamedDataKind = 'structured' | 'document' | 'binary' | 'asset';
+import {
+  NAMED_DATA_ERROR_CODES,
+  type NamedDataBody,
+  type NamedDataErrorCode,
+  type NamedDataKind,
+  type NamedDataMetadata,
+  type NamedDataReference,
+  type NamedDataRegistryService,
+  type NamedDataReleaseReason,
+  type NamedDataRepresentation,
+  type NamedDataResolveContext,
+  type NamedDataScope
+} from '@kubohiroya/turbowarp-named-data/composition';
 
-export type NamedDataScope = 'target' | 'project';
-
-/** Stable provider error namespace shared with structured/document/binary data extensions. */
-export const NAMED_DATA_ERROR_CODES = [
-  'NAMED_DATA_INVALID_REF',
-  'NAMED_DATA_PROVIDER_NOT_FOUND',
-  'NAMED_DATA_NOT_FOUND',
-  'NAMED_DATA_KIND_MISMATCH',
-  'NAMED_DATA_SCOPE_MISMATCH',
-  'NAMED_DATA_REPRESENTATION_UNSUPPORTED',
-  'NAMED_DATA_BODY_TOO_LARGE',
-  'NAMED_DATA_ABORTED',
-  'NAMED_DATA_PROVIDER_RELEASED'
-] as const;
-
-export type NamedDataErrorCode = (typeof NAMED_DATA_ERROR_CODES)[number];
+export {NAMED_DATA_ERROR_CODES};
+export type {NamedDataErrorCode, NamedDataKind, NamedDataReference, NamedDataScope};
 export type NamedBodyErrorCode =
   | NamedDataErrorCode
   | 'NAMED_RESPONSE_BODY_DISABLED'
   | 'NAMED_RESPONSE_INVALID_METADATA';
 
-export interface NamedDataReference {
-  namespace: string;
-  name: string;
-  kind: NamedDataKind;
-  scope: NamedDataScope;
-}
-
-export type NamedBodyRepresentation = 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+export type NamedBodyRepresentation = NamedDataRepresentation;
 
 export interface NamedBodyRequest {
   reference: NamedDataReference;
@@ -37,14 +28,11 @@ export interface NamedBodyRequest {
   targetId?: string;
 }
 
-export interface NamedBodyMetadata {
-  mediaType: string;
-  byteLength?: number;
+export interface NamedBodyMetadata extends NamedDataMetadata {
   etag?: string;
-  revision?: string;
 }
 
-export type NamedBodyReleaseReason = 'complete' | 'cancel' | 'abort' | 'error';
+export type NamedBodyReleaseReason = Exclude<NamedDataReleaseReason, 'shutdown'>;
 
 export interface NamedBodyHandle {
   metadata: NamedBodyMetadata;
@@ -57,6 +45,10 @@ export interface NamedBodyProvider {
   stat(request: NamedBodyRequest, signal: AbortSignal): NamedBodyMetadata | null | Promise<NamedBodyMetadata | null>;
   openBody(request: NamedBodyRequest, signal: AbortSignal): NamedBodyHandle | null | Promise<NamedBodyHandle | null>;
 }
+
+export type NamedDataContextResolver = (
+  request: NamedBodyRequest
+) => NamedDataResolveContext | Promise<NamedDataResolveContext>;
 
 export interface NamedResponseBodyFeatureFlags {
   namedResponseBody: boolean;
@@ -105,6 +97,53 @@ export class NamedBodyResolver {
   }
 }
 
+/** Adapts the canonical runtime registry to the HTTP response boundary. */
+export class NamedDataRegistryResolver extends NamedBodyResolver {
+  public constructor(
+    registry: NamedDataRegistryService,
+    contextFor: NamedDataContextResolver
+  ) {
+    super([registryProvider(registry, contextFor)]);
+  }
+}
+
+function registryProvider(
+  registry: NamedDataRegistryService,
+  contextFor: NamedDataContextResolver
+): NamedBodyProvider {
+  return {
+    // Let the registry distinguish an absent namespace, kind mismatch, and an
+    // unsupported representation with their canonical stable error codes.
+    canResolve: () => true,
+    stat: async (request, signal) => {
+      const context = await contextFor(request);
+      return registry.stat(request.reference, request.representation, {...context, signal});
+    },
+    openBody: async (request, signal) => {
+      const context = await contextFor(request);
+      const body = await registry.openBody(request.reference, request.representation, {...context, signal});
+      return namedDataBodyHandle(body);
+    }
+  };
+}
+
+function namedDataBodyHandle(body: NamedDataBody): NamedBodyHandle {
+  return {
+    metadata: {
+      reference: body.reference,
+      nativeRepresentation: body.nativeRepresentation,
+      representation: body.representation,
+      mediaType: body.mediaType,
+      ...(body.byteLength === undefined ? {} : {byteLength: body.byteLength}),
+      ...(body.digest === undefined ? {} : {digest: body.digest}),
+      revision: body.revision,
+      replayable: body.replayable
+    },
+    body: body.body,
+    release: (reason) => body.release(reason)
+  };
+}
+
 export class NamedBodyResponder {
   public constructor(
     private readonly resolver: NamedBodyResolver,
@@ -146,7 +185,7 @@ export async function createNamedBodyResponse(
       throw error;
     }
     if (!metadata) return errorResponse('NAMED_DATA_NOT_FOUND', 404, method);
-    const metadataError = validateMetadata(metadata, request.representation, maxBodyBytes);
+    const metadataError = validateMetadata(metadata, request, maxBodyBytes);
     if (metadataError) return withoutResponseBody(metadataError);
     return new Response(null, {status, headers: responseHeaders(options.headers, metadata)});
   }
@@ -169,7 +208,7 @@ export async function createNamedBodyResponse(
     return errorResponse('NAMED_DATA_ABORTED', 499);
   }
 
-  const metadataError = validateMetadata(handle.metadata, request.representation, maxBodyBytes);
+  const metadataError = validateMetadata(handle.metadata, request, maxBodyBytes);
   if (metadataError) {
     return (await releaseErrorResponse(release, 'error')) ?? metadataError;
   }
@@ -250,13 +289,26 @@ function managedBodyStream(
 
 function validateMetadata(
   metadata: NamedBodyMetadata,
-  representation: NamedBodyRepresentation,
+  request: NamedBodyRequest,
   maxBodyBytes?: number
 ): Response | null {
+  if (
+    metadata.reference.namespace !== request.reference.namespace ||
+    metadata.reference.name !== request.reference.name ||
+    metadata.reference.kind !== request.reference.kind ||
+    metadata.reference.scope !== request.reference.scope ||
+    metadata.representation !== request.representation ||
+    !isNativeRepresentation(metadata.reference.kind, metadata.nativeRepresentation) ||
+    typeof metadata.revision !== 'string' ||
+    metadata.revision.length === 0 ||
+    typeof metadata.replayable !== 'boolean'
+  ) {
+    return errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
+  }
   if (hasControlCharacter(metadata.mediaType) || metadata.mediaType.length > 255) {
     return errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
   }
-  if (!isMediaTypeForRepresentation(metadata.mediaType, representation)) {
+  if (!isMediaTypeForRepresentation(metadata.mediaType, request.representation)) {
     return errorResponse('NAMED_DATA_REPRESENTATION_UNSUPPORTED', 415);
   }
   if (metadata.byteLength !== undefined) {
@@ -273,6 +325,15 @@ function validateMetadata(
     }
   }
   return null;
+}
+
+function isNativeRepresentation(
+  kind: NamedDataKind,
+  representation: NamedBodyRepresentation
+): boolean {
+  if (kind === 'structured') return representation === 'json' || representation === 'yaml';
+  if (kind === 'document') return representation === 'html' || representation === 'markdown';
+  return representation === 'raw';
 }
 
 function isValidRequest(request: NamedBodyRequest): boolean {
@@ -389,9 +450,11 @@ function statusForNamedDataError(code: NamedDataErrorCode): number {
   if (code === 'NAMED_DATA_NOT_FOUND') return 404;
   if (code === 'NAMED_DATA_PROVIDER_NOT_FOUND') return 501;
   if (code === 'NAMED_DATA_REPRESENTATION_UNSUPPORTED') return 415;
+  if (code === 'NAMED_DATA_INVALID_METADATA') return 502;
   if (code === 'NAMED_DATA_BODY_TOO_LARGE') return 413;
   if (code === 'NAMED_DATA_ABORTED') return 499;
   if (code === 'NAMED_DATA_PROVIDER_RELEASED') return 503;
+  if (code === 'NAMED_DATA_INCOMPATIBLE_VERSION' || code === 'NAMED_DATA_NAMESPACE_CONFLICT') return 500;
   return 400;
 }
 

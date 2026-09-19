@@ -4,7 +4,8 @@ import {join} from 'node:path';
 import {afterEach, describe, expect, it} from 'vitest';
 import {
   compileToDirectory,
-  compileTurboWarpProjectV2
+  compileTurboWarpProjectV2,
+  resolveCompilerManifestLock
 } from '../src/compiler/index.js';
 
 const prefix = 'kubohiroyaturbowarphttpserver_';
@@ -153,6 +154,125 @@ describe('TurboWarp IR v2 frontend', () => {
         namedResponseBody: true
       })
     ).rejects.toThrow(/TW2_TARGET_CAPABILITY_UNSUPPORTED/u);
+  });
+
+  it('lowers literal bounded repeats instead of accepting blocks that the frontend cannot compile', () => {
+    const project = namedProject();
+    const blocks = targetBlocks(project);
+    blocks.hat!.next = 'repeat';
+    blocks.repeat = {
+      opcode: 'control_repeat',
+      next: 'response',
+      parent: 'hat',
+      inputs: {TIMES: [1, [4, '2']], SUBSTACK: [2, 'status']}
+    };
+    blocks.status = {
+      opcode: `${prefix}setHttpStatus`,
+      next: null,
+      parent: 'repeat',
+      inputs: {STATUS: [1, [4, '201']]}
+    };
+    blocks.response = {
+      opcode: `${prefix}respondWithText`,
+      next: null,
+      parent: 'repeat',
+      inputs: {BODY: [1, [10, 'done']]}
+    };
+    delete blocks.named;
+
+    const result = compileTurboWarpProjectV2(project);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ir.routes[0]?.body).toMatchObject([
+      {kind: 'bounded-loop', maxIterations: 2, body: [{kind: 'set-status', status: 201}]},
+      {kind: 'respond', format: 'text'}
+    ]);
+  });
+
+  it('uses the locked manifest registry to lower Structured Data reporters in project.json', async () => {
+    const {registry} = await resolveCompilerManifestLock(
+      'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
+    );
+    const project = namedProject();
+    const blocks = targetBlocks(project);
+    blocks.named = {
+      opcode: `${prefix}respondWithJson`,
+      next: null,
+      parent: 'hat',
+      inputs: {BODY: [3, 'normalize']}
+    };
+    blocks.normalize = {
+      opcode: 'kubohiroyastructureddata_normalizeJson',
+      next: null,
+      parent: 'named',
+      inputs: {JSON: [1, [10, '{"b":2,"a":1}']]}
+    };
+
+    const result = compileTurboWarpProjectV2(project, registry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ir.routes[0]?.body[0]).toMatchObject({
+      kind: 'respond',
+      format: 'json',
+      body: {
+        kind: 'json-stringify',
+        value: {kind: 'literal', valueType: 'json-object', value: {b: 2, a: 1}}
+      }
+    });
+
+    const directory = await mkdtemp(join(tmpdir(), 'tw-v2-manifest-'));
+    temporaryDirectories.push(directory);
+    const input = join(directory, 'project.json');
+    const output = join(directory, 'worker');
+    await writeFile(input, JSON.stringify(project));
+    const compiled = await compileToDirectory({
+      input,
+      output,
+      format: 'turbowarp-json',
+      irVersion: 2,
+      target: 'cloudflare-workers',
+      manifestLock: 'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
+    });
+    expect(compiled.diagnostics).toEqual([]);
+    expect(await readFile(join(output, 'src/core.generated.ts'), 'utf8')).toContain('stringifyApplicationJson');
+  });
+
+  it('keeps source locations unambiguous when targets have the same display name', () => {
+    const project = namedProject();
+    const duplicate = structuredClone((project.targets as unknown[])[0]) as {
+      blocks: Record<string, Record<string, unknown>>;
+    };
+    duplicate.blocks = {
+      secondHat: {
+        opcode: `${prefix}whenHttpRequestReceived`,
+        next: 'unsafe',
+        parent: null,
+        topLevel: true,
+        inputs: {}
+      },
+      unsafe: {
+        opcode: `${prefix}setResponseHeader`,
+        next: 'secondResponse',
+        parent: 'secondHat',
+        inputs: {NAME: [1, [10, 'content-length']], VALUE: [1, [10, '1']]}
+      },
+      secondResponse: {
+        opcode: `${prefix}respondWithText`,
+        next: null,
+        parent: 'unsafe',
+        inputs: {BODY: [1, [10, 'no']]}
+      }
+    };
+    (project.targets as unknown[]).push(duplicate);
+
+    const result = compileTurboWarpProjectV2(project);
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'TW2_UNSAFE_HEADER',
+        sourceRef: expect.objectContaining({targetIndex: 1, targetName: 'Stage', blockId: 'unsafe'})
+      })
+    );
   });
 });
 

@@ -21,7 +21,7 @@ export function lowerNamedBodyResponse(args, sourceRef) {
         return { diagnostics };
     }
     if (!NAMESPACE.test(namespace) || name.length < 1 || name.length > 256 || hasControlCharacter(name)) {
-        report(diagnostics, 'TW2_NAMED_INVALID_DESCRIPTOR', 'Named response namespace or name is invalid.', 'The canonical descriptor requires a safe logical namespace and a bounded non-control name.', 'Use a namespace such as asset-manager and a name from 1 to 256 characters.', sourceRef);
+        report(diagnostics, 'TW2_NAMED_INVALID_DESCRIPTOR', 'Named response namespace or name is invalid.', 'The canonical descriptor requires a safe logical namespace and a bounded non-control name.', 'Use a canonical namespace such as asset and a name from 1 to 256 characters.', sourceRef);
         return { diagnostics };
     }
     let targetId;

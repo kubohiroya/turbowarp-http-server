@@ -72,6 +72,7 @@ function parseCompileArgs(args) {
     let irVersion = 1;
     let target;
     let targetConfig;
+    let manifestLock;
     let namedResponseBody = false;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
@@ -108,6 +109,10 @@ function parseCompileArgs(args) {
             targetConfig = requireValue(args, index, '--target-config');
             index += 1;
         }
+        else if (arg === '--manifest-lock') {
+            manifestLock = requireValue(args, index, '--manifest-lock');
+            index += 1;
+        }
         else if (arg === '--enable-named-response-body') {
             namedResponseBody = true;
         }
@@ -128,6 +133,9 @@ function parseCompileArgs(args) {
     if (namedResponseBody && irVersion !== 2) {
         throw new Error('--enable-named-response-body requires --ir-version 2.');
     }
+    if (manifestLock !== undefined && (irVersion !== 2 || format !== 'turbowarp-json')) {
+        throw new Error('--manifest-lock requires --ir-version 2 and --format turbowarp-json.');
+    }
     return {
         input,
         output,
@@ -136,7 +144,8 @@ function parseCompileArgs(args) {
         irVersion,
         namedResponseBody,
         ...(target === undefined ? {} : { target }),
-        ...(targetConfig === undefined ? {} : { targetConfig })
+        ...(targetConfig === undefined ? {} : { targetConfig }),
+        ...(manifestLock === undefined ? {} : { manifestLock })
     };
 }
 function requireValue(args, index, name) {
@@ -183,6 +192,7 @@ Options:
   --ir-version <1|2>  Select compiler pipeline. Defaults to 1.
   --target <id>        Required for IR v2; for example cloudflare-workers.
   --target-config <file> Adapter config containing binding names, never secrets.
+  --manifest-lock <file> Locked extension manifests for TurboWarp project input.
   --enable-named-response-body Enable the experimental named body IR operation (default OFF).
   --force              Replace generated files in a non-empty output directory.
   -h, --help           Show this help.

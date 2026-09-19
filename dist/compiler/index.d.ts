@@ -21,6 +21,7 @@ export interface CompileOptions {
     irVersion?: 1 | 2;
     target?: string;
     targetConfig?: string;
+    manifestLock?: string;
     namedResponseBody?: boolean;
 }
 export interface CompilerOutput {

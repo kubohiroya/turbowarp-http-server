@@ -2,7 +2,13 @@ import {describe, expect, it} from 'vitest';
 import {readFile} from 'node:fs/promises';
 import {createServer} from 'node:net';
 import {WebSocket} from 'ws';
+import {
+  NamedDataRegistry,
+  type NamedDataMetadata,
+  type NamedDataReference
+} from '@kubohiroya/turbowarp-named-data/composition';
 import {createApp, startServer} from '../src/server.js';
+import {NamedDataRegistryResolver} from '../src/named-body.js';
 import type {
   HttpRequestBridge,
   ResourceCapability,
@@ -448,7 +454,7 @@ describe('HTTP bridge server app', () => {
         body: {
           kind: 'named',
           reference: {
-            namespace: 'asset-manager',
+            namespace: 'asset',
             name: 'avatar',
             kind: 'asset',
             scope: 'project'
@@ -479,7 +485,7 @@ describe('HTTP bridge server app', () => {
         body: {
           kind: 'named',
           reference: {
-            namespace: 'asset-manager',
+            namespace: 'asset',
             name: 'avatar',
             kind: 'asset',
             scope: 'project'
@@ -492,6 +498,54 @@ describe('HTTP bridge server app', () => {
     const head = await headPromise;
     expect(head.headers.get('content-length')).toBe('4');
     expect(await head.text()).toBe('');
+    socket.close();
+    await server.close();
+  });
+
+  it('uses an injected canonical registry for structured bridge responses', async () => {
+    const target = {};
+    const registry = new NamedDataRegistry();
+    registry.registerProvider({
+      namespace: 'structured',
+      kind: 'structured',
+      canResolve: (reference, representation) =>
+        reference.namespace === 'structured' && representation === 'json',
+      stat: (reference) => canonicalStructuredMetadata(reference),
+      openBody: (reference) => ({
+        ...canonicalStructuredMetadata(reference),
+        body: new TextEncoder().encode('{"source":"registry"}'),
+        release: () => undefined
+      }),
+      release: () => undefined
+    }, {lifetime: 'persistent'});
+    const port = await getFreePort();
+    const server = startServer({
+      hostname: '127.0.0.1',
+      port,
+      namedResponseBody: true,
+      namedBodyResolver: new NamedDataRegistryResolver(registry, () => ({target}))
+    });
+    const socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await onceOpen(socket);
+    const nextRequest = onceRequestMessage(socket);
+    const responsePromise = fetch(`http://127.0.0.1:${port}/profile`);
+    const request = await nextRequest;
+    socket.send(JSON.stringify({
+      type: 'response',
+      id: request.id,
+      status: 200,
+      headers: {},
+      body: {
+        kind: 'named',
+        reference: {namespace: 'structured', name: 'profile', kind: 'structured', scope: 'target'},
+        representation: 'json',
+        targetId: 'Stage:1',
+        maxBytes: 1024
+      }
+    }));
+
+    const response = await responsePromise;
+    expect(await response.json()).toEqual({source: 'registry'});
     socket.close();
     await server.close();
   });
@@ -520,7 +574,7 @@ describe('HTTP bridge server app', () => {
         body: {
           kind: 'named',
           reference: {
-            namespace: 'asset-manager',
+            namespace: 'asset',
             name: 'avatar',
             kind: 'asset',
             scope: 'project'
@@ -739,6 +793,18 @@ class FakeSnapshotProducer {
 
 function keyFor(routeName: string, resourceName: string): string {
   return `${routeName}\0${resourceName}`;
+}
+
+function canonicalStructuredMetadata(reference: NamedDataReference): NamedDataMetadata {
+  return {
+    reference: {...reference},
+    nativeRepresentation: 'json',
+    representation: 'json',
+    mediaType: 'application/json; charset=utf-8',
+    byteLength: 21,
+    revision: 'fixture:registry:1',
+    replayable: true
+  };
 }
 
 function cloneSnapshot(snapshot: ResourceSnapshot): ResourceSnapshot {

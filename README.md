@@ -659,7 +659,7 @@ Completes the response with a named structured, document, binary, or asset snaps
 |---|---|
 | Type | Command |
 | Opcode | `respondWithNamedBody` |
-| `NAMESPACE` | String, default: `asset-manager` |
+| `NAMESPACE` | String, default: `asset` |
 | `NAME` | String, default: `avatar` |
 | `KIND` | String, default: `asset` |
 | `SCOPE` | String, default: `project` |

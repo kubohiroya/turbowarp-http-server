@@ -11,7 +11,7 @@ export interface AssetManagerNamedBodyProviderOptions {
   projectRouteName?: string;
 }
 
-const DEFAULT_NAMESPACE = 'asset-manager';
+const DEFAULT_NAMESPACE = 'asset';
 const NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
 
 /** Adapts the public Asset Manager resource capability without reading extension-private state. */
@@ -36,12 +36,12 @@ export function createAssetManagerNamedBodyProvider(
         const items = await resources.listResources(routeName);
         throwIfAborted(signal);
         const metadata = items.find((item) => item.name === request.reference.name);
-        return metadata === undefined ? null : namedMetadata(metadata);
+        return metadata === undefined ? null : namedMetadata(metadata, request);
       }
 
       const snapshot = await resources.getResource(routeName, request.reference.name);
       throwIfAborted(signal);
-      return snapshot === null ? null : snapshotMetadata(snapshot);
+      return snapshot === null ? null : snapshotMetadata(snapshot, request);
     },
     async openBody(request, signal) {
       assertSupportedRequest(request);
@@ -54,7 +54,7 @@ export function createAssetManagerNamedBodyProvider(
       if (snapshot === null) return null;
       const bytes = snapshot.bytes.slice();
       return {
-        metadata: {...snapshotMetadata(snapshot), byteLength: bytes.byteLength},
+        metadata: {...snapshotMetadata(snapshot, request), byteLength: bytes.byteLength},
         body: bytes,
         release: () => undefined
       };
@@ -63,7 +63,7 @@ export function createAssetManagerNamedBodyProvider(
 }
 
 function assertSupportedRequest(request: NamedBodyRequest): void {
-  if (request.reference.kind !== 'asset' && request.reference.kind !== 'binary') {
+  if (request.reference.kind !== 'asset') {
     throw namedDataError('NAMED_DATA_KIND_MISMATCH');
   }
   if (request.representation !== 'raw') {
@@ -77,16 +77,22 @@ function routeNameFor(request: NamedBodyRequest, projectRouteName: string): stri
   return request.targetId;
 }
 
-function snapshotMetadata(snapshot: ResourceSnapshot): NamedBodyMetadata {
-  return namedMetadata({...snapshot, byteLength: snapshot.bytes.byteLength});
+function snapshotMetadata(snapshot: ResourceSnapshot, request: NamedBodyRequest): NamedBodyMetadata {
+  return namedMetadata({...snapshot, byteLength: snapshot.bytes.byteLength}, request);
 }
 
-function namedMetadata(resource: ResourceMetadata): NamedBodyMetadata {
+function namedMetadata(resource: ResourceMetadata, request: NamedBodyRequest): NamedBodyMetadata {
+  const revision = resource.replacementId ?? resource.etag;
+  if (revision === undefined) throw namedDataError('NAMED_DATA_INVALID_METADATA');
   return {
+    reference: {...request.reference},
+    nativeRepresentation: 'raw',
+    representation: 'raw',
     mediaType: resource.mimeType,
     ...(resource.byteLength === undefined ? {} : {byteLength: resource.byteLength}),
     ...(resource.etag === undefined ? {} : {etag: resource.etag}),
-    ...(resource.replacementId === undefined ? {} : {revision: resource.replacementId})
+    revision,
+    replayable: true
   };
 }
 

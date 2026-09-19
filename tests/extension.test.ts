@@ -290,7 +290,7 @@ describe('TurboWarpHttpServerExtension', () => {
     sockets[0]?.receive(JSON.stringify(requestMessage({id: 'req-named'})));
 
     extension.respondWithNamedBody({
-      NAMESPACE: 'asset-manager',
+      NAMESPACE: 'asset',
       NAME: 'avatar',
       KIND: 'asset',
       SCOPE: 'project',
@@ -308,7 +308,7 @@ describe('TurboWarpHttpServerExtension', () => {
       body: {
         kind: 'named',
         reference: {
-          namespace: 'asset-manager',
+          namespace: 'asset',
           name: 'avatar',
           kind: 'asset',
           scope: 'project'

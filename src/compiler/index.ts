@@ -4,6 +4,7 @@ import {generateCloudflareWorker, type GeneratedFiles} from './generator.js';
 import type {CompilerDiagnostic, DeployIr} from './ir.js';
 import {compileTurboWarpProject} from './turbowarp.js';
 import {compileTurboWarpProjectV2} from './turbowarp-v2.js';
+import {resolveCompilerManifestLock} from './manifest/resolve.js';
 import {parseDeployIr} from './validate.js';
 import {parseDeployIrV2, type CompilerDiagnosticV2, type DeployIrV2} from './ir-v2/index.js';
 import {compileDeployIrV2, type PipelineDiagnostic} from './pipeline/index.js';
@@ -30,6 +31,7 @@ export interface CompileOptions {
   irVersion?: 1 | 2;
   target?: string;
   targetConfig?: string;
+  manifestLock?: string;
   namedResponseBody?: boolean;
 }
 
@@ -43,15 +45,22 @@ export async function compileToDirectory(options: CompileOptions): Promise<Compi
   if (extname(options.input).toLowerCase() === '.sb3') {
     throw new Error('Direct .sb3 input is not supported yet. Export or extract project.json first.');
   }
+  if (options.manifestLock !== undefined && (options.irVersion !== 2 || options.format !== 'turbowarp-json')) {
+    throw new Error('manifestLock requires IR v2 TurboWarp JSON input.');
+  }
   const inputPath = resolve(options.input);
   const outputPath = resolve(options.output);
   const raw = JSON.parse(await readFile(inputPath, 'utf8')) as unknown;
   if (options.irVersion === 2) {
     if (!options.target) throw new Error('IR v2 compilation requires --target <id>.');
+    const registry =
+      options.format === 'turbowarp-json' && options.manifestLock !== undefined
+        ? (await resolveCompilerManifestLock(options.manifestLock)).registry
+        : undefined;
     const frontend =
       options.format === 'ir'
         ? {ir: parseDeployIrV2(raw), diagnostics: []}
-        : compileTurboWarpProjectV2(raw);
+        : compileTurboWarpProjectV2(raw, registry);
     const frontendErrors = frontend.diagnostics.filter(({severity}) => severity === 'error');
     if (frontendErrors.length > 0) throw new CompilerDiagnosticsError(frontendErrors);
     const ir = frontend.ir;

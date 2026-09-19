@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import type { CommunityServerOptions } from './community.js';
+import { NamedBodyResolver } from './named-body.js';
 import type { BridgeRequestMessage } from './protocol.js';
-export { createNamedBodyResponse, DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS, NAMED_DATA_ERROR_CODES, NamedBodyResponder, NamedBodyResolver } from './named-body.js';
-export type { NamedBodyErrorCode, NamedBodyHandle, NamedBodyMetadata, NamedBodyProvider, NamedBodyReleaseReason, NamedBodyRequest, NamedBodyResponseOptions, NamedBodyRepresentation, NamedDataKind, NamedDataErrorCode, NamedDataReference, NamedDataScope, NamedResponseBodyFeatureFlags } from './named-body.js';
+export { createNamedBodyResponse, DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS, NAMED_DATA_ERROR_CODES, NamedBodyResponder, NamedBodyResolver, NamedDataRegistryResolver } from './named-body.js';
+export type { NamedBodyErrorCode, NamedBodyHandle, NamedBodyMetadata, NamedBodyProvider, NamedBodyReleaseReason, NamedBodyRequest, NamedBodyResponseOptions, NamedBodyRepresentation, NamedDataKind, NamedDataContextResolver, NamedDataErrorCode, NamedDataReference, NamedDataScope, NamedResponseBodyFeatureFlags } from './named-body.js';
 export { createAssetManagerNamedBodyProvider } from './resource-named-body-provider.js';
 export type { AssetManagerNamedBodyProviderOptions } from './resource-named-body-provider.js';
 export interface ServerOptions {
@@ -15,6 +16,8 @@ export interface ServerOptions {
     authorizeResource?: ResourceAuthorizer;
     requestTimeoutMs?: number;
     namedResponseBody?: boolean;
+    /** Overrides the built-in ResourceCapability adapter for canonical named-data registries or custom providers. */
+    namedBodyResolver?: NamedBodyResolver;
     maxNamedResponseBodyBytes?: number;
     routes?: readonly string[];
     community?: false | CommunityServerOptions;

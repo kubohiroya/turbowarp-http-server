@@ -20,7 +20,7 @@ describe('named response body lowering', () => {
     expect(result.statement).toEqual({
       kind: 'respond-named-body',
       reference: {
-        namespace: 'asset-manager',
+        namespace: 'asset',
         name: 'avatar',
         kind: 'asset',
         scope: 'project'
@@ -76,7 +76,7 @@ describe('named response body lowering', () => {
 
 function args(overrides: Partial<Record<string, ExpressionIrV2>> = {}): Record<string, ExpressionIrV2> {
   return {
-    NAMESPACE: text('asset-manager'),
+    NAMESPACE: text('asset'),
     NAME: text('avatar'),
     KIND: text('asset'),
     SCOPE: text('project'),

@@ -65,7 +65,11 @@
     "hono": "^4.10.7",
     "ws": "^8.18.3"
   },
+  "peerDependencies": {
+    "@kubohiroya/turbowarp-named-data": "^0.1.0"
+  },
   "devDependencies": {
+    "@kubohiroya/turbowarp-named-data": "link:../turbowarp-named-data",
     "@eslint/js": "^9.39.5",
     "@kubohiroya/vite-plugin-turbowarp-extension": "0.1.1",
     "@types/node": "^24.13.3",

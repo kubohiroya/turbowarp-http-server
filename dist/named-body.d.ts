@@ -1,29 +1,18 @@
-export type NamedDataKind = 'structured' | 'document' | 'binary' | 'asset';
-export type NamedDataScope = 'target' | 'project';
-/** Stable provider error namespace shared with structured/document/binary data extensions. */
-export declare const NAMED_DATA_ERROR_CODES: readonly ["NAMED_DATA_INVALID_REF", "NAMED_DATA_PROVIDER_NOT_FOUND", "NAMED_DATA_NOT_FOUND", "NAMED_DATA_KIND_MISMATCH", "NAMED_DATA_SCOPE_MISMATCH", "NAMED_DATA_REPRESENTATION_UNSUPPORTED", "NAMED_DATA_BODY_TOO_LARGE", "NAMED_DATA_ABORTED", "NAMED_DATA_PROVIDER_RELEASED"];
-export type NamedDataErrorCode = (typeof NAMED_DATA_ERROR_CODES)[number];
+import { NAMED_DATA_ERROR_CODES, type NamedDataErrorCode, type NamedDataKind, type NamedDataMetadata, type NamedDataReference, type NamedDataRegistryService, type NamedDataReleaseReason, type NamedDataRepresentation, type NamedDataResolveContext, type NamedDataScope } from '@kubohiroya/turbowarp-named-data/composition';
+export { NAMED_DATA_ERROR_CODES };
+export type { NamedDataErrorCode, NamedDataKind, NamedDataReference, NamedDataScope };
 export type NamedBodyErrorCode = NamedDataErrorCode | 'NAMED_RESPONSE_BODY_DISABLED' | 'NAMED_RESPONSE_INVALID_METADATA';
-export interface NamedDataReference {
-    namespace: string;
-    name: string;
-    kind: NamedDataKind;
-    scope: NamedDataScope;
-}
-export type NamedBodyRepresentation = 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+export type NamedBodyRepresentation = NamedDataRepresentation;
 export interface NamedBodyRequest {
     reference: NamedDataReference;
     representation: NamedBodyRepresentation;
     /** Runtime-local identity used only when reference.scope is target. */
     targetId?: string;
 }
-export interface NamedBodyMetadata {
-    mediaType: string;
-    byteLength?: number;
+export interface NamedBodyMetadata extends NamedDataMetadata {
     etag?: string;
-    revision?: string;
 }
-export type NamedBodyReleaseReason = 'complete' | 'cancel' | 'abort' | 'error';
+export type NamedBodyReleaseReason = Exclude<NamedDataReleaseReason, 'shutdown'>;
 export interface NamedBodyHandle {
     metadata: NamedBodyMetadata;
     body: Uint8Array | ReadableStream<Uint8Array>;
@@ -34,6 +23,7 @@ export interface NamedBodyProvider {
     stat(request: NamedBodyRequest, signal: AbortSignal): NamedBodyMetadata | null | Promise<NamedBodyMetadata | null>;
     openBody(request: NamedBodyRequest, signal: AbortSignal): NamedBodyHandle | null | Promise<NamedBodyHandle | null>;
 }
+export type NamedDataContextResolver = (request: NamedBodyRequest) => NamedDataResolveContext | Promise<NamedDataResolveContext>;
 export interface NamedResponseBodyFeatureFlags {
     namedResponseBody: boolean;
 }
@@ -53,6 +43,10 @@ export declare class NamedBodyResolver {
     openBody(request: NamedBodyRequest, signal: AbortSignal): Promise<NamedBodyHandle | null>;
     canResolve(request: NamedBodyRequest): boolean;
     private providerFor;
+}
+/** Adapts the canonical runtime registry to the HTTP response boundary. */
+export declare class NamedDataRegistryResolver extends NamedBodyResolver {
+    constructor(registry: NamedDataRegistryService, contextFor: NamedDataContextResolver);
 }
 export declare class NamedBodyResponder {
     private readonly resolver;

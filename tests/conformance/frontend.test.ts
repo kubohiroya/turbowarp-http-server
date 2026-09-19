@@ -3,14 +3,13 @@ import {dirname, join, resolve} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {
   canonicalizeDeployIrV2,
+  compileTurboWarpProjectV2,
   parseDeployIrV2,
   resolveCompilerManifestLock,
   resolveCompilerProjectOpcode,
   StructuredDataLoweringContext,
-  upgradeDeployIrV1,
   validateDeployIrV2Subset
 } from '../../src/compiler/index.js';
-import {compileTurboWarpProject} from '../../src/compiler/turbowarp.js';
 
 const fixtureDirectory = resolve('tests/fixtures/conformance/frontend');
 
@@ -51,14 +50,12 @@ describe('conformance frontend layer', () => {
     expect(lowering.diagnostics).toEqual([]);
 
     const project = JSON.parse(await readFile(resolve(base, fixture.projectFile), 'utf8')) as unknown;
-    const compiled = compileTurboWarpProject(project);
+    const compiled = compileTurboWarpProjectV2(project, resolved.registry);
     expect(compiled.diagnostics).toEqual([]);
-    const upgraded = upgradeDeployIrV1(compiled.ir);
-    expect(upgraded.diagnostics).toEqual([]);
     const expected = parseDeployIrV2(
       JSON.parse(await readFile(resolve(base, fixture.expectedIrFile), 'utf8')) as unknown
     );
-    expect(canonicalizeDeployIrV2(upgraded.ir)).toBe(canonicalizeDeployIrV2(expected));
+    expect(canonicalizeDeployIrV2(compiled.ir)).toBe(canonicalizeDeployIrV2(expected));
   });
 
   it('matches expected target-neutral diagnostic codes', async () => {

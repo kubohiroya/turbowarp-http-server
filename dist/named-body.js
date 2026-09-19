@@ -1,15 +1,5 @@
-/** Stable provider error namespace shared with structured/document/binary data extensions. */
-export const NAMED_DATA_ERROR_CODES = [
-    'NAMED_DATA_INVALID_REF',
-    'NAMED_DATA_PROVIDER_NOT_FOUND',
-    'NAMED_DATA_NOT_FOUND',
-    'NAMED_DATA_KIND_MISMATCH',
-    'NAMED_DATA_SCOPE_MISMATCH',
-    'NAMED_DATA_REPRESENTATION_UNSUPPORTED',
-    'NAMED_DATA_BODY_TOO_LARGE',
-    'NAMED_DATA_ABORTED',
-    'NAMED_DATA_PROVIDER_RELEASED'
-];
+import { NAMED_DATA_ERROR_CODES } from '@kubohiroya/turbowarp-named-data/composition';
+export { NAMED_DATA_ERROR_CODES };
 export const DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS = Object.freeze({
     namedResponseBody: false
 });
@@ -38,6 +28,44 @@ export class NamedBodyResolver {
     providerFor(request) {
         return this.providers.find((provider) => provider.canResolve(request));
     }
+}
+/** Adapts the canonical runtime registry to the HTTP response boundary. */
+export class NamedDataRegistryResolver extends NamedBodyResolver {
+    constructor(registry, contextFor) {
+        super([registryProvider(registry, contextFor)]);
+    }
+}
+function registryProvider(registry, contextFor) {
+    return {
+        // Let the registry distinguish an absent namespace, kind mismatch, and an
+        // unsupported representation with their canonical stable error codes.
+        canResolve: () => true,
+        stat: async (request, signal) => {
+            const context = await contextFor(request);
+            return registry.stat(request.reference, request.representation, { ...context, signal });
+        },
+        openBody: async (request, signal) => {
+            const context = await contextFor(request);
+            const body = await registry.openBody(request.reference, request.representation, { ...context, signal });
+            return namedDataBodyHandle(body);
+        }
+    };
+}
+function namedDataBodyHandle(body) {
+    return {
+        metadata: {
+            reference: body.reference,
+            nativeRepresentation: body.nativeRepresentation,
+            representation: body.representation,
+            mediaType: body.mediaType,
+            ...(body.byteLength === undefined ? {} : { byteLength: body.byteLength }),
+            ...(body.digest === undefined ? {} : { digest: body.digest }),
+            revision: body.revision,
+            replayable: body.replayable
+        },
+        body: body.body,
+        release: (reason) => body.release(reason)
+    };
 }
 export class NamedBodyResponder {
     constructor(resolver, featureFlags = DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS) {
@@ -78,7 +106,7 @@ export async function createNamedBodyResponse(resolver, request, options = {}) {
         }
         if (!metadata)
             return errorResponse('NAMED_DATA_NOT_FOUND', 404, method);
-        const metadataError = validateMetadata(metadata, request.representation, maxBodyBytes);
+        const metadataError = validateMetadata(metadata, request, maxBodyBytes);
         if (metadataError)
             return withoutResponseBody(metadataError);
         return new Response(null, { status, headers: responseHeaders(options.headers, metadata) });
@@ -104,7 +132,7 @@ export async function createNamedBodyResponse(resolver, request, options = {}) {
             return releaseError;
         return errorResponse('NAMED_DATA_ABORTED', 499);
     }
-    const metadataError = validateMetadata(handle.metadata, request.representation, maxBodyBytes);
+    const metadataError = validateMetadata(handle.metadata, request, maxBodyBytes);
     if (metadataError) {
         return (await releaseErrorResponse(release, 'error')) ?? metadataError;
     }
@@ -177,11 +205,22 @@ function managedBodyStream(source, signal, maxBodyBytes, release) {
         }
     });
 }
-function validateMetadata(metadata, representation, maxBodyBytes) {
+function validateMetadata(metadata, request, maxBodyBytes) {
+    if (metadata.reference.namespace !== request.reference.namespace ||
+        metadata.reference.name !== request.reference.name ||
+        metadata.reference.kind !== request.reference.kind ||
+        metadata.reference.scope !== request.reference.scope ||
+        metadata.representation !== request.representation ||
+        !isNativeRepresentation(metadata.reference.kind, metadata.nativeRepresentation) ||
+        typeof metadata.revision !== 'string' ||
+        metadata.revision.length === 0 ||
+        typeof metadata.replayable !== 'boolean') {
+        return errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
+    }
     if (hasControlCharacter(metadata.mediaType) || metadata.mediaType.length > 255) {
         return errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
     }
-    if (!isMediaTypeForRepresentation(metadata.mediaType, representation)) {
+    if (!isMediaTypeForRepresentation(metadata.mediaType, request.representation)) {
         return errorResponse('NAMED_DATA_REPRESENTATION_UNSUPPORTED', 415);
     }
     if (metadata.byteLength !== undefined) {
@@ -198,6 +237,13 @@ function validateMetadata(metadata, representation, maxBodyBytes) {
         }
     }
     return null;
+}
+function isNativeRepresentation(kind, representation) {
+    if (kind === 'structured')
+        return representation === 'json' || representation === 'yaml';
+    if (kind === 'document')
+        return representation === 'html' || representation === 'markdown';
+    return representation === 'raw';
 }
 function isValidRequest(request) {
     if (typeof request !== 'object' || request === null)
@@ -312,12 +358,16 @@ function statusForNamedDataError(code) {
         return 501;
     if (code === 'NAMED_DATA_REPRESENTATION_UNSUPPORTED')
         return 415;
+    if (code === 'NAMED_DATA_INVALID_METADATA')
+        return 502;
     if (code === 'NAMED_DATA_BODY_TOO_LARGE')
         return 413;
     if (code === 'NAMED_DATA_ABORTED')
         return 499;
     if (code === 'NAMED_DATA_PROVIDER_RELEASED')
         return 503;
+    if (code === 'NAMED_DATA_INCOMPATIBLE_VERSION' || code === 'NAMED_DATA_NAMESPACE_CONFLICT')
+        return 500;
     return 400;
 }
 function toArrayBuffer(bytes) {

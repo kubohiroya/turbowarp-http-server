@@ -21,6 +21,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@kubohiroya/turbowarp-named-data':
+        specifier: link:../turbowarp-named-data
+        version: link:../turbowarp-named-data
       '@kubohiroya/vite-plugin-turbowarp-extension':
         specifier: 0.1.1
         version: 0.1.1(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.12))
