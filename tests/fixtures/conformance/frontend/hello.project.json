@@ -1,0 +1,13 @@
+{
+  "targets": [{
+    "isStage": true,
+    "name": "Stage",
+    "blocks": {
+      "hat": {"opcode": "kubohiroyaturbowarphttpserver_whenHttpRequestReceived", "next": "guard", "parent": null, "topLevel": true, "inputs": {}},
+      "guard": {"opcode": "control_if", "next": null, "parent": "hat", "inputs": {"CONDITION": [2, "equals"], "SUBSTACK": [2, "respond"]}},
+      "equals": {"opcode": "operator_equals", "next": null, "parent": "guard", "inputs": {"OPERAND1": [3, "method"], "OPERAND2": [1, [10, "GET"]]}},
+      "method": {"opcode": "kubohiroyaturbowarphttpserver_currentHttpMethod", "next": null, "parent": "equals", "inputs": {}},
+      "respond": {"opcode": "kubohiroyaturbowarphttpserver_respondWithText", "next": null, "parent": "guard", "inputs": {"BODY": [1, [10, "Hello"]]}}
+    }
+  }]
+}

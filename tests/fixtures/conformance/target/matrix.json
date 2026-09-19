@@ -1,0 +1,40 @@
+{
+  "fixtureVersion": 1,
+  "targets": [
+    {
+      "id": "cloudflare-workers",
+      "adapterVersion": "1.1.0",
+      "tsconfig": "tsconfig.json",
+      "expectedFiles": [
+        "README.md",
+        "migrations/0001_init.sql",
+        "package.json",
+        "src/core.generated.ts",
+        "src/index.ts",
+        "src/platform.ts",
+        "tsconfig.json",
+        "turbowarp-server.generated.json",
+        "wrangler.jsonc"
+      ]
+    },
+    {
+      "id": "firebase-functions",
+      "adapterVersion": "1.0.0",
+      "tsconfig": "functions/tsconfig.json",
+      "expectedFiles": [
+        ".firebaserc.example",
+        "README.md",
+        "firebase.json",
+        "firestore.indexes.json",
+        "firestore.rules",
+        "functions/package.json",
+        "functions/src/core.generated.ts",
+        "functions/src/index.ts",
+        "functions/src/platform.ts",
+        "functions/tsconfig.json",
+        "storage.rules",
+        "turbowarp-server.generated.json"
+      ]
+    }
+  ]
+}

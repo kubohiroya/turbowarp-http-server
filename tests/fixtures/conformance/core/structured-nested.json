@@ -1,0 +1,52 @@
+{
+  "fixtureVersion": 1,
+  "id": "structured-nested",
+  "layer": "core",
+  "ir": {
+    "version": 2,
+    "name": "structured-nested",
+    "auth": {"kind": "none"},
+    "capabilities": [],
+    "routes": [{
+      "id": "nested",
+      "method": "GET",
+      "path": "/nested",
+      "auth": "public",
+      "body": [
+        {
+          "kind": "json-for-each",
+          "loopId": "outer",
+          "root": {"kind": "literal", "valueType": "json-object", "value": {"b": [2], "a": [1]}},
+          "path": [],
+          "maxIterations": 2,
+          "body": [
+            {"kind": "set-header", "name": "x-outer", "value": {"kind": "iteration-key", "valueType": "string", "loopId": "outer"}},
+            {
+              "kind": "json-for-each",
+              "loopId": "inner",
+              "root": {"kind": "iteration-value", "valueType": {"kind": "union", "members": ["null", "boolean", "number", "string", "json-array", "json-object"]}, "loopId": "outer"},
+              "path": [],
+              "maxIterations": 1,
+              "body": [{"kind": "set-header", "name": "x-inner", "value": {"kind": "iteration-index", "valueType": "number", "loopId": "inner"}}]
+            }
+          ]
+        },
+        {"kind": "respond", "format": "text", "body": {"kind": "literal", "valueType": "string", "value": "done"}}
+      ]
+    }]
+  },
+  "request": {"method": "GET", "url": "http://conformance.test/nested"},
+  "expected": {
+    "response": {
+      "status": 200,
+      "headers": [
+        ["content-type", "text/plain; charset=utf-8"],
+        ["x-inner", "0"],
+        ["x-outer", "b"]
+      ],
+      "bodyText": "done",
+      "bodySha256": "a4c3ed04a95a3da14a9d235c83d868bed7c0f45cf7f3faa751ee8f50598d2211"
+    },
+    "effects": []
+  }
+}

@@ -1,0 +1,772 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kubohiroya/turbowarp-http-server/main/schemas/deploy-ir-v2.schema.json",
+  "title": "TurboWarp HTTP Server Deploy IR v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "auth", "capabilities", "routes"],
+  "properties": {
+    "version": {"const": 2},
+    "name": {"type": "string", "minLength": 1},
+    "auth": {"$ref": "#/$defs/auth"},
+    "capabilities": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/capability"}
+    },
+    "routes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/route"}
+    }
+  },
+  "$defs": {
+    "atomicValueType": {
+      "enum": ["null", "boolean", "number", "string", "json-text", "json-array", "json-object", "binary-ref"]
+    },
+    "valueType": {
+      "oneOf": [
+        {"$ref": "#/$defs/atomicValueType"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "members"],
+          "properties": {
+            "kind": {"const": "union"},
+            "members": {
+              "type": "array",
+              "minItems": 2,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/atomicValueType"}
+            }
+          }
+        }
+      ]
+    },
+    "bindingType": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType"],
+          "properties": {
+            "kind": {"const": "value"},
+            "valueType": {"$ref": "#/$defs/valueType"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "resourceType"],
+          "properties": {
+            "kind": {"const": "resource"},
+            "resourceType": {"const": "binary-body"}
+          }
+        }
+      ]
+    },
+    "binaryRefDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "key"],
+      "properties": {
+        "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]*$"},
+        "key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"},
+        "contentType": {"type": "string", "minLength": 1, "maxLength": 255},
+        "size": {"type": "integer", "minimum": 0},
+        "integrity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "binaryLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "key"],
+      "properties": {
+        "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]*$", "maxLength": 64},
+        "key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"}
+      }
+    },
+    "binaryMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contentType": {"type": "string", "minLength": 1, "maxLength": 255},
+        "size": {"type": "integer", "minimum": 0},
+        "integrity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "binaryLimit": {"type": "integer", "minimum": 1, "maximum": 16777216},
+    "pathSegment": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {"kind": {"const": "key"}, "value": {"type": "string"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {"kind": {"const": "index"}, "value": {"type": "integer", "minimum": 0}}
+        }
+      ]
+    },
+    "jsonValueType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "members"],
+      "properties": {
+        "kind": {"const": "union"},
+        "members": {"const": ["null", "boolean", "number", "string", "json-array", "json-object"]}
+      }
+    },
+    "path": {"type": "array", "items": {"$ref": "#/$defs/pathSegment"}},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "type": {"$ref": "#/$defs/bindingType"}
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["targetIndex", "targetName", "blockId", "opcode"],
+      "properties": {
+        "targetIndex": {"type": "integer", "minimum": 0},
+        "targetName": {"type": "string", "minLength": 1},
+        "blockId": {"type": "string", "minLength": 1},
+        "opcode": {"type": "string", "minLength": 1},
+        "input": {"type": "string", "minLength": 1}
+      }
+    },
+    "auth": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "none"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "scheme"],
+          "properties": {
+            "kind": {"const": "jwt"},
+            "scheme": {"enum": ["external-jwt", "trusted-access-jwt"]}
+          }
+        }
+      ]
+    },
+    "capability": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "record-store"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"enum": ["object-storage", "streaming-body", "named-body-provider"]}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "field"],
+          "properties": {
+            "kind": {"const": "request-metadata"},
+            "field": {"const": "client-address"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "scheme"],
+          "properties": {
+            "kind": {"const": "auth"},
+            "scheme": {"enum": ["external-jwt", "trusted-access-jwt"]}
+          }
+        }
+      ]
+    },
+    "expression": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "value"],
+          "properties": {
+            "kind": {"const": "literal"},
+            "valueType": {"$ref": "#/$defs/atomicValueType"},
+            "value": {},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"valueType": {"const": "binary-ref"}}, "required": ["valueType"]},
+              "then": {"properties": {"value": {"$ref": "#/$defs/binaryRefDescriptor"}}}
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "source"],
+          "properties": {
+            "kind": {"const": "request"},
+            "valueType": {"const": "string"},
+            "source": {"enum": ["method", "path", "url", "body-text", "content-type", "client-address"]},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "source", "name"],
+          "properties": {
+            "kind": {"const": "request-value"},
+            "valueType": {"const": "string"},
+            "source": {"enum": ["query", "path-param", "header"]},
+            "name": {"type": "string", "minLength": 1},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "left", "right"],
+          "properties": {
+            "kind": {"const": "concat"},
+            "valueType": {"const": "string"},
+            "left": {"$ref": "#/$defs/expression"},
+            "right": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "name"],
+          "properties": {
+            "kind": {"const": "handler-variable"},
+            "valueType": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "members"],
+              "properties": {
+                "kind": {"const": "union"},
+                "members": {"const": ["number", "string"]}
+              }
+            },
+            "name": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "name"],
+          "properties": {
+            "kind": {"const": "handler-variable-exists"},
+            "valueType": {"const": "boolean"},
+            "name": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType"],
+          "properties": {
+            "kind": {"const": "handler-variable-names"},
+            "valueType": {"const": "string"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "binding"],
+          "properties": {
+            "kind": {"const": "binding"},
+            "valueType": {"$ref": "#/$defs/valueType"},
+            "binding": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "input"],
+          "properties": {
+            "kind": {"const": "json-text-coerce"},
+            "valueType": {"const": "json-text"},
+            "input": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "text"],
+          "properties": {
+            "kind": {"const": "json-parse"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "text": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "value"],
+          "properties": {
+            "kind": {"const": "json-stringify"},
+            "valueType": {"const": "json-text"},
+            "value": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "text"],
+          "properties": {
+            "kind": {"const": "json-is-valid"},
+            "valueType": {"const": "boolean"},
+            "text": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-get"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-has"},
+            "valueType": {"const": "boolean"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path", "value"],
+          "properties": {
+            "kind": {"const": "json-set"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "value": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-delete"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-keys"},
+            "valueType": {"const": "json-array"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-length"},
+            "valueType": {"const": "number"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "loopId"],
+          "properties": {
+            "kind": {"const": "iteration-key"},
+            "valueType": {"const": "string"},
+            "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "loopId"],
+          "properties": {
+            "kind": {"const": "iteration-index"},
+            "valueType": {"const": "number"},
+            "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "loopId"],
+          "properties": {
+            "kind": {"const": "iteration-value"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        }
+      ]
+    },
+    "statement": {
+      "oneOf": [
+        {"$ref": "#/$defs/setStatus"},
+        {"$ref": "#/$defs/setHeader"},
+        {"$ref": "#/$defs/removeHeader"},
+        {"$ref": "#/$defs/handlerVariableMutation"},
+        {"$ref": "#/$defs/deleteHandlerVariable"},
+        {"$ref": "#/$defs/clearHandlerVariables"},
+        {"$ref": "#/$defs/recordCreate"},
+        {"$ref": "#/$defs/recordList"},
+        {"$ref": "#/$defs/recordById"},
+        {"$ref": "#/$defs/assetResolve"},
+        {"$ref": "#/$defs/requestBodyBinary"},
+        {"$ref": "#/$defs/assetObjectGet"},
+        {"$ref": "#/$defs/assetObjectPut"},
+        {"$ref": "#/$defs/assetObjectDelete"},
+        {"$ref": "#/$defs/ifStatement"},
+        {"$ref": "#/$defs/boundedLoop"},
+        {"$ref": "#/$defs/jsonForEach"},
+        {"$ref": "#/$defs/respondBinary"},
+        {"$ref": "#/$defs/respondNamedBody"},
+        {"$ref": "#/$defs/respond"}
+      ]
+    },
+    "setStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "status"],
+      "properties": {
+        "kind": {"const": "set-status"},
+        "status": {"type": "integer", "minimum": 100, "maximum": 599},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "setHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "value"],
+      "properties": {
+        "kind": {"const": "set-header"},
+        "name": {"type": "string", "minLength": 1},
+        "value": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "removeHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"const": "remove-header"},
+        "name": {"type": "string", "minLength": 1},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "handlerVariableMutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "value"],
+      "properties": {
+        "kind": {"enum": ["set-handler-variable", "change-handler-variable"]},
+        "name": {"$ref": "#/$defs/expression"},
+        "value": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "deleteHandlerVariable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"const": "delete-handler-variable"},
+        "name": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "clearHandlerVariables": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"const": "clear-handler-variables"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "recordCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "collection", "data", "result"],
+      "properties": {
+        "kind": {"const": "record-create"},
+        "collection": {"type": "string", "minLength": 1},
+        "data": {"$ref": "#/$defs/expression"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "recordList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "collection", "result"],
+      "properties": {
+        "kind": {"const": "record-list"},
+        "collection": {"type": "string", "minLength": 1},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "recordById": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "result"],
+      "properties": {
+        "kind": {"enum": ["record-get", "record-delete"]},
+        "id": {"$ref": "#/$defs/expression"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "assetResolve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "locator", "result"],
+      "properties": {
+        "kind": {"const": "asset-resolve"},
+        "locator": {"$ref": "#/$defs/binaryLocator"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "requestBodyBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "maxBytes", "result"],
+      "properties": {
+        "kind": {"const": "request-body-binary"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "assetObjectGet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "maxBytes", "result"],
+      "properties": {
+        "kind": {"const": "asset-object-get"},
+        "ref": {"$ref": "#/$defs/expression"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "assetObjectPut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "locator", "body", "metadata", "maxBytes", "result"],
+      "properties": {
+        "kind": {"const": "asset-object-put"},
+        "locator": {"$ref": "#/$defs/binaryLocator"},
+        "body": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "metadata": {"$ref": "#/$defs/binaryMetadata"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "assetObjectDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target", "result"],
+      "properties": {
+        "kind": {"const": "asset-object-delete"},
+        "target": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "ref"],
+              "properties": {"kind": {"const": "ref"}, "ref": {"$ref": "#/$defs/expression"}}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "locator"],
+              "properties": {"kind": {"const": "locator"}, "locator": {"$ref": "#/$defs/binaryLocator"}}
+            }
+          ]
+        },
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "ifStatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "condition", "then"],
+      "properties": {
+        "kind": {"const": "if"},
+        "condition": {"$ref": "#/$defs/expression"},
+        "then": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
+        "else": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "boundedLoop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "maxIterations", "body"],
+      "properties": {
+        "kind": {"const": "bounded-loop"},
+        "maxIterations": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "body": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "jsonForEach": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "loopId", "root", "path", "maxIterations", "body"],
+      "properties": {
+        "kind": {"const": "json-for-each"},
+        "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "root": {"$ref": "#/$defs/expression"},
+        "path": {"$ref": "#/$defs/path"},
+        "maxIterations": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "body": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "respondBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "body"],
+      "properties": {
+        "kind": {"const": "respond-binary"},
+        "body": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "disposition": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {"kind": {"const": "inline"}}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "filename"],
+              "properties": {
+                "kind": {"const": "attachment"},
+                "filename": {"type": "string", "minLength": 1, "maxLength": 255}
+              }
+            }
+          ]
+        },
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "respondNamedBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "representation", "maxBytes"],
+      "properties": {
+        "kind": {"const": "respond-named-body"},
+        "reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["namespace", "name", "kind", "scope"],
+          "properties": {
+            "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"},
+            "name": {"type": "string", "minLength": 1, "maxLength": 256},
+            "kind": {"enum": ["structured", "document", "binary", "asset"]},
+            "scope": {"enum": ["target", "project"]}
+          }
+        },
+        "representation": {"enum": ["json", "yaml", "html", "markdown", "raw"]},
+        "targetId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"reference": {"properties": {"scope": {"const": "target"}}}}},
+          "then": {"required": ["targetId"]},
+          "else": {"not": {"required": ["targetId"]}}
+        }
+      ]
+    },
+    "respond": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "format", "body"],
+      "properties": {
+        "kind": {"const": "respond"},
+        "format": {"enum": ["text", "html", "json"]},
+        "body": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "method", "path", "auth", "body"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "method": {"enum": ["ALL", "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]},
+        "path": {"type": "string", "minLength": 1},
+        "auth": {"enum": ["public", "required"]},
+        "body": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/statement"}},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    }
+  }
+}

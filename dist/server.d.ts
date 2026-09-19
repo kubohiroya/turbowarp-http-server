@@ -2,7 +2,12 @@ import type { ServerOptions as HttpsServerOptions } from 'node:https';
 import { Hono } from 'hono';
 import type { DigestAuthOptions } from './auth/digest.js';
 import type { CommunityServerOptions } from './community.js';
+import { NamedBodyResolver } from './named-body.js';
 import type { BridgeRequestMessage } from './protocol.js';
+export { createNamedBodyResponse, DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS, NAMED_DATA_ERROR_CODES, NamedBodyResponder, NamedBodyResolver, NamedDataRegistryResolver } from './named-body.js';
+export type { NamedBodyErrorCode, NamedBodyHandle, NamedBodyMetadata, NamedBodyProvider, NamedBodyReleaseReason, NamedBodyRequest, NamedBodyResponseOptions, NamedBodyRepresentation, NamedDataKind, NamedDataContextResolver, NamedDataErrorCode, NamedDataReference, NamedDataScope, NamedResponseBodyFeatureFlags } from './named-body.js';
+export { createAssetManagerNamedBodyProvider } from './resource-named-body-provider.js';
+export type { AssetManagerNamedBodyProviderOptions } from './resource-named-body-provider.js';
 export interface ServerOptions {
     hostname: string;
     port: number;
@@ -14,6 +19,10 @@ export interface ServerOptions {
     digestAuth?: DigestAuthOptions;
     tls?: HttpsServerOptions;
     requestTimeoutMs?: number;
+    namedResponseBody?: boolean;
+    /** Overrides the built-in ResourceCapability adapter for canonical named-data registries or custom providers. */
+    namedBodyResolver?: NamedBodyResolver;
+    maxNamedResponseBodyBytes?: number;
     routes?: readonly string[];
     community?: false | CommunityServerOptions;
 }
@@ -83,7 +92,7 @@ export interface ServerAppOptions {
     community?: false | CommunityServerOptions;
 }
 export interface HttpRequestBridge {
-    forward(message: BridgeRequestMessage, method: string): Promise<Response>;
+    forward(message: BridgeRequestMessage, method: string, signal?: AbortSignal): Promise<Response>;
 }
 export declare function createApp(options?: ServerAppOptions): Hono;
 export declare function startServer(options: ServerOptions): RunningServer;

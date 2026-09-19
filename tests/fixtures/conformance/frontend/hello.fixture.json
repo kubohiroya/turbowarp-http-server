@@ -1,0 +1,20 @@
+{
+  "fixtureVersion": 1,
+  "id": "frontend-hello",
+  "layer": "frontend",
+  "projectFile": "hello.project.json",
+  "manifestLockFile": "../../compiler-manifests/turbowarp-server.lock.json",
+  "expectedIrFile": "hello.expected.ir.json",
+  "externalVectors": [
+    {
+      "packageName": "@kubohiroya/turbowarp-asset-manager",
+      "packageVersion": "0.16.0",
+      "integrity": "sha256-FcgxT34QB/GxZtHbzBJPiyNhZ/yfeILDPLUh+c1czZU="
+    },
+    {
+      "packageName": "@kubohiroya/turbowarp-structured-data",
+      "packageVersion": "0.4.0",
+      "integrity": "sha256-atsgtqeDE72WUR23msLnagXtyHYwN/8OfCSJH0BZw5M="
+    }
+  ]
+}

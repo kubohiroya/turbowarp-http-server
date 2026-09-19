@@ -15,7 +15,20 @@ export interface BridgeUnsupportedBody {
   reason: string;
 }
 
-export type BridgeBody = BridgeTextBody | BridgeEmptyBody | BridgeUnsupportedBody;
+export interface BridgeNamedBody {
+  kind: 'named';
+  reference: {
+    namespace: string;
+    name: string;
+    kind: 'structured' | 'document' | 'binary' | 'asset';
+    scope: 'target' | 'project';
+  };
+  representation: 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+  targetId?: string;
+  maxBytes: number;
+}
+
+export type BridgeBody = BridgeTextBody | BridgeEmptyBody | BridgeUnsupportedBody | BridgeNamedBody;
 
 export interface BridgeAuthContext {
   type: string;
@@ -127,6 +140,42 @@ export function requireBridgeBody(value: unknown): BridgeBody {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {kind: 'empty'};
   const record = value as Record<string, unknown>;
   if (record.kind === 'text') return {kind: 'text', text: String(record.text ?? '')};
+  if (record.kind === 'named') return requireNamedBridgeBody(record);
   if (record.kind === 'unsupported') return {kind: 'unsupported', reason: String(record.reason ?? '')};
   return {kind: 'empty'};
+}
+
+function requireNamedBridgeBody(record: Record<string, unknown>): BridgeBody {
+  const reference = record.reference;
+  if (typeof reference !== 'object' || reference === null || Array.isArray(reference)) {
+    return {kind: 'unsupported', reason: 'invalid_named_body'};
+  }
+  const value = reference as Record<string, unknown>;
+  const kinds = ['structured', 'document', 'binary', 'asset'] as const;
+  const scopes = ['target', 'project'] as const;
+  const representations = ['json', 'yaml', 'html', 'markdown', 'raw'] as const;
+  if (
+    typeof value.namespace !== 'string' ||
+    typeof value.name !== 'string' ||
+    !kinds.includes(value.kind as (typeof kinds)[number]) ||
+    !scopes.includes(value.scope as (typeof scopes)[number]) ||
+    !representations.includes(record.representation as (typeof representations)[number]) ||
+    !Number.isSafeInteger(record.maxBytes) ||
+    (record.maxBytes as number) < 1 ||
+    (record.targetId !== undefined && typeof record.targetId !== 'string')
+  ) {
+    return {kind: 'unsupported', reason: 'invalid_named_body'};
+  }
+  return {
+    kind: 'named',
+    reference: {
+      namespace: value.namespace,
+      name: value.name,
+      kind: value.kind as (typeof kinds)[number],
+      scope: value.scope as (typeof scopes)[number]
+    },
+    representation: record.representation as (typeof representations)[number],
+    ...(record.targetId === undefined ? {} : {targetId: record.targetId}),
+    maxBytes: record.maxBytes as number
+  };
 }

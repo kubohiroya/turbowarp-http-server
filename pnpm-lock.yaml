@@ -21,6 +21,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@kubohiroya/turbowarp-named-data':
+        specifier: github:kubohiroya/turbowarp-named-data#bc3be0e669f501479ef45877e5d06e27714184d2
+        version: https://codeload.github.com/kubohiroya/turbowarp-named-data/tar.gz/bc3be0e669f501479ef45877e5d06e27714184d2
       '@kubohiroya/vite-plugin-turbowarp-extension':
         specifier: 0.1.1
         version: 0.1.1(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.12))
@@ -273,6 +276,11 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
+
+  '@kubohiroya/turbowarp-named-data@https://codeload.github.com/kubohiroya/turbowarp-named-data/tar.gz/bc3be0e669f501479ef45877e5d06e27714184d2':
+    resolution: {gitHosted: true, integrity: sha512-CWr8YbCtoinn4nqbw4x8uABRg0ezQ3L4JQ5eD7FsteARaEUyqlOEWccHcrYVnPWDZUl6Di9RnAjt1AUMdvQ8JQ==, tarball: https://codeload.github.com/kubohiroya/turbowarp-named-data/tar.gz/bc3be0e669f501479ef45877e5d06e27714184d2}
+    version: 0.1.0
+    engines: {node: '>=22.18.0'}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.1.1':
     resolution: {integrity: sha512-6lOlSnfOcKeGwI8SpWQMC6Vz153WIit+1fVxhowy2YdgqC5tP96Zmzkn+Q+4JlJVRsFo89jrp7ifqJcWL56svg==}
@@ -1207,6 +1215,8 @@ snapshots:
   '@humanwhocodes/retry@0.4.3': {}
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
+
+  '@kubohiroya/turbowarp-named-data@https://codeload.github.com/kubohiroya/turbowarp-named-data/tar.gz/bc3be0e669f501479ef45877e5d06e27714184d2': {}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.1.1(vite@7.3.6(@types/node@24.13.3)(tsx@4.23.12))':
     dependencies:

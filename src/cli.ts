@@ -1,41 +1,59 @@
 import {readFileSync} from 'node:fs';
 import {HtdigestFile} from './auth/digest-file.js';
+import type {DigestAuthOptions} from './auth/digest.js';
 import {startServer} from './server.js';
 import type {CommunityServerOptions} from './community.js';
-import type {DigestAuthOptions} from './auth/digest.js';
+import {compileToDirectory, type CompilerInputFormat} from './compiler/index.js';
 
 interface CliOptions {
   hostname: string;
   port: number;
   community?: false | CommunityServerOptions;
+  namedResponseBody?: boolean;
   authDigestFile?: string;
   authRealm?: string;
   tlsCert?: string;
   tlsKey?: string;
 }
 
-const options = parseArgs(process.argv.slice(2));
-const server = startServer(toServerOptions(options));
+void main(process.argv.slice(2)).catch((error: unknown) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exitCode = 1;
+});
 
-console.log(
-  `turbowarp-http-server listening on ${options.tlsCert ? 'https' : 'http'}://${server.hostname}:${server.port}`
-);
+async function main(args: readonly string[]): Promise<void> {
+  if (args[0] === 'compile') {
+    const options = parseCompileArgs(args.slice(1));
+    const result = await compileToDirectory(options);
+    for (const diagnostic of result.diagnostics) {
+      console.warn(`[${diagnostic.code}] ${diagnostic.message}`);
+    }
+    console.log(`Generated ${result.files.length} files in ${options.output}.`);
+    return;
+  }
 
-function shutdown(signal: string): void {
-  console.log(`Received ${signal}; shutting down.`);
-  server
-    .close()
-    .catch((error: unknown) => {
-      console.error(error);
-      process.exitCode = 1;
-    })
-    .finally(() => {
-      process.exit();
-    });
+  const options = parseArgs(args);
+  const server = startServer(toServerOptions(options));
+  console.log(
+    `turbowarp-http-server listening on ${options.tlsCert ? 'https' : 'http'}://${server.hostname}:${server.port}`
+  );
+
+  function shutdown(signal: string): void {
+    console.log(`Received ${signal}; shutting down.`);
+    server
+      .close()
+      .catch((error: unknown) => {
+        console.error(error);
+        process.exitCode = 1;
+      })
+      .finally(() => {
+        process.exit();
+      });
+  }
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
-
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 function parseArgs(args: readonly string[]): CliOptions {
   const options: CliOptions = {
@@ -66,6 +84,8 @@ function parseArgs(args: readonly string[]): CliOptions {
       index += 1;
     } else if (arg === '--community') {
       options.community = {};
+    } else if (arg === '--enable-named-response-body') {
+      options.namedResponseBody = true;
     } else if (arg === '--auth-digest') {
       options.authDigestFile = requireValue(args, index, '--auth-digest');
       index += 1;
@@ -99,12 +119,95 @@ function parseArgs(args: readonly string[]): CliOptions {
   return options;
 }
 
+function parseCompileArgs(args: readonly string[]): {
+  input: string;
+  output: string;
+  format: CompilerInputFormat;
+  force: boolean;
+  irVersion: 1 | 2;
+  target?: string;
+  targetConfig?: string;
+  manifestLock?: string;
+  namedResponseBody: boolean;
+} {
+  let input = '';
+  let output = '';
+  let format: CompilerInputFormat = 'turbowarp-json';
+  let force = false;
+  let irVersion: 1 | 2 = 1;
+  let target: string | undefined;
+  let targetConfig: string | undefined;
+  let manifestLock: string | undefined;
+  let namedResponseBody = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--input') {
+      input = requireValue(args, index, '--input');
+      index += 1;
+    } else if (arg === '--output') {
+      output = requireValue(args, index, '--output');
+      index += 1;
+    } else if (arg === '--format') {
+      const value = requireValue(args, index, '--format');
+      if (value !== 'turbowarp-json' && value !== 'ir') throw new Error(`Invalid format: ${value}`);
+      format = value;
+      index += 1;
+    } else if (arg === '--force') {
+      force = true;
+    } else if (arg === '--ir-version') {
+      const value = requireValue(args, index, '--ir-version');
+      if (value !== '1' && value !== '2') throw new Error(`Invalid IR version: ${value}`);
+      irVersion = Number(value) as 1 | 2;
+      index += 1;
+    } else if (arg === '--target') {
+      target = requireValue(args, index, '--target');
+      index += 1;
+    } else if (arg === '--target-config') {
+      targetConfig = requireValue(args, index, '--target-config');
+      index += 1;
+    } else if (arg === '--manifest-lock') {
+      manifestLock = requireValue(args, index, '--manifest-lock');
+      index += 1;
+    } else if (arg === '--enable-named-response-body') {
+      namedResponseBody = true;
+    } else if (arg === '--help' || arg === '-h') {
+      printCompileHelp();
+      process.exit(0);
+    } else {
+      throw new Error(`Unknown compile argument: ${arg}`);
+    }
+  }
+  if (!input) throw new Error('compile requires --input <file>.');
+  if (!output) throw new Error('compile requires --output <directory>.');
+  if (irVersion === 2 && target === undefined) throw new Error('IR v2 compilation requires --target <id>.');
+  if (namedResponseBody && irVersion !== 2) {
+    throw new Error('--enable-named-response-body requires --ir-version 2.');
+  }
+  if (manifestLock !== undefined && (irVersion !== 2 || format !== 'turbowarp-json')) {
+    throw new Error('--manifest-lock requires --ir-version 2 and --format turbowarp-json.');
+  }
+  return {
+    input,
+    output,
+    format,
+    force,
+    irVersion,
+    namedResponseBody,
+    ...(target === undefined ? {} : {target}),
+    ...(targetConfig === undefined ? {} : {targetConfig}),
+    ...(manifestLock === undefined ? {} : {manifestLock})
+  };
+}
+
 function toServerOptions(options: CliOptions): Parameters<typeof startServer>[0] {
   const serverOptions: Parameters<typeof startServer>[0] = {
     hostname: options.hostname,
     port: options.port
   };
   if (options.community !== undefined) serverOptions.community = options.community;
+  if (options.namedResponseBody !== undefined) {
+    serverOptions.namedResponseBody = options.namedResponseBody;
+  }
   const digestAuth = toDigestAuthOptions(options);
   if (digestAuth) serverOptions.digestAuth = digestAuth;
   if (options.tlsCert && options.tlsKey) {
@@ -145,7 +248,9 @@ function isTruthy(value: string | undefined): boolean {
 }
 
 function printHelp(): void {
-  console.log(`Usage: turbowarp-http-server [--host <host>] [--port <port>]
+  console.log(`Usage:
+  turbowarp-http-server [--host <host>] [--port <port>]
+  turbowarp-http-server compile --input <file> --output <directory> [options]
 
 Starts the companion HTTP/WebSocket bridge for the TurboWarp extension.
 
@@ -153,6 +258,7 @@ Options:
   --host <host>  Hostname or address to bind. Defaults to HOST or 127.0.0.1.
   --port <port>  TCP port to bind. Defaults to PORT or 8787.
   --community    Enable the learning-only Scratch-like community routes.
+  --enable-named-response-body Enable experimental named response blocks (default OFF).
   --auth-digest <file>
                  Enable HTTP Digest authentication using an htdigest file.
   --auth-realm <realm>
@@ -168,5 +274,24 @@ Environment:
   TURBOWARP_HTTP_DIGEST_REALM
   TURBOWARP_HTTP_TLS_CERT
   TURBOWARP_HTTP_TLS_KEY
+`);
+}
+
+function printCompileHelp(): void {
+  console.log(`Usage: turbowarp-http-server compile --input <file> --output <directory> [options]
+
+Compiles an accepted TurboWarp project.json subset or deploy IR to Hono deployment artifacts.
+
+Options:
+  --input <file>       TurboWarp project.json or deploy IR JSON.
+  --output <directory> Generated project directory.
+  --format <format>    turbowarp-json (default) or ir.
+  --ir-version <1|2>  Select compiler pipeline. Defaults to 1.
+  --target <id>        Required for IR v2; for example cloudflare-workers.
+  --target-config <file> Adapter config containing binding names, never secrets.
+  --manifest-lock <file> Locked extension manifests for TurboWarp project input.
+  --enable-named-response-body Enable the experimental named body IR operation (default OFF).
+  --force              Replace generated files in a non-empty output directory.
+  -h, --help           Show this help.
 `);
 }

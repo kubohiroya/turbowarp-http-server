@@ -232,6 +232,20 @@ current request ID
 
 simple query/header reporter は最初の値を返します。wire protocol は全値を保持するため、将来 list-oriented block を追加しても protocol を壊さずに済みます。
 
+server へ compile 可能な一時値には、通常の Scratch 変数ではなく handler variable を使います。値は request ID ごとに分離され、response 完了時に破棄されます。
+
+```text
+set handler variable [name] to [value]
+change handler variable [name] by [amount]
+handler variable [name]
+handler variable [name] exists?
+delete handler variable [name]
+delete all handler variables
+active handler variables
+```
+
+これは TurboWarp Temporary Variables の thread variable に対応する request-local な機能です。request をまたいで残す値には D1 等の永続 storage を使います。通常の variable/list、broadcast、`forever` は Cloudflare Worker 用 compiler の MVP では受理しません。詳しい置換規則と compile command は [TurboWarp → Cloudflare Workers/Hono コンパイラ設計](docs/cloudflare-worker-compiler.ja.md) を参照してください。
+
 response blocks は current request の response builder を変更し、最後に response message として完了します。
 
 ```text

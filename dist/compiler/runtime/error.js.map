@@ -1,0 +1,1 @@
+{"version":3,"file":"error.js","sourceRoot":"","sources":["../../../src/compiler/runtime/error.ts"],"names":[],"mappings":"AAAA,MAAM,OAAO,cAAe,SAAQ,KAAK;IAGvC,YACkB,IAAY,EAC5B,OAAe,EACC,UAAkB;QAElC,KAAK,CAAC,OAAO,CAAC,CAAC;QAJC,SAAI,GAAJ,IAAI,CAAQ;QAEZ,eAAU,GAAV,UAAU,CAAQ;QALpB,SAAI,GAAG,gBAAgB,CAAC;IAQxC,CAAC;CACF"}

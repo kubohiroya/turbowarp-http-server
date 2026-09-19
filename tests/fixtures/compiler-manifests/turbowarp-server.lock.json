@@ -1,0 +1,21 @@
+{
+  "lockVersion": 1,
+  "extensions": [
+    {
+      "extensionId": "kubohiroyaassetmanager",
+      "packageName": "@kubohiroya/turbowarp-asset-manager",
+      "packageVersion": "0.16.0",
+      "manifestFormatVersion": 1,
+      "integrity": "sha256-FcgxT34QB/GxZtHbzBJPiyNhZ/yfeILDPLUh+c1czZU=",
+      "source": {"kind": "local", "path": "asset-manager.json"}
+    },
+    {
+      "extensionId": "kubohiroyastructureddata",
+      "packageName": "@kubohiroya/turbowarp-structured-data",
+      "packageVersion": "0.4.0",
+      "manifestFormatVersion": 2,
+      "integrity": "sha256-atsgtqeDE72WUR23msLnagXtyHYwN/8OfCSJH0BZw5M=",
+      "source": {"kind": "local", "path": "structured-data.json"}
+    }
+  ]
+}

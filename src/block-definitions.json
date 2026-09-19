@@ -140,6 +140,67 @@
       "arguments": {}
     },
     {
+      "opcode": "setHandlerVariable",
+      "blockType": "COMMAND",
+      "text": "set handler variable [NAME] to [VALUE]",
+      "description": "Sets a request-local variable that is discarded when the current HTTP response completes.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "value"},
+        "VALUE": {"type": "STRING", "defaultValue": "0"}
+      }
+    },
+    {
+      "opcode": "changeHandlerVariable",
+      "blockType": "COMMAND",
+      "text": "change handler variable [NAME] by [AMOUNT]",
+      "description": "Changes a request-local numeric variable using Scratch number conversion rules.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "value"},
+        "AMOUNT": {"type": "NUMBER", "defaultValue": 1}
+      }
+    },
+    {
+      "opcode": "handlerVariable",
+      "blockType": "REPORTER",
+      "text": "handler variable [NAME]",
+      "description": "Returns a request-local handler variable, or an empty string when it does not exist.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "value"}
+      }
+    },
+    {
+      "opcode": "handlerVariableExists",
+      "blockType": "BOOLEAN",
+      "text": "handler variable [NAME] exists?",
+      "description": "Reports whether a request-local handler variable exists.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "value"}
+      }
+    },
+    {
+      "opcode": "deleteHandlerVariable",
+      "blockType": "COMMAND",
+      "text": "delete handler variable [NAME]",
+      "description": "Deletes a request-local handler variable.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "value"}
+      }
+    },
+    {
+      "opcode": "clearHandlerVariables",
+      "blockType": "COMMAND",
+      "text": "delete all handler variables",
+      "description": "Deletes all request-local handler variables for the current HTTP handler.",
+      "arguments": {}
+    },
+    {
+      "opcode": "listHandlerVariables",
+      "blockType": "REPORTER",
+      "text": "active handler variables",
+      "description": "Returns comma-separated names of request-local handler variables.",
+      "arguments": {}
+    },
+    {
       "opcode": "currentAuthType",
       "blockType": "REPORTER",
       "text": "current auth type",
@@ -263,6 +324,21 @@
       "description": "Responds with JSON.",
       "arguments": {
         "BODY": {"type": "STRING", "defaultValue": "{\"ok\":true}"}
+      }
+    },
+    {
+      "opcode": "respondWithNamedBody",
+      "blockType": "COMMAND",
+      "text": "respond with named [NAMESPACE] [NAME] kind [KIND] scope [SCOPE] target [TARGET_ID] as [REPRESENTATION] max bytes [MAX_BYTES]",
+      "description": "Completes the response with a named structured, document, binary, or asset snapshot resolved by the server.",
+      "arguments": {
+        "NAMESPACE": {"type": "STRING", "defaultValue": "asset"},
+        "NAME": {"type": "STRING", "defaultValue": "avatar"},
+        "KIND": {"type": "STRING", "defaultValue": "asset"},
+        "SCOPE": {"type": "STRING", "defaultValue": "project"},
+        "TARGET_ID": {"type": "STRING", "defaultValue": "Stage:1"},
+        "REPRESENTATION": {"type": "STRING", "defaultValue": "raw"},
+        "MAX_BYTES": {"type": "NUMBER", "defaultValue": 10485760}
       }
     },
     {
