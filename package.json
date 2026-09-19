@@ -70,7 +70,7 @@
     "@kubohiroya/turbowarp-named-data": "^0.1.0"
   },
   "devDependencies": {
-    "@kubohiroya/turbowarp-named-data": "github:kubohiroya/turbowarp-named-data#bc3be0e669f501479ef45877e5d06e27714184d2",
+    "@kubohiroya/turbowarp-named-data": "0.1.0",
     "@eslint/js": "^9.39.5",
     "@kubohiroya/vite-plugin-turbowarp-extension": "0.1.1",
     "@types/node": "^24.13.3",

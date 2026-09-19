@@ -228,7 +228,13 @@ export async function createNamedBodyResponse(
     return new Response(toArrayBuffer(bytes), {status, headers});
   }
 
-  const body = managedBodyStream(handle.body, signal, maxBodyBytes, release);
+  const body = managedBodyStream(
+    handle.body,
+    signal,
+    maxBodyBytes,
+    handle.metadata.byteLength,
+    release
+  );
   return new Response(body, {status, headers});
 }
 
@@ -236,11 +242,20 @@ function managedBodyStream(
   source: ReadableStream<Uint8Array>,
   signal: AbortSignal,
   maxBodyBytes: number,
+  expectedBodyBytes: number | undefined,
   release: (reason: NamedBodyReleaseReason) => Promise<void>
 ): ReadableStream<Uint8Array> {
   const reader = source.getReader();
   let total = 0;
   let finished = false;
+
+  const cancelSource = async (reason: unknown): Promise<void> => {
+    try {
+      await reader.cancel(reason);
+    } catch {
+      // Cancellation is best-effort; release remains mandatory.
+    }
+  };
 
   const finish = async (reason: NamedBodyReleaseReason): Promise<void> => {
     if (finished) return;
@@ -250,7 +265,7 @@ function managedBodyStream(
   };
   const onAbort = (): void => {
     void finish('abort').catch(() => undefined);
-    void reader.cancel(signal.reason);
+    void cancelSource(signal.reason);
   };
   signal.addEventListener('abort', onAbort, {once: true});
 
@@ -260,14 +275,21 @@ function managedBodyStream(
         if (signal.aborted) throw namedBodyError('NAMED_DATA_ABORTED');
         const chunk = await reader.read();
         if (chunk.done) {
+          if (expectedBodyBytes !== undefined && total !== expectedBodyBytes) {
+            throw namedBodyError('NAMED_RESPONSE_INVALID_METADATA');
+          }
           await finish('complete');
           controller.close();
           return;
         }
         total += chunk.value.byteLength;
         if (total > maxBodyBytes) {
-          await reader.cancel('named_body_too_large');
+          await cancelSource('named_body_too_large');
           throw namedBodyError('NAMED_DATA_BODY_TOO_LARGE');
+        }
+        if (expectedBodyBytes !== undefined && total > expectedBodyBytes) {
+          await cancelSource('named_body_length_mismatch');
+          throw namedBodyError('NAMED_RESPONSE_INVALID_METADATA');
         }
         controller.enqueue(chunk.value);
       } catch (error) {
@@ -281,8 +303,9 @@ function managedBodyStream(
       }
     },
     async cancel(reason) {
-      await reader.cancel(reason);
-      await finish(signal.aborted ? 'abort' : 'cancel');
+      const releasePromise = finish(signal.aborted ? 'abort' : 'cancel');
+      await cancelSource(reason);
+      await releasePromise;
     }
   });
 }
@@ -438,7 +461,7 @@ function providerErrorResponse(error: unknown): Response | null {
   return errorResponse(code, statusForNamedDataError(code));
 }
 
-function namedBodyError(code: NamedDataErrorCode): Error & {code: NamedDataErrorCode} {
+function namedBodyError(code: NamedBodyErrorCode): Error & {code: NamedBodyErrorCode} {
   return Object.assign(new Error(code), {code});
 }
 
@@ -454,7 +477,7 @@ function statusForNamedDataError(code: NamedDataErrorCode): number {
   if (code === 'NAMED_DATA_BODY_TOO_LARGE') return 413;
   if (code === 'NAMED_DATA_ABORTED') return 499;
   if (code === 'NAMED_DATA_PROVIDER_RELEASED') return 503;
-  if (code === 'NAMED_DATA_INCOMPATIBLE_VERSION' || code === 'NAMED_DATA_NAMESPACE_CONFLICT') return 500;
+  if (code === 'NAMED_DATA_INVALID_REGISTRY' || code === 'NAMED_DATA_PROVIDER_CONFLICT') return 500;
   return 400;
 }
 
