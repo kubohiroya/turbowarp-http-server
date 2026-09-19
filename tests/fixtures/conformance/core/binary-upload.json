@@ -1,0 +1,50 @@
+{
+  "fixtureVersion": 1,
+  "id": "binary-upload",
+  "layer": "core",
+  "ir": {
+    "version": 2,
+    "name": "binary-upload",
+    "auth": {"kind": "none"},
+    "capabilities": [{"kind": "object-storage"}, {"kind": "streaming-body"}],
+    "routes": [{
+      "id": "upload",
+      "method": "PUT",
+      "path": "/binary",
+      "auth": "public",
+      "body": [
+        {
+          "kind": "request-body-binary",
+          "maxBytes": 3,
+          "result": {"id": "body", "type": {"kind": "resource", "resourceType": "binary-body"}}
+        },
+        {
+          "kind": "asset-object-put",
+          "locator": {"namespace": "asset", "key": "fixture.bin"},
+          "body": "body",
+          "metadata": {"contentType": "application/octet-stream"},
+          "maxBytes": 3,
+          "result": {"id": "stored", "type": {"kind": "value", "valueType": "binary-ref"}}
+        },
+        {"kind": "respond", "format": "json", "body": {"kind": "binding", "valueType": "binary-ref", "binding": "stored"}}
+      ]
+    }]
+  },
+  "request": {
+    "method": "PUT",
+    "url": "http://conformance.test/binary",
+    "headers": {"content-type": "application/octet-stream", "content-length": "3"},
+    "bodyText": "abc"
+  },
+  "expected": {
+    "response": {
+      "status": 200,
+      "headers": [["content-type", "application/json; charset=utf-8"]],
+      "bodyText": "{\"contentType\":\"application/octet-stream\",\"integrity\":\"sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\",\"key\":\"fixture.bin\",\"namespace\":\"asset\",\"revision\":\"1\",\"size\":3}",
+      "bodySha256": "887c3c6f71c376ff1982f859f422b100a201e463e31b8ed60edd9ec0276e8575"
+    },
+    "effects": [
+      {"capability": "object-storage", "operation": "put", "subject": "asset/fixture.bin", "metadata": {"contentType": "application/octet-stream"}}
+    ]
+  }
+}

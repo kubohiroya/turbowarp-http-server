@@ -64,8 +64,42 @@ export function requireBridgeBody(value) {
     const record = value;
     if (record.kind === 'text')
         return { kind: 'text', text: String(record.text ?? '') };
+    if (record.kind === 'named')
+        return requireNamedBridgeBody(record);
     if (record.kind === 'unsupported')
         return { kind: 'unsupported', reason: String(record.reason ?? '') };
     return { kind: 'empty' };
+}
+function requireNamedBridgeBody(record) {
+    const reference = record.reference;
+    if (typeof reference !== 'object' || reference === null || Array.isArray(reference)) {
+        return { kind: 'unsupported', reason: 'invalid_named_body' };
+    }
+    const value = reference;
+    const kinds = ['structured', 'document', 'binary', 'asset'];
+    const scopes = ['target', 'project'];
+    const representations = ['json', 'yaml', 'html', 'markdown', 'raw'];
+    if (typeof value.namespace !== 'string' ||
+        typeof value.name !== 'string' ||
+        !kinds.includes(value.kind) ||
+        !scopes.includes(value.scope) ||
+        !representations.includes(record.representation) ||
+        !Number.isSafeInteger(record.maxBytes) ||
+        record.maxBytes < 1 ||
+        (record.targetId !== undefined && typeof record.targetId !== 'string')) {
+        return { kind: 'unsupported', reason: 'invalid_named_body' };
+    }
+    return {
+        kind: 'named',
+        reference: {
+            namespace: value.namespace,
+            name: value.name,
+            kind: value.kind,
+            scope: value.scope
+        },
+        representation: record.representation,
+        ...(record.targetId === undefined ? {} : { targetId: record.targetId }),
+        maxBytes: record.maxBytes
+    };
 }
 //# sourceMappingURL=protocol.js.map

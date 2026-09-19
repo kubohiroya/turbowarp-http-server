@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kubohiroya/turbowarp-http-server/main/schemas/compiler-extension-manifest.schema.json",
+  "title": "TurboWarp Server Compiler Extension Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "id", "blocks"],
+  "properties": {
+    "formatVersion": {"enum": [1, 2]},
+    "id": {"type": "string", "pattern": "^[a-z0-9]+$"},
+    "pathSegmentType": {"$ref": "#/$defs/pathSegmentType"},
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2048,
+      "items": {"$ref": "#/$defs/block"}
+    },
+    "menus": {"type": "array"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"formatVersion": {"const": 2}}, "required": ["formatVersion"]},
+      "then": {
+        "properties": {"blocks": {"items": {"$ref": "#/$defs/blockV2"}}}
+      }
+    }
+  ],
+  "$defs": {
+    "pathSegmentType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "variants"],
+      "properties": {
+        "kind": {"const": "discriminatedUnion"},
+        "variants": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "valueType"],
+              "properties": {"kind": {"const": "key"}, "valueType": {"const": "string"}}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "valueType"],
+              "properties": {"kind": {"const": "index"}, "valueType": {"const": "nonNegativeInteger"}}
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "argument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"enum": ["STRING", "NUMBER", "BOOLEAN"]},
+        "menu": {"type": "string", "minLength": 1},
+        "normalizesTo": {"const": "pathSegments"},
+        "staticLiteral": {"type": "boolean"},
+        "minimum": {"type": "number"},
+        "maximum": {"type": "number"}
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported"],
+      "properties": {
+        "supported": {"type": "boolean"},
+        "irOperation": {"type": "string", "minLength": 1}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"supported": {"const": true}}, "required": ["supported"]},
+          "then": {"required": ["irOperation"]}
+        }
+      ]
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opcode", "blockType", "arguments"],
+      "properties": {
+        "opcode": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+        "blockType": {"enum": ["COMMAND", "REPORTER", "BOOLEAN", "HAT", "LOOP"]},
+        "arguments": {"type": "array", "items": {"$ref": "#/$defs/argument"}},
+        "resultType": {"enum": ["json", "boolean", "number", "string", "void"]},
+        "effect": {
+          "enum": ["pure", "immutable", "control", "request-read", "response-write", "storage-read", "storage-write", "binary-read", "binary-write"]
+        },
+        "immutable": {"type": "boolean"},
+        "errors": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"}
+        },
+        "server": {"$ref": "#/$defs/server"}
+      }
+    },
+    "blockV2": {
+      "allOf": [
+        {"$ref": "#/$defs/block"},
+        {"required": ["resultType", "effect", "immutable", "errors", "server"]}
+      ]
+    }
+  }
+}

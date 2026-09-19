@@ -12,6 +12,8 @@ import {DIGEST_AUTH_USER_HEADER, isLocalAddress, verifyDigestAuth} from './auth/
 import type {DigestAuthOptions} from './auth/digest.js';
 import {createCommunityApp} from './community.js';
 import type {CommunityServerOptions} from './community.js';
+import {NamedBodyResponder, NamedBodyResolver} from './named-body.js';
+import {createAssetManagerNamedBodyProvider} from './resource-named-body-provider.js';
 import {
   HTTP_BRIDGE_PROTOCOL,
   HTTP_BRIDGE_PROTOCOL_VERSION,
@@ -25,6 +27,33 @@ import {
 } from './protocol.js';
 import type {BridgeBody, BridgeRequestMessage, BridgeResponseMessage} from './protocol.js';
 
+export {
+  createNamedBodyResponse,
+  DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS,
+  NAMED_DATA_ERROR_CODES,
+  NamedBodyResponder,
+  NamedBodyResolver,
+  NamedDataRegistryResolver
+} from './named-body.js';
+export type {
+  NamedBodyErrorCode,
+  NamedBodyHandle,
+  NamedBodyMetadata,
+  NamedBodyProvider,
+  NamedBodyReleaseReason,
+  NamedBodyRequest,
+  NamedBodyResponseOptions,
+  NamedBodyRepresentation,
+  NamedDataKind,
+  NamedDataContextResolver,
+  NamedDataErrorCode,
+  NamedDataReference,
+  NamedDataScope,
+  NamedResponseBodyFeatureFlags
+} from './named-body.js';
+export {createAssetManagerNamedBodyProvider} from './resource-named-body-provider.js';
+export type {AssetManagerNamedBodyProviderOptions} from './resource-named-body-provider.js';
+
 export interface ServerOptions {
   hostname: string;
   port: number;
@@ -36,6 +65,10 @@ export interface ServerOptions {
   digestAuth?: DigestAuthOptions;
   tls?: HttpsServerOptions;
   requestTimeoutMs?: number;
+  namedResponseBody?: boolean;
+  /** Overrides the built-in ResourceCapability adapter for canonical named-data registries or custom providers. */
+  namedBodyResolver?: NamedBodyResolver;
+  maxNamedResponseBodyBytes?: number;
   routes?: readonly string[];
   community?: false | CommunityServerOptions;
 }
@@ -132,7 +165,7 @@ const TEXT_BODY_TYPES = [
 const authenticatedUsers = new WeakMap<Request, string>();
 
 export interface HttpRequestBridge {
-  forward(message: BridgeRequestMessage, method: string): Promise<Response>;
+  forward(message: BridgeRequestMessage, method: string, signal?: AbortSignal): Promise<Response>;
 }
 
 export function createApp(options: ServerAppOptions = {}): Hono {
@@ -193,7 +226,8 @@ export function createApp(options: ServerAppOptions = {}): Hono {
       if (authenticatedUser) bridgeRequestOptions.authenticatedUser = authenticatedUser;
       return options.bridge.forward(
         await createBridgeRequestMessage(c.req.raw, bridgeRequestOptions),
-        c.req.method
+        c.req.method,
+        c.req.raw.signal
       );
     }
 
@@ -210,7 +244,15 @@ export function createApp(options: ServerAppOptions = {}): Hono {
 }
 
 export function startServer(options: ServerOptions): RunningServer {
-  const bridge = new WebSocketHttpRequestBridge(options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
+  const namedBodies = new NamedBodyResponder(
+    options.namedBodyResolver ??
+      new NamedBodyResolver(options.resources ? [createAssetManagerNamedBodyProvider(options.resources)] : []),
+    {namedResponseBody: options.namedResponseBody === true}
+  );
+  const bridge = new WebSocketHttpRequestBridge(options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, {
+    responder: namedBodies,
+    maxBodyBytes: options.maxNamedResponseBodyBytes ?? options.maxResourceBodyBytes ?? DEFAULT_MAX_RESOURCE_BODY_BYTES
+  });
   const app = createApp({...options, bridge});
   const wss = new WebSocketServer({noServer: true});
   const sockets = new Set<WebSocket>();
@@ -276,6 +318,11 @@ export function startServer(options: ServerOptions): RunningServer {
   };
 }
 
+interface BridgeNamedBodyOptions {
+  responder: NamedBodyResponder;
+  maxBodyBytes: number;
+}
+
 class WebSocketHttpRequestBridge implements HttpRequestBridge {
   private socket: WebSocket | null = null;
   private nextRequestId = 1;
@@ -283,12 +330,16 @@ class WebSocketHttpRequestBridge implements HttpRequestBridge {
     string,
     {
       method: string;
+      signal?: AbortSignal;
       resolve(response: Response): void;
       timeout: ReturnType<typeof setTimeout>;
     }
   >();
 
-  public constructor(private readonly requestTimeoutMs: number) {}
+  public constructor(
+    private readonly requestTimeoutMs: number,
+    private readonly namedBodies: BridgeNamedBodyOptions
+  ) {}
 
   public attach(socket: WebSocket): void {
     const previousSocket = this.socket;
@@ -313,7 +364,7 @@ class WebSocketHttpRequestBridge implements HttpRequestBridge {
     }
   }
 
-  public async forward(message: BridgeRequestMessage, method: string): Promise<Response> {
+  public async forward(message: BridgeRequestMessage, method: string, signal?: AbortSignal): Promise<Response> {
     if (!this.socket || this.socket.readyState !== this.socket.OPEN) {
       return jsonResponse({error: 'not_connected'}, 503);
     }
@@ -328,7 +379,7 @@ class WebSocketHttpRequestBridge implements HttpRequestBridge {
         resolve(jsonResponse({error: 'gateway_timeout'}, 504));
       }, this.requestTimeoutMs);
 
-      this.pending.set(id, {method, resolve, timeout});
+      this.pending.set(id, {method, ...(signal === undefined ? {} : {signal}), resolve, timeout});
       try {
         this.socket?.send(JSON.stringify(requestMessage));
       } catch {
@@ -357,7 +408,9 @@ class WebSocketHttpRequestBridge implements HttpRequestBridge {
     if (!pending) return;
     clearTimeout(pending.timeout);
     this.pending.delete(parsed.id);
-    pending.resolve(toHttpResponse(parsed, pending.method));
+    void toHttpResponse(parsed, pending.method, this.namedBodies, pending.signal)
+      .then(pending.resolve)
+      .catch(() => pending.resolve(jsonResponse({error: 'named_body_failed'}, 502)));
   }
 }
 
@@ -409,7 +462,12 @@ async function createBridgeRequestMessage(request: Request, options: BridgeReque
   return message;
 }
 
-function toHttpResponse(message: BridgeResponseMessage, method: string): Response {
+async function toHttpResponse(
+  message: BridgeResponseMessage,
+  method: string,
+  namedBodies: BridgeNamedBodyOptions,
+  signal?: AbortSignal
+): Promise<Response> {
   const status = isValidHttpStatus(message.status) ? message.status : 502;
   if (!isValidHttpStatus(message.status)) {
     return jsonResponse({error: 'invalid_bridge_status'}, 502);
@@ -428,6 +486,28 @@ function toHttpResponse(message: BridgeResponseMessage, method: string): Respons
     for (const value of values) {
       headers.append(normalized, value);
     }
+  }
+
+  if (message.body.kind === 'named') {
+    if (status === 204 || status === 205 || status === 304) return new Response(null, {status, headers});
+    return namedBodies.responder.respond(
+      {
+        reference: message.body.reference,
+        representation: message.body.representation,
+        ...(message.body.targetId === undefined ? {} : {targetId: message.body.targetId})
+      },
+      {
+        method,
+        status,
+        headers,
+        ...(signal === undefined ? {} : {signal}),
+        maxBodyBytes: Math.min(message.body.maxBytes, namedBodies.maxBodyBytes)
+      }
+    );
+  }
+
+  if (message.body.kind === 'unsupported' && message.body.reason === 'invalid_named_body') {
+    return jsonResponse({error: 'NAMED_DATA_INVALID_REF'}, 400);
   }
 
   if (isBodyForbidden(method, status)) {

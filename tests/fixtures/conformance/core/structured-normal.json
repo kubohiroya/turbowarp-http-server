@@ -1,0 +1,42 @@
+{
+  "fixtureVersion": 1,
+  "id": "structured-normal",
+  "layer": "core",
+  "ir": {
+    "version": 2,
+    "name": "structured-normal",
+    "auth": {"kind": "none"},
+    "capabilities": [],
+    "routes": [{
+      "id": "normalize",
+      "method": "POST",
+      "path": "/structured",
+      "auth": "public",
+      "body": [{
+        "kind": "respond",
+        "format": "json",
+        "body": {
+          "kind": "json-stringify",
+          "valueType": "json-text",
+          "value": {
+            "kind": "json-set",
+            "valueType": {"kind": "union", "members": ["null", "boolean", "number", "string", "json-array", "json-object"]},
+            "root": {"kind": "literal", "valueType": "json-object", "value": {"b": 2, "a": 1}},
+            "path": [{"kind": "key", "value": "b"}],
+            "value": {"kind": "literal", "valueType": "number", "value": 3}
+          }
+        }
+      }]
+    }]
+  },
+  "request": {"method": "POST", "url": "http://conformance.test/structured"},
+  "expected": {
+    "response": {
+      "status": 200,
+      "headers": [["content-type", "application/json; charset=utf-8"]],
+      "bodyText": "{\"a\":1,\"b\":3}",
+      "bodySha256": "f9c6777fb86597920de313c707c2c0aa7b059e208a66e1f56f7a2b548e11453d"
+    },
+    "effects": []
+  }
+}

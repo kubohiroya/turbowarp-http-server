@@ -9,5 +9,13 @@
     "sourceMap": true,
     "noEmit": false
   },
-  "include": ["src/cli.ts", "src/digest-cli.ts", "src/server.ts", "src/protocol.ts", "src/auth/**/*.ts"]
+  "include": [
+    "src/cli.ts",
+    "src/digest-cli.ts",
+    "src/server.ts",
+    "src/protocol.ts",
+    "src/named-body.ts",
+    "src/resource-named-body-provider.ts",
+    "src/auth/**/*.ts"
+  ]
 }

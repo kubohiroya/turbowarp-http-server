@@ -36,35 +36,6 @@ From an installed package:
 turbowarp-http-server --host 127.0.0.1 --port 8787
 ```
 
-For an offline venue LAN, enable HTTP Digest authentication with an htdigest file:
-
-```bash
-turbowarp-http-digest init ./users.htdigest --realm turbowarp-lan
-turbowarp-http-digest add ./users.htdigest alice --realm turbowarp-lan
-
-turbowarp-http-server \
-  --host 0.0.0.0 \
-  --port 8787 \
-  --auth-digest ./users.htdigest \
-  --auth-realm turbowarp-lan
-```
-
-Digest authentication is intended for simple user identification on a trusted LAN where certificates and external identity providers are not available. It is disabled by default. The authenticated username is forwarded to TurboWarp handlers as the runtime-owned `x-turbowarp-http-auth-user` request header; an incoming client-supplied header with the same name is overwritten. The `/ws` endpoint is only accepted from localhost peers.
-
-TurboWarp handlers can read authentication context with reporter blocks: `current auth type`, `current authenticated user`, `current auth provider`, `current auth profile JSON`, and `auth profile field [NAME]`. Digest authentication provides the username. OAuth-capable deployments can forward provider profile data as request auth context, and handlers can read fields such as `email`, `name`, or dotted paths like `organization.name`.
-
-If a certificate and private key are already available, the server can run HTTPS directly:
-
-```bash
-turbowarp-http-server \
-  --host 0.0.0.0 \
-  --port 8787 \
-  --tls-cert ./certs/server.crt \
-  --tls-key ./certs/server.key
-```
-
-Certificate issuance, renewal, distribution, and OS/browser trust configuration are outside this package. For Internet-facing deployments, terminate TLS at a reverse proxy and use the Cloudflare/OAuth deployment path for authentication.
-
 The server exposes:
 
 | Route | Purpose |
@@ -510,6 +481,76 @@ Returns the current request client address when available.
 | Type | Reporter |
 | Opcode | `currentRequestClientAddress` |
 
+### `set handler variable [NAME] to [VALUE]`
+
+Sets a request-local variable that is discarded when the current HTTP response completes.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `setHandlerVariable` |
+| `NAME` | String, default: `value` |
+| `VALUE` | String, default: `0` |
+
+### `change handler variable [NAME] by [AMOUNT]`
+
+Changes a request-local numeric variable using Scratch number conversion rules.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `changeHandlerVariable` |
+| `NAME` | String, default: `value` |
+| `AMOUNT` | Number, default: `1` |
+
+### `handler variable [NAME]`
+
+Returns a request-local handler variable, or an empty string when it does not exist.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `handlerVariable` |
+| `NAME` | String, default: `value` |
+
+### `handler variable [NAME] exists?`
+
+Reports whether a request-local handler variable exists.
+
+| Property | Value |
+|---|---|
+| Type | Boolean |
+| Opcode | `handlerVariableExists` |
+| `NAME` | String, default: `value` |
+
+### `delete handler variable [NAME]`
+
+Deletes a request-local handler variable.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `deleteHandlerVariable` |
+| `NAME` | String, default: `value` |
+
+### `delete all handler variables`
+
+Deletes all request-local handler variables for the current HTTP handler.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `clearHandlerVariables` |
+
+### `active handler variables`
+
+Returns comma-separated names of request-local handler variables.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `listHandlerVariables` |
+
 ### `current auth type`
 
 Returns the current authentication type, such as digest or oauth.
@@ -655,6 +696,22 @@ Responds with JSON.
 | Type | Command |
 | Opcode | `respondWithJson` |
 | `BODY` | String, default: `{"ok":true}` |
+
+### `respond with named [NAMESPACE] [NAME] kind [KIND] scope [SCOPE] target [TARGET_ID] as [REPRESENTATION] max bytes [MAX_BYTES]`
+
+Completes the response with a named structured, document, binary, or asset snapshot resolved by the server.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `respondWithNamedBody` |
+| `NAMESPACE` | String, default: `asset` |
+| `NAME` | String, default: `avatar` |
+| `KIND` | String, default: `asset` |
+| `SCOPE` | String, default: `project` |
+| `TARGET_ID` | String, default: `Stage:1` |
+| `REPRESENTATION` | String, default: `raw` |
+| `MAX_BYTES` | Number, default: `10485760` |
 
 ### `record HTTP log [ENTRY]`
 

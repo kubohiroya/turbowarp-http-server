@@ -1,0 +1,27 @@
+{
+  "fixtureVersion": 1,
+  "id": "frontend-missing-capability",
+  "layer": "frontend-diagnostic",
+  "ir": {
+    "version": 2,
+    "name": "missing-capability",
+    "auth": {"kind": "none"},
+    "capabilities": [],
+    "routes": [{
+      "id": "create",
+      "method": "POST",
+      "path": "/records",
+      "auth": "public",
+      "body": [
+        {
+          "kind": "record-create",
+          "collection": "records",
+          "data": {"kind": "literal", "valueType": "json-object", "value": {}},
+          "result": {"id": "created", "type": {"kind": "value", "valueType": "json-object"}}
+        },
+        {"kind": "respond", "format": "json", "body": {"kind": "binding", "valueType": "json-object", "binding": "created"}}
+      ]
+    }]
+  },
+  "expectedDiagnosticCodes": ["TW2_CAPABILITY_MISSING"]
+}

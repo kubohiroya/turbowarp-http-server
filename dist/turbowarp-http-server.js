@@ -167,6 +167,82 @@
   			"arguments": {}
   		},
   		{
+  			"opcode": "setHandlerVariable",
+  			"blockType": "COMMAND",
+  			"text": "set handler variable [NAME] to [VALUE]",
+  			"description": "Sets a request-local variable that is discarded when the current HTTP response completes.",
+  			"arguments": {
+  				"NAME": {
+  					"type": "STRING",
+  					"defaultValue": "value"
+  				},
+  				"VALUE": {
+  					"type": "STRING",
+  					"defaultValue": "0"
+  				}
+  			}
+  		},
+  		{
+  			"opcode": "changeHandlerVariable",
+  			"blockType": "COMMAND",
+  			"text": "change handler variable [NAME] by [AMOUNT]",
+  			"description": "Changes a request-local numeric variable using Scratch number conversion rules.",
+  			"arguments": {
+  				"NAME": {
+  					"type": "STRING",
+  					"defaultValue": "value"
+  				},
+  				"AMOUNT": {
+  					"type": "NUMBER",
+  					"defaultValue": 1
+  				}
+  			}
+  		},
+  		{
+  			"opcode": "handlerVariable",
+  			"blockType": "REPORTER",
+  			"text": "handler variable [NAME]",
+  			"description": "Returns a request-local handler variable, or an empty string when it does not exist.",
+  			"arguments": { "NAME": {
+  				"type": "STRING",
+  				"defaultValue": "value"
+  			} }
+  		},
+  		{
+  			"opcode": "handlerVariableExists",
+  			"blockType": "BOOLEAN",
+  			"text": "handler variable [NAME] exists?",
+  			"description": "Reports whether a request-local handler variable exists.",
+  			"arguments": { "NAME": {
+  				"type": "STRING",
+  				"defaultValue": "value"
+  			} }
+  		},
+  		{
+  			"opcode": "deleteHandlerVariable",
+  			"blockType": "COMMAND",
+  			"text": "delete handler variable [NAME]",
+  			"description": "Deletes a request-local handler variable.",
+  			"arguments": { "NAME": {
+  				"type": "STRING",
+  				"defaultValue": "value"
+  			} }
+  		},
+  		{
+  			"opcode": "clearHandlerVariables",
+  			"blockType": "COMMAND",
+  			"text": "delete all handler variables",
+  			"description": "Deletes all request-local handler variables for the current HTTP handler.",
+  			"arguments": {}
+  		},
+  		{
+  			"opcode": "listHandlerVariables",
+  			"blockType": "REPORTER",
+  			"text": "active handler variables",
+  			"description": "Returns comma-separated names of request-local handler variables.",
+  			"arguments": {}
+  		},
+  		{
   			"opcode": "currentAuthType",
   			"blockType": "REPORTER",
   			"text": "current auth type",
@@ -306,6 +382,42 @@
   				"type": "STRING",
   				"defaultValue": "{\"ok\":true}"
   			} }
+  		},
+  		{
+  			"opcode": "respondWithNamedBody",
+  			"blockType": "COMMAND",
+  			"text": "respond with named [NAMESPACE] [NAME] kind [KIND] scope [SCOPE] target [TARGET_ID] as [REPRESENTATION] max bytes [MAX_BYTES]",
+  			"description": "Completes the response with a named structured, document, binary, or asset snapshot resolved by the server.",
+  			"arguments": {
+  				"NAMESPACE": {
+  					"type": "STRING",
+  					"defaultValue": "asset"
+  				},
+  				"NAME": {
+  					"type": "STRING",
+  					"defaultValue": "avatar"
+  				},
+  				"KIND": {
+  					"type": "STRING",
+  					"defaultValue": "asset"
+  				},
+  				"SCOPE": {
+  					"type": "STRING",
+  					"defaultValue": "project"
+  				},
+  				"TARGET_ID": {
+  					"type": "STRING",
+  					"defaultValue": "Stage:1"
+  				},
+  				"REPRESENTATION": {
+  					"type": "STRING",
+  					"defaultValue": "raw"
+  				},
+  				"MAX_BYTES": {
+  					"type": "NUMBER",
+  					"defaultValue": 10485760
+  				}
+  			}
   		},
   		{
   			"opcode": "recordHttpLog",
@@ -603,6 +715,20 @@
   	"mailto",
   	"tel"
   ]);
+  var NAMED_BODY_KINDS = /* @__PURE__ */ new Set([
+  	"structured",
+  	"document",
+  	"binary",
+  	"asset"
+  ]);
+  var NAMED_BODY_SCOPES = /* @__PURE__ */ new Set(["target", "project"]);
+  var NAMED_BODY_REPRESENTATIONS = /* @__PURE__ */ new Set([
+  	"json",
+  	"yaml",
+  	"html",
+  	"markdown",
+  	"raw"
+  ]);
   var TurboWarpHttpServerExtension = class {
   	constructor() {
   		this.serverUrl = DEFAULT_SERVER_URL;
@@ -697,6 +823,33 @@
   	currentRequestClientAddress() {
   		return this.currentContext()?.request.clientAddress ?? "";
   	}
+  	setHandlerVariable(args) {
+  		const context = this.mutableCurrentContext();
+  		if (!context) return;
+  		context.handlerVariables.set(Scratch.Cast.toString(args.NAME), Scratch.Cast.toString(args.VALUE));
+  	}
+  	changeHandlerVariable(args) {
+  		const context = this.mutableCurrentContext();
+  		if (!context) return;
+  		const name = Scratch.Cast.toString(args.NAME);
+  		const current = Scratch.Cast.toNumber(context.handlerVariables.get(name) ?? "");
+  		context.handlerVariables.set(name, current + Scratch.Cast.toNumber(args.AMOUNT));
+  	}
+  	handlerVariable(args) {
+  		return this.currentContext()?.handlerVariables.get(Scratch.Cast.toString(args.NAME)) ?? "";
+  	}
+  	handlerVariableExists(args) {
+  		return this.currentContext()?.handlerVariables.has(Scratch.Cast.toString(args.NAME)) ?? false;
+  	}
+  	deleteHandlerVariable(args) {
+  		this.mutableCurrentContext()?.handlerVariables.delete(Scratch.Cast.toString(args.NAME));
+  	}
+  	clearHandlerVariables() {
+  		this.mutableCurrentContext()?.handlerVariables.clear();
+  	}
+  	listHandlerVariables() {
+  		return Array.from(this.currentContext()?.handlerVariables.keys() ?? []).join(",");
+  	}
   	currentAuthType() {
   		return this.currentContext()?.request.auth?.type ?? "";
   	}
@@ -780,6 +933,35 @@
   			VALUE: "application/json; charset=utf-8"
   		});
   		this.sendResponse({ BODY: args.BODY });
+  	}
+  	respondWithNamedBody(args) {
+  		const context = this.mutableCurrentContext();
+  		if (!context) return;
+  		const kind = Scratch.Cast.toString(args.KIND).toLowerCase();
+  		const scope = Scratch.Cast.toString(args.SCOPE).toLowerCase();
+  		const representation = Scratch.Cast.toString(args.REPRESENTATION).toLowerCase();
+  		const maxBytes = Math.trunc(Scratch.Cast.toNumber(args.MAX_BYTES));
+  		if (!NAMED_BODY_KINDS.has(kind) || !NAMED_BODY_SCOPES.has(scope) || !NAMED_BODY_REPRESENTATIONS.has(representation) || !Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+  			context.response.body = {
+  				kind: "unsupported",
+  				reason: "invalid_named_body"
+  			};
+  			this.completeResponse(context);
+  			return;
+  		}
+  		context.response.body = {
+  			kind: "named",
+  			reference: {
+  				namespace: Scratch.Cast.toString(args.NAMESPACE),
+  				name: Scratch.Cast.toString(args.NAME),
+  				kind,
+  				scope
+  			},
+  			representation,
+  			...scope === "target" ? { targetId: Scratch.Cast.toString(args.TARGET_ID) } : {},
+  			maxBytes
+  		};
+  		this.completeResponse(context);
   	}
   	receiveBridgeRequestForTest(request) {
   		this.acceptBridgeRequest(request);
@@ -898,7 +1080,8 @@
   				headers: {},
   				body: { kind: "empty" },
   				completed: false
-  			}
+  			},
+  			handlerVariables: /* @__PURE__ */ new Map()
   		});
   		this.currentRequestContextId = request.id;
   		this.startRequestHat();

@@ -1,0 +1,137 @@
+{
+  "formatVersion": 2,
+  "id": "kubohiroyakvs",
+  "blocks": [
+    {
+      "opcode": "deleteKey",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "KEY",
+          "type": "STRING"
+        },
+        {
+          "id": "NAMESPACE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "storage-write",
+      "immutable": false,
+      "errors": [
+        "KVS_NAMESPACE_INVALID",
+        "KVS_KEY_INVALID",
+        "KVS_STORAGE_FAILURE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "kvs.delete"
+      }
+    },
+    {
+      "opcode": "getValue",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "KEY",
+          "type": "STRING"
+        },
+        {
+          "id": "NAMESPACE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "string",
+      "effect": "storage-read",
+      "immutable": true,
+      "errors": [
+        "KVS_NAMESPACE_INVALID",
+        "KVS_KEY_INVALID",
+        "KVS_STORAGE_FAILURE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "kvs.getText"
+      }
+    },
+    {
+      "opcode": "hasKey",
+      "blockType": "BOOLEAN",
+      "arguments": [
+        {
+          "id": "KEY",
+          "type": "STRING"
+        },
+        {
+          "id": "NAMESPACE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "boolean",
+      "effect": "storage-read",
+      "immutable": true,
+      "errors": [
+        "KVS_NAMESPACE_INVALID",
+        "KVS_KEY_INVALID",
+        "KVS_STORAGE_FAILURE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "kvs.has"
+      }
+    },
+    {
+      "opcode": "listKeys",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAMESPACE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "json",
+      "effect": "storage-read",
+      "immutable": true,
+      "errors": [
+        "KVS_NAMESPACE_INVALID",
+        "KVS_KEY_INVALID",
+        "KVS_STORAGE_FAILURE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "kvs.listKeys"
+      }
+    },
+    {
+      "opcode": "setValue",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "KEY",
+          "type": "STRING"
+        },
+        {
+          "id": "NAMESPACE",
+          "type": "STRING"
+        },
+        {
+          "id": "VALUE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "storage-write",
+      "immutable": false,
+      "errors": [
+        "KVS_NAMESPACE_INVALID",
+        "KVS_KEY_INVALID",
+        "KVS_STORAGE_FAILURE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "kvs.setText"
+      }
+    }
+  ],
+  "menus": []
+}

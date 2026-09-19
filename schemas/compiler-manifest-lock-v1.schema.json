@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kubohiroya/turbowarp-http-server/main/schemas/compiler-manifest-lock-v1.schema.json",
+  "title": "TurboWarp Server Compiler Manifest Lock v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lockVersion", "extensions"],
+  "properties": {
+    "lockVersion": {"const": 1},
+    "extensions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extensionId", "packageName", "packageVersion", "manifestFormatVersion", "integrity", "source"],
+      "properties": {
+        "extensionId": {"type": "string", "pattern": "^[a-z0-9]+$"},
+        "packageName": {"type": "string", "minLength": 1},
+        "packageVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+        },
+        "manifestFormatVersion": {"enum": [1, 2]},
+        "integrity": {"type": "string", "pattern": "^sha256-[A-Za-z0-9+/]{43}=$"},
+        "source": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "id"],
+              "properties": {"kind": {"const": "bundled"}, "id": {"type": "string", "minLength": 1}}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "path"],
+              "properties": {"kind": {"const": "local"}, "path": {"type": "string", "minLength": 1}}
+            }
+          ]
+        }
+      }
+    }
+  }
+}

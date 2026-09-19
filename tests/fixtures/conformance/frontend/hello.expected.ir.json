@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "name": "turbowarp-worker",
+  "auth": {"kind": "none"},
+  "capabilities": [],
+  "routes": [{
+    "id": "stage-get-1",
+    "method": "GET",
+    "path": "/",
+    "auth": "public",
+    "sourceRef": {
+      "targetIndex": 0,
+      "targetName": "Stage",
+      "blockId": "hat",
+      "opcode": "kubohiroyaturbowarphttpserver_whenHttpRequestReceived"
+    },
+    "body": [{
+      "kind": "respond",
+      "format": "text",
+      "sourceRef": {
+        "targetIndex": 0,
+        "targetName": "Stage",
+        "blockId": "respond",
+        "opcode": "kubohiroyaturbowarphttpserver_respondWithText"
+      },
+      "body": {
+        "kind": "literal",
+        "valueType": "string",
+        "value": "Hello",
+        "sourceRef": {
+          "targetIndex": 0,
+          "targetName": "Stage",
+          "blockId": "respond",
+          "opcode": "kubohiroyaturbowarphttpserver_respondWithText"
+        }
+      }
+    }]
+  }]
+}
