@@ -1,7 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-http-server",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.2.0",
   "description": "A TurboWarp extension for connecting block programs to an HTTP bridge server.",
   "author": "Hiroya Kubo <hiroya@cuc.ac.jp>",
   "license": "MPL-2.0",
@@ -54,12 +53,12 @@
     "test:conformance:core": "vitest run tests/conformance/core-runtime.test.ts",
     "test:conformance:target": "vitest run tests/conformance/target.test.ts",
     "test:conformance:target-runtime": "tsx scripts/check-target-runtimes.mts",
-    "examples:check": "node scripts/check-examples.mjs",
-    "docs": "node scripts/generate-readme.mjs",
-    "docs:check": "node scripts/generate-readme.mjs --check",
+    "examples:check": "node scripts/check-examples.ts",
+    "docs": "node scripts/generate-readme.ts",
+    "docs:check": "node scripts/generate-readme.ts --check",
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "start": "node dist/cli.js",
-    "check:dist": "pnpm run build && node scripts/check-dist.mjs",
+    "check:dist": "pnpm run build && node scripts/check-dist.ts",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run examples:check && pnpm run docs:check && pnpm run check:dist && pnpm run pack:check"
   },
   "dependencies": {
@@ -74,7 +73,7 @@
     "@cloudflare/workers-types": "^5.20260919.1",
     "@eslint/js": "^9.39.5",
     "@kubohiroya/turbowarp-named-data": "0.2.0",
-    "@kubohiroya/vite-plugin-turbowarp-extension": "0.1.1",
+    "@kubohiroya/vite-plugin-turbowarp-extension": "0.4.0",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",
     "eslint": "^9.39.5",
@@ -85,7 +84,7 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.66.0",
-    "vite": "^7.3.6",
+    "vite": "^8.2.2",
     "vitest": "^4.1.10",
     "wrangler": "4.135.0"
   }

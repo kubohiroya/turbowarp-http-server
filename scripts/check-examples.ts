@@ -1,11 +1,18 @@
 import {spawn} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
+import type {ChildProcess} from 'node:child_process';
+
+interface Example {
+  path: string;
+  port: number;
+  checks: (base: string) => Promise<void>;
+}
 
 const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
 const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0x00]);
 const sb3Bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
 
-const examples = [
+const examples: Example[] = [
   {
     path: 'examples/01-hello-form/server.mjs',
     port: 9101,
@@ -136,7 +143,7 @@ for (const example of examples) {
   }
 }
 
-async function waitForServer(url, child) {
+async function waitForServer(url: string, child: ChildProcess): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt += 1) {
     if (child.exitCode !== null) throw new Error(`server exited early with ${child.exitCode}`);
     try {
@@ -149,7 +156,7 @@ async function waitForServer(url, child) {
   throw new Error(`server did not start: ${url}`);
 }
 
-async function expectStatus(url, status, init) {
+async function expectStatus(url: string, status: number, init?: RequestInit): Promise<Response> {
   const response = await fetch(url, init);
   if (response.status !== status) {
     throw new Error(`${url} expected ${status}, got ${response.status}: ${await response.text()}`);

@@ -7,7 +7,7 @@ const requiredArtifacts = [
   'dist/digest-cli.js',
   'dist/server.js'
 ];
-const missing = [];
+const missing: string[] = [];
 
 for (const artifact of requiredArtifacts) {
   try {
