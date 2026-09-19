@@ -3,6 +3,16 @@
   "id": "kubohiroyaturbowarphttpserver",
   "blocks": [
     {
+      "opcode": "authProfileField",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
       "opcode": "changeHandlerVariable",
       "blockType": "COMMAND",
       "arguments": [
@@ -29,6 +39,26 @@
     {
       "opcode": "connect",
       "blockType": "COMMAND",
+      "arguments": []
+    },
+    {
+      "opcode": "currentAuthProfileJson",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentAuthProvider",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentAuthType",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "currentAuthenticatedUser",
+      "blockType": "REPORTER",
       "arguments": []
     },
     {

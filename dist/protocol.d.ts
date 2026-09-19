@@ -24,6 +24,12 @@ export interface BridgeNamedBody {
     maxBytes: number;
 }
 export type BridgeBody = BridgeTextBody | BridgeEmptyBody | BridgeUnsupportedBody | BridgeNamedBody;
+export interface BridgeAuthContext {
+    type: string;
+    username?: string;
+    provider?: string;
+    profile?: Record<string, unknown>;
+}
 export interface BridgeRequestMessage {
     type: 'request';
     protocol: typeof HTTP_BRIDGE_PROTOCOL;
@@ -38,6 +44,7 @@ export interface BridgeRequestMessage {
     headers: Record<string, string[]>;
     body: BridgeBody;
     clientAddress: string;
+    auth?: BridgeAuthContext;
 }
 export interface BridgeResponseMessage {
     type: 'response';

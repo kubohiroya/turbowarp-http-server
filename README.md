@@ -551,6 +551,52 @@ Returns comma-separated names of request-local handler variables.
 | Type | Reporter |
 | Opcode | `listHandlerVariables` |
 
+### `current auth type`
+
+Returns the current authentication type, such as digest or oauth.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthType` |
+
+### `current authenticated user`
+
+Returns the authenticated username or a stable user-like profile field when available.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthenticatedUser` |
+
+### `current auth provider`
+
+Returns the authentication provider name when available.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthProvider` |
+
+### `current auth profile JSON`
+
+Returns the provider profile object as JSON when available.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `currentAuthProfileJson` |
+
+### `auth profile field [NAME]`
+
+Returns a top-level or dotted field from the provider profile object.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `authProfileField` |
+| `NAME` | String, default: `email` |
+
 ### `current response status`
 
 Returns the response status currently being built.

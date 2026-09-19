@@ -254,6 +254,33 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
     return Array.from(this.currentContext()?.handlerVariables.keys() ?? []).join(',');
   }
 
+  public currentAuthType(): string {
+    return this.currentContext()?.request.auth?.type ?? '';
+  }
+
+  public currentAuthenticatedUser(): string {
+    const auth = this.currentContext()?.request.auth;
+    if (!auth) return '';
+    if (typeof auth.username === 'string') return auth.username;
+    const profile = auth.profile;
+    return firstString(profile?.preferred_username, profile?.email, profile?.name, profile?.sub);
+  }
+
+  public currentAuthProvider(): string {
+    return this.currentContext()?.request.auth?.provider ?? '';
+  }
+
+  public currentAuthProfileJson(): string {
+    const profile = this.currentContext()?.request.auth?.profile;
+    return profile ? JSON.stringify(profile) : '';
+  }
+
+  public authProfileField(args: {NAME: unknown}): string {
+    const profile = this.currentContext()?.request.auth?.profile;
+    const value = readProfileField(profile, Scratch.Cast.toString(args.NAME));
+    return stringifyProfileValue(value);
+  }
+
   public currentResponseStatus(): number {
     return this.currentContext()?.response.status ?? 200;
   }
@@ -492,13 +519,16 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
   }
 
   private acceptBridgeRequest(request: BridgeRequestMessage): void {
+    const normalizedRequest: BridgeRequestMessage = {
+      ...request,
+      headers: normalizeHeaderRecord(request.headers),
+      query: normalizeValueRecord(request.query),
+      pathParams: normalizePathParams(request.pathParams)
+    };
+    const auth = normalizeAuthContext(request.auth);
+    if (auth) normalizedRequest.auth = auth;
     this.requestContexts.set(request.id, {
-      request: {
-        ...request,
-        headers: normalizeHeaderRecord(request.headers),
-        query: normalizeValueRecord(request.query),
-        pathParams: normalizePathParams(request.pathParams)
-      },
+      request: normalizedRequest,
       response: {
         status: 200,
         headers: {},
@@ -664,6 +694,48 @@ function normalizePathParams(values: Record<string, string>): Record<string, str
     normalized[name] = String(value);
   }
   return normalized;
+}
+
+function normalizeAuthContext(auth: BridgeRequestMessage['auth']): BridgeRequestMessage['auth'] {
+  if (typeof auth !== 'object' || auth === null || Array.isArray(auth)) return undefined;
+  const type = typeof auth.type === 'string' ? auth.type : '';
+  if (!type) return undefined;
+  const normalized: NonNullable<BridgeRequestMessage['auth']> = {type};
+  if (typeof auth.username === 'string') normalized.username = auth.username;
+  if (typeof auth.provider === 'string') normalized.provider = auth.provider;
+  if (isPlainRecord(auth.profile)) normalized.profile = normalizeProfile(auth.profile);
+  return normalized;
+}
+
+function normalizeProfile(profile: Record<string, unknown>): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(profile)) as Record<string, unknown>;
+}
+
+function readProfileField(profile: Record<string, unknown> | undefined, path: string): unknown {
+  if (!profile) return undefined;
+  const segments = path.split('.').map((segment) => segment.trim()).filter(Boolean);
+  if (segments.length === 0) return undefined;
+  let value: unknown = profile;
+  for (const segment of segments) {
+    if (!isPlainRecord(value)) return undefined;
+    value = value[segment];
+  }
+  return value;
+}
+
+function stringifyProfileValue(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+}
+
+function firstString(...values: unknown[]): string {
+  return values.find((value): value is string => typeof value === 'string') ?? '';
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function escapeMarkdownLine(value: string): string {

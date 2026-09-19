@@ -201,6 +201,43 @@
       "arguments": {}
     },
     {
+      "opcode": "currentAuthType",
+      "blockType": "REPORTER",
+      "text": "current auth type",
+      "description": "Returns the current authentication type, such as digest or oauth.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentAuthenticatedUser",
+      "blockType": "REPORTER",
+      "text": "current authenticated user",
+      "description": "Returns the authenticated username or a stable user-like profile field when available.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentAuthProvider",
+      "blockType": "REPORTER",
+      "text": "current auth provider",
+      "description": "Returns the authentication provider name when available.",
+      "arguments": {}
+    },
+    {
+      "opcode": "currentAuthProfileJson",
+      "blockType": "REPORTER",
+      "text": "current auth profile JSON",
+      "description": "Returns the provider profile object as JSON when available.",
+      "arguments": {}
+    },
+    {
+      "opcode": "authProfileField",
+      "blockType": "REPORTER",
+      "text": "auth profile field [NAME]",
+      "description": "Returns a top-level or dotted field from the provider profile object.",
+      "arguments": {
+        "NAME": {"type": "STRING", "defaultValue": "email"}
+      }
+    },
+    {
       "opcode": "currentResponseStatus",
       "blockType": "REPORTER",
       "text": "current response status",
