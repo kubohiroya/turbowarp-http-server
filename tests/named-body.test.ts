@@ -252,7 +252,7 @@ describe('named response body', () => {
     );
 
     expect(response.headers.get('content-length')).toBeNull();
-    await expect(response.arrayBuffer()).rejects.toMatchObject({code: 'NAMED_DATA_INVALID_METADATA'});
+    await expect(response.arrayBuffer()).rejects.toMatchObject({code: 'NAMED_RESPONSE_INVALID_METADATA'});
     expect(provider.releases).toEqual(['error']);
   });
 

@@ -1,10 +1,10 @@
 import { NAMED_DATA_ERROR_CODES } from '@kubohiroya/turbowarp-named-data/composition';
+import { isNamedDataNamespace } from './named-data-namespace.js';
 export { NAMED_DATA_ERROR_CODES };
 export const DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS = Object.freeze({
     namedResponseBody: false
 });
 const DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024;
-const NAMED_NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
 const TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const REPRESENTATIONS = ['json', 'yaml', 'html', 'markdown', 'raw'];
 const KINDS = ['structured', 'document', 'binary', 'asset'];
@@ -109,7 +109,7 @@ export async function createNamedBodyResponse(resolver, request, options = {}) {
         const metadataError = validateMetadata(metadata, request, maxBodyBytes);
         if (metadataError)
             return withoutResponseBody(metadataError);
-        return new Response(null, { status, headers: responseHeaders(options.headers, metadata) });
+        return new Response(null, { status, headers: responseHeaders(options.headers, metadata, true) });
     }
     if (isBodyForbidden(status))
         return new Response(null, { status, headers: new Headers(options.headers) });
@@ -136,7 +136,6 @@ export async function createNamedBodyResponse(resolver, request, options = {}) {
     if (metadataError) {
         return (await releaseErrorResponse(release, 'error')) ?? metadataError;
     }
-    const headers = responseHeaders(options.headers, handle.metadata);
     if (handle.body instanceof Uint8Array) {
         if (handle.body.byteLength > maxBodyBytes) {
             return (await releaseErrorResponse(release, 'error')) ?? errorResponse('NAMED_DATA_BODY_TOO_LARGE', 413);
@@ -144,6 +143,7 @@ export async function createNamedBodyResponse(resolver, request, options = {}) {
         if (handle.metadata.byteLength !== undefined && handle.metadata.byteLength !== handle.body.byteLength) {
             return (await releaseErrorResponse(release, 'error')) ?? errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
         }
+        const headers = responseHeaders(options.headers, handle.metadata, false);
         headers.set('Content-Length', String(handle.body.byteLength));
         const bytes = handle.body.slice();
         const releaseError = await releaseErrorResponse(release, 'complete');
@@ -151,6 +151,9 @@ export async function createNamedBodyResponse(resolver, request, options = {}) {
             return releaseError;
         return new Response(toArrayBuffer(bytes), { status, headers });
     }
+    // Do not promise Content-Length before an untrusted stream has completed.
+    // A mismatch discovered after headers are committed terminates the stream.
+    const headers = responseHeaders(options.headers, handle.metadata, false);
     const body = managedBodyStream(handle.body, signal, maxBodyBytes, handle.metadata.byteLength, release);
     return new Response(body, { status, headers });
 }
@@ -267,7 +270,7 @@ function isValidRequest(request) {
     const reference = request.reference;
     if (typeof reference !== 'object' ||
         reference === null ||
-        !NAMED_NAMESPACE.test(reference.namespace) ||
+        !isNamedDataNamespace(reference.namespace) ||
         typeof reference.name !== 'string' ||
         reference.name.length < 1 ||
         reference.name.length > 256 ||
@@ -302,12 +305,13 @@ function isMediaTypeForRepresentation(mediaType, representation) {
         return essence === 'text/html';
     return essence === 'text/markdown' || essence === 'text/x-markdown';
 }
-function responseHeaders(existing, metadata) {
+function responseHeaders(existing, metadata, includeByteLength) {
     const headers = new Headers(existing);
     headers.delete('Content-Length');
     headers.set('Content-Type', metadata.mediaType);
-    if (metadata.byteLength !== undefined)
+    if (includeByteLength && metadata.byteLength !== undefined) {
         headers.set('Content-Length', String(metadata.byteLength));
+    }
     const identity = metadata.etag ?? metadata.revision;
     if (identity)
         headers.set('ETag', quoteEtag(identity));
