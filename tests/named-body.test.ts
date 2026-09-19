@@ -312,7 +312,7 @@ describe('named response body', () => {
   });
 
   it('cancels a stream as soon as it exceeds its declared length', async () => {
-    const cancel = vi.fn();
+    const cancel = vi.fn().mockRejectedValue(new Error('private cancel detail'));
     const provider = new FakeNamedBodyProvider();
     provider.seed(
       'stream',
@@ -337,6 +337,27 @@ describe('named response body', () => {
     });
     expect(cancel).toHaveBeenCalledWith('named_body_length_mismatch');
     expect(provider.releases).toEqual(['error']);
+  });
+
+  it('releases a stream when source cancellation fails', async () => {
+    const provider = new FakeNamedBodyProvider();
+    provider.seed(
+      'stream',
+      'raw',
+      {mediaType: 'application/octet-stream'},
+      new ReadableStream<Uint8Array>({
+        cancel: () => Promise.reject(new Error('private cancel detail'))
+      })
+    );
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('stream', 'raw'),
+      {featureFlags: enabled}
+    );
+
+    await expect(response.body?.cancel('client_closed')).resolves.toBeUndefined();
+    expect(provider.releases).toEqual(['cancel']);
   });
 
   it('keeps an opened stream snapshot isolated from same-name replacement', async () => {
