@@ -481,6 +481,76 @@ Returns the current request client address when available.
 | Type | Reporter |
 | Opcode | `currentRequestClientAddress` |
 
+### `set handler variable [NAME] to [VALUE]`
+
+Sets a request-local variable that is discarded when the current HTTP response completes.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `setHandlerVariable` |
+| `NAME` | String, default: `value` |
+| `VALUE` | String, default: `0` |
+
+### `change handler variable [NAME] by [AMOUNT]`
+
+Changes a request-local numeric variable using Scratch number conversion rules.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `changeHandlerVariable` |
+| `NAME` | String, default: `value` |
+| `AMOUNT` | Number, default: `1` |
+
+### `handler variable [NAME]`
+
+Returns a request-local handler variable, or an empty string when it does not exist.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `handlerVariable` |
+| `NAME` | String, default: `value` |
+
+### `handler variable [NAME] exists?`
+
+Reports whether a request-local handler variable exists.
+
+| Property | Value |
+|---|---|
+| Type | Boolean |
+| Opcode | `handlerVariableExists` |
+| `NAME` | String, default: `value` |
+
+### `delete handler variable [NAME]`
+
+Deletes a request-local handler variable.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `deleteHandlerVariable` |
+| `NAME` | String, default: `value` |
+
+### `delete all handler variables`
+
+Deletes all request-local handler variables for the current HTTP handler.
+
+| Property | Value |
+|---|---|
+| Type | Command |
+| Opcode | `clearHandlerVariables` |
+
+### `active handler variables`
+
+Returns comma-separated names of request-local handler variables.
+
+| Property | Value |
+|---|---|
+| Type | Reporter |
+| Opcode | `listHandlerVariables` |
+
 ### `current response status`
 
 Returns the response status currently being built.

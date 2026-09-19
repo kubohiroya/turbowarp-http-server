@@ -100,6 +100,7 @@ interface ResponseBuilder {
 interface RequestContext {
   request: BridgeRequestMessage;
   response: ResponseBuilder;
+  handlerVariables: Map<string, string | number>;
 }
 
 export class TurboWarpHttpServerExtension implements TurboWarpExtension {
@@ -214,6 +215,40 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
 
   public currentRequestClientAddress(): string {
     return this.currentContext()?.request.clientAddress ?? '';
+  }
+
+  public setHandlerVariable(args: {NAME: unknown; VALUE: unknown}): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    context.handlerVariables.set(Scratch.Cast.toString(args.NAME), Scratch.Cast.toString(args.VALUE));
+  }
+
+  public changeHandlerVariable(args: {NAME: unknown; AMOUNT: unknown}): void {
+    const context = this.mutableCurrentContext();
+    if (!context) return;
+    const name = Scratch.Cast.toString(args.NAME);
+    const current = Scratch.Cast.toNumber(context.handlerVariables.get(name) ?? '');
+    context.handlerVariables.set(name, current + Scratch.Cast.toNumber(args.AMOUNT));
+  }
+
+  public handlerVariable(args: {NAME: unknown}): string | number {
+    return this.currentContext()?.handlerVariables.get(Scratch.Cast.toString(args.NAME)) ?? '';
+  }
+
+  public handlerVariableExists(args: {NAME: unknown}): boolean {
+    return this.currentContext()?.handlerVariables.has(Scratch.Cast.toString(args.NAME)) ?? false;
+  }
+
+  public deleteHandlerVariable(args: {NAME: unknown}): void {
+    this.mutableCurrentContext()?.handlerVariables.delete(Scratch.Cast.toString(args.NAME));
+  }
+
+  public clearHandlerVariables(): void {
+    this.mutableCurrentContext()?.handlerVariables.clear();
+  }
+
+  public listHandlerVariables(): string {
+    return Array.from(this.currentContext()?.handlerVariables.keys() ?? []).join(',');
   }
 
   public currentResponseStatus(): number {
@@ -425,7 +460,8 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
         headers: {},
         body: {kind: 'empty'},
         completed: false
-      }
+      },
+      handlerVariables: new Map()
     });
     this.currentRequestContextId = request.id;
     this.startRequestHat();

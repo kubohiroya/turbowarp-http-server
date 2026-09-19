@@ -92,6 +92,13 @@ describe('TurboWarpHttpServerExtension', () => {
       'currentRequestBody',
       'currentRequestContentType',
       'currentRequestClientAddress',
+      'setHandlerVariable',
+      'changeHandlerVariable',
+      'handlerVariable',
+      'handlerVariableExists',
+      'deleteHandlerVariable',
+      'clearHandlerVariables',
+      'listHandlerVariables',
       'currentResponseStatus',
       'setHttpStatus',
       'setResponseHeader',
@@ -238,10 +245,24 @@ describe('TurboWarpHttpServerExtension', () => {
     extension.useHttpRequest({ID: 'req-a'});
     expect(extension.pathParameter({NAME: 'id'})).toBe('a');
     extension.setHttpStatus({STATUS: 202});
+    extension.setHandlerVariable({NAME: 'count', VALUE: '2'});
+    extension.changeHandlerVariable({NAME: 'count', AMOUNT: 3});
+    expect(extension.handlerVariable({NAME: 'count'})).toBe(5);
+    expect(extension.handlerVariableExists({NAME: 'count'})).toBe(true);
+    expect(extension.listHandlerVariables()).toBe('count');
 
     extension.useHttpRequest({ID: 'req-b'});
     expect(extension.currentResponseStatus()).toBe(200);
     expect(extension.pathParameter({NAME: 'id'})).toBe('b');
+    expect(extension.handlerVariable({NAME: 'count'})).toBe('');
+    expect(extension.handlerVariableExists({NAME: 'count'})).toBe(false);
+
+    extension.useHttpRequest({ID: 'req-a'});
+    extension.deleteHandlerVariable({NAME: 'count'});
+    expect(extension.handlerVariableExists({NAME: 'count'})).toBe(false);
+    extension.setHandlerVariable({NAME: 'one', VALUE: '1'});
+    extension.clearHandlerVariables();
+    expect(extension.listHandlerVariables()).toBe('');
   });
 
   it('sets convenience response content types', () => {

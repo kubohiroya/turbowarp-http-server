@@ -3,6 +3,25 @@
   "id": "kubohiroyaturbowarphttpserver",
   "blocks": [
     {
+      "opcode": "changeHandlerVariable",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "AMOUNT",
+          "type": "NUMBER"
+        },
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "clearHandlerVariables",
+      "blockType": "COMMAND",
+      "arguments": []
+    },
+    {
       "opcode": "clearHttpLogs",
       "blockType": "COMMAND",
       "arguments": []
@@ -53,9 +72,39 @@
       "arguments": []
     },
     {
+      "opcode": "deleteHandlerVariable",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
       "opcode": "disconnect",
       "blockType": "COMMAND",
       "arguments": []
+    },
+    {
+      "opcode": "handlerVariable",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "handlerVariableExists",
+      "blockType": "BOOLEAN",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ]
     },
     {
       "opcode": "htmlAppendChild",
@@ -121,6 +170,11 @@
     },
     {
       "opcode": "lastMessage",
+      "blockType": "REPORTER",
+      "arguments": []
+    },
+    {
+      "opcode": "listHandlerVariables",
       "blockType": "REPORTER",
       "arguments": []
     },
@@ -343,6 +397,20 @@
       "arguments": [
         {
           "id": "MESSAGE",
+          "type": "STRING"
+        }
+      ]
+    },
+    {
+      "opcode": "setHandlerVariable",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "VALUE",
           "type": "STRING"
         }
       ]
