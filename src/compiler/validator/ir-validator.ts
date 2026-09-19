@@ -25,6 +25,7 @@ interface ValidationContext {
   capabilities: ReadonlySet<string>;
   policy: Readonly<ServerSubsetPolicy>;
   loopDepth: number;
+  iterationLoopIds: ReadonlySet<string>;
 }
 
 interface FlowResult {
@@ -45,12 +46,20 @@ export function validateDeployIrV2Subset(
       diagnostics,
       capabilities,
       policy,
-      loopDepth: 0
+      loopDepth: 0,
+      iterationLoopIds: new Set()
     };
     requireCapability({kind: 'auth', scheme: ir.auth.scheme}, context, ir.routes[0].sourceRef);
   }
   for (const route of ir.routes) {
-    const context: ValidationContext = {route, diagnostics, capabilities, policy, loopDepth: 0};
+    const context: ValidationContext = {
+      route,
+      diagnostics,
+      capabilities,
+      policy,
+      loopDepth: 0,
+      iterationLoopIds: new Set()
+    };
     const flow = analyzeSequence(route.body, new Map(), context);
     if (flow.mayContinue || !flow.mayTerminate) {
       report(
@@ -186,17 +195,36 @@ function analyzeStatement(
         ? {mayContinue: true, mayTerminate: false, bindings: cloneBindings(bindings)}
         : analyzeSequence(statement.else, cloneBindings(bindings), context);
     return mergeBranchFlows(bindings, thenFlow, elseFlow, context, statement.sourceRef);
-  } else if (statement.kind === 'bounded-loop') {
+  } else if (statement.kind === 'bounded-loop' || statement.kind === 'json-for-each') {
     const nextDepth = context.loopDepth + 1;
+    if (statement.kind === 'json-for-each') {
+      requireJsonValue(
+        validateExpression(statement.root, bindings, context),
+        context,
+        statement.root.sourceRef ?? statement.sourceRef,
+        'Structured Data for-each root'
+      );
+      if (context.iterationLoopIds.has(statement.loopId)) {
+        report(
+          context,
+          'TW2_BINDING_DUPLICATE',
+          `Iteration loop ID ${statement.loopId} is already active.`,
+          'Nested Structured Data loops require distinct lexical IDs.',
+          'Generate a unique loop ID from the source block.',
+          statement.sourceRef
+        );
+      }
+    }
+    const minimum = statement.kind === 'json-for-each' ? 1 : 0;
     if (
       !Number.isSafeInteger(statement.maxIterations) ||
-      statement.maxIterations < 0 ||
+      statement.maxIterations < minimum ||
       statement.maxIterations > context.policy.maxLoopIterations
     ) {
       report(
         context,
         'TW2_LOOP_BOUND_INVALID',
-        `Loop maxIterations must be an integer from 0 to ${context.policy.maxLoopIterations}.`,
+        `Loop maxIterations must be an integer from ${minimum} to ${context.policy.maxLoopIterations}.`,
         'Server loops require a statically proven finite bound.',
         'Use a literal bound within the supported range.',
         statement.sourceRef
@@ -212,7 +240,15 @@ function analyzeStatement(
         statement.sourceRef
       );
     }
-    analyzeSequence(statement.body, cloneBindings(bindings), {...context, loopDepth: nextDepth});
+    const iterationLoopIds =
+      statement.kind === 'json-for-each'
+        ? new Set([...context.iterationLoopIds, statement.loopId])
+        : context.iterationLoopIds;
+    analyzeSequence(statement.body, cloneBindings(bindings), {
+      ...context,
+      loopDepth: nextDepth,
+      iterationLoopIds
+    });
   } else if (statement.kind === 'respond') {
     validateExpression(statement.body, bindings, context);
     if (context.loopDepth > 0) {
@@ -259,6 +295,76 @@ function validateExpression(
       expression.sourceRef,
       'Handler variable names'
     );
+  }
+  if (expression.kind === 'json-text-coerce') {
+    requireValueType(
+      validateExpression(expression.input, bindings, context),
+      'string',
+      context,
+      expression.sourceRef,
+      'json-text coercion input'
+    );
+  }
+  if (expression.kind === 'json-parse' || expression.kind === 'json-is-valid') {
+    requireValueType(
+      validateExpression(expression.text, bindings, context),
+      'json-text',
+      context,
+      expression.sourceRef,
+      'Structured Data JSON text input'
+    );
+  }
+  if (expression.kind === 'json-stringify') {
+    requireJsonValue(
+      validateExpression(expression.value, bindings, context),
+      context,
+      expression.sourceRef,
+      'Structured Data serialization input'
+    );
+  }
+  if (
+    expression.kind === 'json-get' ||
+    expression.kind === 'json-has' ||
+    expression.kind === 'json-delete' ||
+    expression.kind === 'json-keys' ||
+    expression.kind === 'json-length'
+  ) {
+    requireJsonValue(
+      validateExpression(expression.root, bindings, context),
+      context,
+      expression.sourceRef,
+      'Structured Data root'
+    );
+  }
+  if (expression.kind === 'json-set') {
+    requireJsonValue(
+      validateExpression(expression.root, bindings, context),
+      context,
+      expression.sourceRef,
+      'Structured Data root'
+    );
+    requireJsonValue(
+      validateExpression(expression.value, bindings, context),
+      context,
+      expression.sourceRef,
+      'Structured Data replacement'
+    );
+  }
+  if (
+    expression.kind === 'iteration-key' ||
+    expression.kind === 'iteration-index' ||
+    expression.kind === 'iteration-value'
+  ) {
+    if (!context.iterationLoopIds.has(expression.loopId)) {
+      report(
+        context,
+        'TW2_ITERATION_CONTEXT_REQUIRED',
+        `Iteration reporter references inactive loop ${expression.loopId}.`,
+        'Iteration reporters are valid only inside the lexical body of their Structured Data loop.',
+        'Bind the reporter to the nearest enclosing json-for-each loop.',
+        expression.sourceRef
+      );
+    }
   }
   if (expression.kind === 'binding') {
     const declared = bindings.get(expression.binding);
@@ -386,6 +492,42 @@ function requireScratchScalar(
   );
 }
 
+function requireValueType(
+  actual: ValueTypeV2,
+  expected: ValueTypeV2,
+  context: ValidationContext,
+  sourceRef: SourceRefV2 | undefined,
+  subject: string
+): void {
+  if (sameValueType(actual, expected)) return;
+  report(
+    context,
+    'TW2_BINDING_TYPE_MISMATCH',
+    `${subject} has an incompatible value type.`,
+    'IR v2 keeps json-text and typed JSON values as distinct nominal boundaries.',
+    'Insert the required parse, serialize, or json-text coercion node.',
+    sourceRef
+  );
+}
+
+function requireJsonValue(
+  actual: ValueTypeV2,
+  context: ValidationContext,
+  sourceRef: SourceRefV2 | undefined,
+  subject: string
+): void {
+  const allowed = new Set(['null', 'boolean', 'number', 'string', 'json-array', 'json-object']);
+  if (valueTypeMembers(actual).every((member) => allowed.has(member))) return;
+  report(
+    context,
+    'TW2_BINDING_TYPE_MISMATCH',
+    `${subject} must be a typed JSON value.`,
+    'json-text and binary references cannot be used as parsed JSON values.',
+    'Parse json-text before using the value in a Structured Data operation.',
+    sourceRef
+  );
+}
+
 function sequenceWork(statements: readonly StatementIrV2[], limit: number): number {
   let total = 0;
   for (const statement of statements) {
@@ -399,8 +541,13 @@ function statementWork(statement: StatementIrV2, limit: number): number {
     const branches = Math.max(sequenceWork(statement.then, limit), sequenceWork(statement.else ?? [], limit));
     return saturatedAdd(saturatedAdd(1, expressionWork(statement.condition, limit), limit), branches, limit);
   }
-  if (statement.kind === 'bounded-loop') {
-    return saturatedAdd(1, saturatedMultiply(statement.maxIterations, sequenceWork(statement.body, limit), limit), limit);
+  if (statement.kind === 'bounded-loop' || statement.kind === 'json-for-each') {
+    const rootWork = statement.kind === 'json-for-each' ? expressionWork(statement.root, limit) : 0;
+    return saturatedAdd(
+      saturatedAdd(1, rootWork, limit),
+      saturatedMultiply(statement.maxIterations, sequenceWork(statement.body, limit), limit),
+      limit
+    );
   }
   let work = 1;
   if (statement.kind === 'set-header') work = saturatedAdd(work, expressionWork(statement.value, limit), limit);
@@ -427,6 +574,31 @@ function expressionWork(expression: ExpressionIrV2, limit: number): number {
   }
   if (expression.kind === 'handler-variable' || expression.kind === 'handler-variable-exists') {
     return saturatedAdd(1, expressionWork(expression.name, limit), limit);
+  }
+  if (expression.kind === 'json-text-coerce') {
+    return saturatedAdd(1, expressionWork(expression.input, limit), limit);
+  }
+  if (expression.kind === 'json-parse' || expression.kind === 'json-is-valid') {
+    return saturatedAdd(1, expressionWork(expression.text, limit), limit);
+  }
+  if (expression.kind === 'json-stringify') {
+    return saturatedAdd(1, expressionWork(expression.value, limit), limit);
+  }
+  if (
+    expression.kind === 'json-get' ||
+    expression.kind === 'json-has' ||
+    expression.kind === 'json-delete' ||
+    expression.kind === 'json-keys' ||
+    expression.kind === 'json-length'
+  ) {
+    return saturatedAdd(1, expressionWork(expression.root, limit), limit);
+  }
+  if (expression.kind === 'json-set') {
+    return saturatedAdd(
+      saturatedAdd(1, expressionWork(expression.root, limit), limit),
+      expressionWork(expression.value, limit),
+      limit
+    );
   }
   return 1;
 }

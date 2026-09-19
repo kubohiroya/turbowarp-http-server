@@ -1,6 +1,7 @@
 import {parseJsonWithoutDuplicateKeys} from './strict-json.js';
 import {
   DEPLOY_IR_V2_VERSION,
+  JSON_VALUE_TYPE_V2,
   type AtomicValueTypeV2,
   type AuthPolicyV2,
   type BinaryRefDescriptorV2,
@@ -11,6 +12,7 @@ import {
   type ExpressionIrV2,
   type HttpMethodV2,
   type JsonValue,
+  type PathSegmentV2,
   type RouteIrV2,
   type SourceRefV2,
   type StatementIrV2,
@@ -23,6 +25,7 @@ const ATOMIC_TYPES = new Set<AtomicValueTypeV2>([
   'boolean',
   'number',
   'string',
+  'json-text',
   'json-array',
   'json-object',
   'binary-ref'
@@ -33,6 +36,7 @@ const ATOMIC_TYPE_ORDER: readonly AtomicValueTypeV2[] = [
   'boolean',
   'number',
   'string',
+  'json-text',
   'json-array',
   'json-object',
   'binary-ref'
@@ -256,6 +260,25 @@ function parseStatement(value: unknown, location: string): StatementIrV2 {
       sourceRef
     );
   }
+  if (kind === 'json-for-each') {
+    exactKeys(statement, ['kind', 'loopId', 'root', 'path', 'maxIterations', 'body', 'sourceRef'], location);
+    const maxIterations = integer(statement.maxIterations, `${location}.maxIterations`);
+    if (maxIterations < 1 || maxIterations > 1000) {
+      throw new Error(`${location}.maxIterations must be from 1 to 1000.`);
+    }
+    return optional(
+      {
+        kind,
+        loopId: bindingId(statement.loopId, `${location}.loopId`),
+        root: parseExpression(statement.root, `${location}.root`),
+        path: parsePath(statement.path, `${location}.path`),
+        maxIterations,
+        body: parseStatements(statement.body, `${location}.body`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
   if (kind === 'respond') {
     exactKeys(statement, ['kind', 'format', 'body', 'sourceRef'], location);
     const format = statement.format;
@@ -362,6 +385,96 @@ function parseExpression(value: unknown, location: string): ExpressionIrV2 {
       sourceRef
     );
   }
+  if (kind === 'json-text-coerce') {
+    exactKeys(expression, ['kind', 'valueType', 'input', 'sourceRef'], location);
+    requireValueType(expression.valueType, 'json-text', `${location}.valueType`);
+    return optional(
+      {kind, valueType: 'json-text', input: parseExpression(expression.input, `${location}.input`)},
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'json-parse') {
+    exactKeys(expression, ['kind', 'valueType', 'text', 'sourceRef'], location);
+    requireJsonValueType(expression.valueType, `${location}.valueType`);
+    return optional(
+      {kind, valueType: JSON_VALUE_TYPE_V2, text: parseExpression(expression.text, `${location}.text`)},
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'json-stringify') {
+    exactKeys(expression, ['kind', 'valueType', 'value', 'sourceRef'], location);
+    requireValueType(expression.valueType, 'json-text', `${location}.valueType`);
+    return optional(
+      {kind, valueType: 'json-text', value: parseExpression(expression.value, `${location}.value`)},
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'json-is-valid') {
+    exactKeys(expression, ['kind', 'valueType', 'text', 'sourceRef'], location);
+    requireValueType(expression.valueType, 'boolean', `${location}.valueType`);
+    return optional(
+      {kind, valueType: 'boolean', text: parseExpression(expression.text, `${location}.text`)},
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (
+    kind === 'json-get' ||
+    kind === 'json-has' ||
+    kind === 'json-delete' ||
+    kind === 'json-keys' ||
+    kind === 'json-length'
+  ) {
+    exactKeys(expression, ['kind', 'valueType', 'root', 'path', 'sourceRef'], location);
+    const root = parseExpression(expression.root, `${location}.root`);
+    const path = parsePath(expression.path, `${location}.path`);
+    if (kind === 'json-get' || kind === 'json-delete') {
+      requireJsonValueType(expression.valueType, `${location}.valueType`);
+      return optional({kind, valueType: JSON_VALUE_TYPE_V2, root, path}, 'sourceRef', sourceRef);
+    }
+    if (kind === 'json-has') {
+      requireValueType(expression.valueType, 'boolean', `${location}.valueType`);
+      return optional({kind, valueType: 'boolean', root, path}, 'sourceRef', sourceRef);
+    }
+    if (kind === 'json-keys') {
+      requireValueType(expression.valueType, 'json-array', `${location}.valueType`);
+      return optional({kind, valueType: 'json-array', root, path}, 'sourceRef', sourceRef);
+    }
+    requireValueType(expression.valueType, 'number', `${location}.valueType`);
+    return optional({kind, valueType: 'number', root, path}, 'sourceRef', sourceRef);
+  }
+  if (kind === 'json-set') {
+    exactKeys(expression, ['kind', 'valueType', 'root', 'path', 'value', 'sourceRef'], location);
+    requireJsonValueType(expression.valueType, `${location}.valueType`);
+    return optional(
+      {
+        kind,
+        valueType: JSON_VALUE_TYPE_V2,
+        root: parseExpression(expression.root, `${location}.root`),
+        path: parsePath(expression.path, `${location}.path`),
+        value: parseExpression(expression.value, `${location}.value`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'iteration-key' || kind === 'iteration-index' || kind === 'iteration-value') {
+    exactKeys(expression, ['kind', 'valueType', 'loopId', 'sourceRef'], location);
+    const loopId = bindingId(expression.loopId, `${location}.loopId`);
+    if (kind === 'iteration-key') {
+      requireValueType(expression.valueType, 'string', `${location}.valueType`);
+      return optional({kind, valueType: 'string', loopId}, 'sourceRef', sourceRef);
+    }
+    if (kind === 'iteration-index') {
+      requireValueType(expression.valueType, 'number', `${location}.valueType`);
+      return optional({kind, valueType: 'number', loopId}, 'sourceRef', sourceRef);
+    }
+    requireJsonValueType(expression.valueType, `${location}.valueType`);
+    return optional({kind, valueType: JSON_VALUE_TYPE_V2, loopId}, 'sourceRef', sourceRef);
+  }
   throw new Error(`${location}.kind is unsupported: ${kind}`);
 }
 
@@ -401,6 +514,35 @@ function parseValueType(value: unknown, location: string): ValueTypeV2 {
     kind: 'union',
     members: members.sort((left, right) => ATOMIC_TYPE_ORDER.indexOf(left) - ATOMIC_TYPE_ORDER.indexOf(right))
   };
+}
+
+function requireValueType(value: unknown, expected: AtomicValueTypeV2, location: string): void {
+  if (value !== expected) throw new Error(`${location} must be ${expected}.`);
+}
+
+function requireJsonValueType(value: unknown, location: string): void {
+  const parsed = parseValueType(value, location);
+  if (JSON.stringify(parsed) !== JSON.stringify(JSON_VALUE_TYPE_V2)) {
+    throw new Error(`${location} must be the canonical JSON value union.`);
+  }
+}
+
+function parsePath(value: unknown, location: string): PathSegmentV2[] {
+  return array(value, location).map((item, index) => {
+    const segmentLocation = `${location}[${index}]`;
+    const segment = object(item, segmentLocation);
+    exactKeys(segment, ['kind', 'value'], segmentLocation);
+    if (segment.kind === 'key') {
+      if (typeof segment.value !== 'string') throw new Error(`${segmentLocation}.value must be a string.`);
+      return {kind: 'key', value: segment.value};
+    }
+    if (segment.kind === 'index') {
+      const indexValue = integer(segment.value, `${segmentLocation}.value`);
+      if (indexValue < 0) throw new Error(`${segmentLocation}.value must not be negative.`);
+      return {kind: 'index', value: indexValue};
+    }
+    throw new Error(`${segmentLocation}.kind is unsupported: ${String(segment.kind)}`);
+  });
 }
 
 function normalizeCapabilities(capabilities: CapabilityRequirementV2[]): CapabilityRequirementV2[] {
@@ -464,6 +606,10 @@ function parseBinaryRef(value: unknown, location: string): BinaryRefDescriptorV2
 
 function assertLiteralType(type: Exclude<AtomicValueTypeV2, 'binary-ref'>, value: JsonValue, location: string): void {
   const actual = value === null ? 'null' : Array.isArray(value) ? 'json-array' : typeof value === 'object' ? 'json-object' : typeof value;
+  if (type === 'json-text') {
+    if (actual !== 'string') throw new Error(`${location}.value must be a JSON text string.`);
+    return;
+  }
   if (type !== actual) throw new Error(`${location}.valueType ${type} does not match ${actual}.`);
 }
 

@@ -8,6 +8,8 @@ Deploy IR v2は、TurboWarpのHTTP handlerをplatform-neutralな型付き表現�
 
 許可block、binding scope、bounded control flow、response、work budgetの規則は[Server-executable subset](server-executable-subset.ja.md)を参照してください。
 
+Structured Data blockの変換規則は[Structured Data lowering](structured-data-lowering.ja.md)を参照してください。
+
 ## Versionと有効化
 
 - rootの`version`は整数`2`です。
@@ -24,11 +26,12 @@ IR JSONへ格納できるatomic value typeは次のとおりです。
 - `boolean`
 - `number`
 - `string`
+- `json-text`
 - `json-array`
 - `json-object`
 - `binary-ref`
 
-`number`は有限IEEE-754 binary64とし、`NaN`と±`Infinity`を拒否します。`-0`は`0`へ正規化します。`json-array`と`json-object`は再帰的なJSON値で、resourceを内包できません。
+`number`は有限IEEE-754 binary64とし、`NaN`と±`Infinity`を拒否します。`-0`は`0`へ正規化します。`json-text`は有効なapplication JSONを表すnominal string境界で、通常の`string`やparse済みJSON値とは暗黙に混同しません。`json-array`と`json-object`は再帰的なJSON値で、resourceを内包できません。
 
 `binary-ref`はbyte列ではなく、`namespace`と`key`、任意の`mediaType`、`byteLength`、SHA-256 digestを持つ論理descriptorです。`base64`、`bytes`、data URL等のinline payload fieldは許可しません。
 
@@ -42,13 +45,13 @@ union typeは次の形式です。
 
 ## Expressionとstatement
 
-すべてのexpressionは`valueType`を持ちます。v2で定義済みのexpressionはliteral、request、request-value、concat、handler-variable、handler-variable-exists、handler-variable-names、bindingです。
+すべてのexpressionは`valueType`を持ちます。v2で定義済みのexpressionはliteral、request、request-value、concat、handler-variable、handler-variable-exists、handler-variable-names、bindingに加え、明示的なJSON parse／serialize、path操作、iteration reporterです。
 
-statementはHTTP response操作、handler-variable操作、論理record store操作、typed `if`、bounded-loop、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
+statementはHTTP response操作、handler-variable操作、論理record store操作、typed `if`、bounded-loop、`json-for-each`、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
 
 statementのeffectは入力側が自由に申告するfieldにはせず、statement kindから`IR_V2_STATEMENT_EFFECTS`で決定的に導出します。分類は`response-write`、`handler-state-write`、`record-read`、`record-write`、`control`です。これにより入力がeffectを過少申告してvalidatorを迂回することを防ぎます。
 
-JSON pathは`PathSegmentV2`とschemaの`pathSegment`で、string keyと非負整数indexを別のvariantとして定義します。具体的なstructured-data expressionへの組込みは後続のlowering Issueで行います。
+JSON pathは`PathSegmentV2`とschemaの`pathSegment`で、string keyと非負整数indexを別のvariantとして定義します。`json-for-each`はlexical `loopId`を作り、そのbody内だけでiteration key／index／value reporterから参照できます。
 
 `sourceRef`はtarget index/name、block ID、opcode、任意のinput名を保持します。diagnostic用であり、生成コードの意味には影響しません。v1 upgraderでは元情報がないため省略できます。
 

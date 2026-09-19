@@ -8,7 +8,20 @@ export const IR_V2_EXPRESSION_KINDS = [
   'handler-variable',
   'handler-variable-exists',
   'handler-variable-names',
-  'binding'
+  'binding',
+  'json-text-coerce',
+  'json-parse',
+  'json-stringify',
+  'json-is-valid',
+  'json-get',
+  'json-has',
+  'json-set',
+  'json-delete',
+  'json-keys',
+  'json-length',
+  'iteration-key',
+  'iteration-index',
+  'iteration-value'
 ] as const;
 
 export const IR_V2_STATEMENT_KINDS = [
@@ -25,6 +38,7 @@ export const IR_V2_STATEMENT_KINDS = [
   'record-delete',
   'if',
   'bounded-loop',
+  'json-for-each',
   'respond'
 ] as const;
 
@@ -49,6 +63,7 @@ export const IR_V2_STATEMENT_EFFECTS = {
   'record-delete': ['record-write'],
   if: ['control'],
   'bounded-loop': ['control'],
+  'json-for-each': ['control'],
   respond: ['response-write']
 } as const satisfies Record<(typeof IR_V2_STATEMENT_KINDS)[number], readonly EffectKindV2[]>;
 
@@ -68,6 +83,7 @@ export type AtomicValueTypeV2 =
   | 'boolean'
   | 'number'
   | 'string'
+  | 'json-text'
   | 'json-array'
   | 'json-object'
   | 'binary-ref';
@@ -75,6 +91,16 @@ export type AtomicValueTypeV2 =
 export type ValueTypeV2 =
   | AtomicValueTypeV2
   | {kind: 'union'; members: AtomicValueTypeV2[]};
+
+export type JsonValueTypeV2 = {
+  kind: 'union';
+  members: ['null', 'boolean', 'number', 'string', 'json-array', 'json-object'];
+};
+
+export const JSON_VALUE_TYPE_V2: JsonValueTypeV2 = {
+  kind: 'union',
+  members: ['null', 'boolean', 'number', 'string', 'json-array', 'json-object']
+};
 
 export type ResourceTypeV2 = 'binary-body';
 
@@ -145,7 +171,57 @@ export type ExpressionIrV2 =
       valueType: ValueTypeV2;
       binding: string;
       sourceRef?: SourceRefV2;
-    };
+    }
+  | {kind: 'json-text-coerce'; valueType: 'json-text'; input: ExpressionIrV2; sourceRef?: SourceRefV2}
+  | {kind: 'json-parse'; valueType: JsonValueTypeV2; text: ExpressionIrV2; sourceRef?: SourceRefV2}
+  | {kind: 'json-stringify'; valueType: 'json-text'; value: ExpressionIrV2; sourceRef?: SourceRefV2}
+  | {kind: 'json-is-valid'; valueType: 'boolean'; text: ExpressionIrV2; sourceRef?: SourceRefV2}
+  | {
+      kind: 'json-get';
+      valueType: JsonValueTypeV2;
+      root: ExpressionIrV2;
+      path: PathSegmentV2[];
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'json-has';
+      valueType: 'boolean';
+      root: ExpressionIrV2;
+      path: PathSegmentV2[];
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'json-set';
+      valueType: JsonValueTypeV2;
+      root: ExpressionIrV2;
+      path: PathSegmentV2[];
+      value: ExpressionIrV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'json-delete';
+      valueType: JsonValueTypeV2;
+      root: ExpressionIrV2;
+      path: PathSegmentV2[];
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'json-keys';
+      valueType: 'json-array';
+      root: ExpressionIrV2;
+      path: PathSegmentV2[];
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'json-length';
+      valueType: 'number';
+      root: ExpressionIrV2;
+      path: PathSegmentV2[];
+      sourceRef?: SourceRefV2;
+    }
+  | {kind: 'iteration-key'; valueType: 'string'; loopId: string; sourceRef?: SourceRefV2}
+  | {kind: 'iteration-index'; valueType: 'number'; loopId: string; sourceRef?: SourceRefV2}
+  | {kind: 'iteration-value'; valueType: JsonValueTypeV2; loopId: string; sourceRef?: SourceRefV2};
 
 export type StatementIrV2 =
   | {kind: 'set-status'; status: number; sourceRef?: SourceRefV2}
@@ -187,6 +263,15 @@ export type StatementIrV2 =
     }
   | {
       kind: 'bounded-loop';
+      maxIterations: number;
+      body: StatementIrV2[];
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'json-for-each';
+      loopId: string;
+      root: ExpressionIrV2;
+      path: PathSegmentV2[];
       maxIterations: number;
       body: StatementIrV2[];
       sourceRef?: SourceRefV2;

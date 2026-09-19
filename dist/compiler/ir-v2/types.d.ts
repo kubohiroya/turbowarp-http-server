@@ -1,6 +1,6 @@
 export declare const DEPLOY_IR_V2_VERSION: 2;
-export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "binding"];
-export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "record-create", "record-list", "record-get", "record-delete", "if", "bounded-loop", "respond"];
+export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "binding", "json-text-coerce", "json-parse", "json-stringify", "json-is-valid", "json-get", "json-has", "json-set", "json-delete", "json-keys", "json-length", "iteration-key", "iteration-index", "iteration-value"];
+export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "record-create", "record-list", "record-get", "record-delete", "if", "bounded-loop", "json-for-each", "respond"];
 export type EffectKindV2 = 'response-write' | 'handler-state-write' | 'record-read' | 'record-write' | 'control';
 export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'set-status': readonly ["response-write"];
@@ -16,6 +16,7 @@ export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'record-delete': readonly ["record-write"];
     readonly if: readonly ["control"];
     readonly 'bounded-loop': readonly ["control"];
+    readonly 'json-for-each': readonly ["control"];
     readonly respond: readonly ["response-write"];
 };
 export type JsonPrimitive = null | boolean | number | string;
@@ -29,11 +30,16 @@ export interface BinaryRefDescriptorV2 {
     byteLength?: number;
     sha256?: string;
 }
-export type AtomicValueTypeV2 = 'null' | 'boolean' | 'number' | 'string' | 'json-array' | 'json-object' | 'binary-ref';
+export type AtomicValueTypeV2 = 'null' | 'boolean' | 'number' | 'string' | 'json-text' | 'json-array' | 'json-object' | 'binary-ref';
 export type ValueTypeV2 = AtomicValueTypeV2 | {
     kind: 'union';
     members: AtomicValueTypeV2[];
 };
+export type JsonValueTypeV2 = {
+    kind: 'union';
+    members: ['null', 'boolean', 'number', 'string', 'json-array', 'json-object'];
+};
+export declare const JSON_VALUE_TYPE_V2: JsonValueTypeV2;
 export type ResourceTypeV2 = 'binary-body';
 export type BindingTypeV2 = {
     kind: 'value';
@@ -109,6 +115,78 @@ export type ExpressionIrV2 = {
     valueType: ValueTypeV2;
     binding: string;
     sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-text-coerce';
+    valueType: 'json-text';
+    input: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-parse';
+    valueType: JsonValueTypeV2;
+    text: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-stringify';
+    valueType: 'json-text';
+    value: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-is-valid';
+    valueType: 'boolean';
+    text: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-get';
+    valueType: JsonValueTypeV2;
+    root: ExpressionIrV2;
+    path: PathSegmentV2[];
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-has';
+    valueType: 'boolean';
+    root: ExpressionIrV2;
+    path: PathSegmentV2[];
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-set';
+    valueType: JsonValueTypeV2;
+    root: ExpressionIrV2;
+    path: PathSegmentV2[];
+    value: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-delete';
+    valueType: JsonValueTypeV2;
+    root: ExpressionIrV2;
+    path: PathSegmentV2[];
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-keys';
+    valueType: 'json-array';
+    root: ExpressionIrV2;
+    path: PathSegmentV2[];
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-length';
+    valueType: 'number';
+    root: ExpressionIrV2;
+    path: PathSegmentV2[];
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'iteration-key';
+    valueType: 'string';
+    loopId: string;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'iteration-index';
+    valueType: 'number';
+    loopId: string;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'iteration-value';
+    valueType: JsonValueTypeV2;
+    loopId: string;
+    sourceRef?: SourceRefV2;
 };
 export type StatementIrV2 = {
     kind: 'set-status';
@@ -159,6 +237,14 @@ export type StatementIrV2 = {
     sourceRef?: SourceRefV2;
 } | {
     kind: 'bounded-loop';
+    maxIterations: number;
+    body: StatementIrV2[];
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-for-each';
+    loopId: string;
+    root: ExpressionIrV2;
+    path: PathSegmentV2[];
     maxIterations: number;
     body: StatementIrV2[];
     sourceRef?: SourceRefV2;

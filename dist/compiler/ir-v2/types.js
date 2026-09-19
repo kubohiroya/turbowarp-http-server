@@ -7,7 +7,20 @@ export const IR_V2_EXPRESSION_KINDS = [
     'handler-variable',
     'handler-variable-exists',
     'handler-variable-names',
-    'binding'
+    'binding',
+    'json-text-coerce',
+    'json-parse',
+    'json-stringify',
+    'json-is-valid',
+    'json-get',
+    'json-has',
+    'json-set',
+    'json-delete',
+    'json-keys',
+    'json-length',
+    'iteration-key',
+    'iteration-index',
+    'iteration-value'
 ];
 export const IR_V2_STATEMENT_KINDS = [
     'set-status',
@@ -23,6 +36,7 @@ export const IR_V2_STATEMENT_KINDS = [
     'record-delete',
     'if',
     'bounded-loop',
+    'json-for-each',
     'respond'
 ];
 export const IR_V2_STATEMENT_EFFECTS = {
@@ -39,6 +53,11 @@ export const IR_V2_STATEMENT_EFFECTS = {
     'record-delete': ['record-write'],
     if: ['control'],
     'bounded-loop': ['control'],
+    'json-for-each': ['control'],
     respond: ['response-write']
+};
+export const JSON_VALUE_TYPE_V2 = {
+    kind: 'union',
+    members: ['null', 'boolean', 'number', 'string', 'json-array', 'json-object']
 };
 //# sourceMappingURL=types.js.map

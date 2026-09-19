@@ -8,6 +8,8 @@ import {parseDeployIr} from './validate.js';
 export * from './feature-flags.js';
 export * from './ir-v2/index.js';
 export * from './manifest/index.js';
+export * from './runtime/index.js';
+export * from './structured-data/index.js';
 export * from './validator/index.js';
 
 export type CompilerInputFormat = 'turbowarp-json' | 'ir';

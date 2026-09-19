@@ -22,7 +22,7 @@
   },
   "$defs": {
     "atomicValueType": {
-      "enum": ["null", "boolean", "number", "string", "json-array", "json-object", "binary-ref"]
+      "enum": ["null", "boolean", "number", "string", "json-text", "json-array", "json-object", "binary-ref"]
     },
     "valueType": {
       "oneOf": [
@@ -93,6 +93,16 @@
         }
       ]
     },
+    "jsonValueType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "members"],
+      "properties": {
+        "kind": {"const": "union"},
+        "members": {"const": ["null", "boolean", "number", "string", "json-array", "json-object"]}
+      }
+    },
+    "path": {"type": "array", "items": {"$ref": "#/$defs/pathSegment"}},
     "binding": {
       "type": "object",
       "additionalProperties": false,
@@ -265,6 +275,156 @@
             "binding": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
             "sourceRef": {"$ref": "#/$defs/sourceRef"}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "input"],
+          "properties": {
+            "kind": {"const": "json-text-coerce"},
+            "valueType": {"const": "json-text"},
+            "input": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "text"],
+          "properties": {
+            "kind": {"const": "json-parse"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "text": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "value"],
+          "properties": {
+            "kind": {"const": "json-stringify"},
+            "valueType": {"const": "json-text"},
+            "value": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "text"],
+          "properties": {
+            "kind": {"const": "json-is-valid"},
+            "valueType": {"const": "boolean"},
+            "text": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-get"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-has"},
+            "valueType": {"const": "boolean"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path", "value"],
+          "properties": {
+            "kind": {"const": "json-set"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "value": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-delete"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-keys"},
+            "valueType": {"const": "json-array"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "root", "path"],
+          "properties": {
+            "kind": {"const": "json-length"},
+            "valueType": {"const": "number"},
+            "root": {"$ref": "#/$defs/expression"},
+            "path": {"$ref": "#/$defs/path"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "loopId"],
+          "properties": {
+            "kind": {"const": "iteration-key"},
+            "valueType": {"const": "string"},
+            "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "loopId"],
+          "properties": {
+            "kind": {"const": "iteration-index"},
+            "valueType": {"const": "number"},
+            "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "loopId"],
+          "properties": {
+            "kind": {"const": "iteration-value"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
         }
       ]
     },
@@ -281,6 +441,7 @@
         {"$ref": "#/$defs/recordById"},
         {"$ref": "#/$defs/ifStatement"},
         {"$ref": "#/$defs/boundedLoop"},
+        {"$ref": "#/$defs/jsonForEach"},
         {"$ref": "#/$defs/respond"}
       ]
     },
@@ -398,6 +559,20 @@
       "properties": {
         "kind": {"const": "bounded-loop"},
         "maxIterations": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "body": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "jsonForEach": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "loopId", "root", "path", "maxIterations", "body"],
+      "properties": {
+        "kind": {"const": "json-for-each"},
+        "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "root": {"$ref": "#/$defs/expression"},
+        "path": {"$ref": "#/$defs/path"},
+        "maxIterations": {"type": "integer", "minimum": 1, "maximum": 1000},
         "body": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
         "sourceRef": {"$ref": "#/$defs/sourceRef"}
       }
