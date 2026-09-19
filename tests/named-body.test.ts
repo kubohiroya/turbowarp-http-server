@@ -37,6 +37,30 @@ describe('named response body', () => {
     expect(provider.releases).toEqual(['complete']);
   });
 
+  it('dispatches structured and asset namespaces through one resolver contract', async () => {
+    const structured = new FakeNamedBodyProvider('structured-data');
+    const assets = new FakeNamedBodyProvider('asset-manager');
+    structured.seed('profile', 'json', {mediaType: 'application/json'}, encoder.encode('{"name":"Ada"}'));
+    assets.seed('avatar', 'raw', {mediaType: 'image/png'}, new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    const resolver = new NamedBodyResolver([structured, assets]);
+
+    const jsonResponse = await createNamedBodyResponse(
+      resolver,
+      request('profile', 'json', {namespace: 'structured-data', kind: 'structured'}),
+      {featureFlags: enabled}
+    );
+    const assetResponse = await createNamedBodyResponse(
+      resolver,
+      request('avatar', 'raw', {namespace: 'asset-manager', kind: 'asset'}),
+      {featureFlags: enabled}
+    );
+
+    expect(await jsonResponse.text()).toBe('{"name":"Ada"}');
+    expect(new Uint8Array(await assetResponse.arrayBuffer())).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    expect(structured.openCount).toBe(1);
+    expect(assets.openCount).toBe(1);
+  });
+
   it('is disabled by default without consulting providers', async () => {
     const provider = new FakeNamedBodyProvider();
 
@@ -169,9 +193,94 @@ describe('named response body', () => {
       {featureFlags: enabled, maxBodyBytes: 3}
     );
 
-    await expect(response.arrayBuffer()).rejects.toThrow('configured limit');
+    await expect(response.arrayBuffer()).rejects.toMatchObject({
+      code: 'NAMED_DATA_BODY_TOO_LARGE',
+      message: 'NAMED_DATA_BODY_TOO_LARGE'
+    });
     expect(cancel).toHaveBeenCalledWith('named_body_too_large');
     expect(provider.releases).toEqual(['error']);
+  });
+
+  it.each([
+    ['invalid namespace', {...request('profile', 'json'), reference: {...request('profile', 'json').reference, namespace: '../test'}}],
+    ['control character', {...request('bad\nname', 'json')}],
+    ['missing target identity', {...request('profile', 'json'), reference: {...request('profile', 'json').reference, scope: 'target'}}],
+    ['project identity ambiguity', {...request('profile', 'json'), targetId: 'Stage:1'}]
+  ] as const)('rejects an %s before provider access', async (_label, invalidRequest) => {
+    const provider = new FakeNamedBodyProvider();
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      invalidRequest as NamedBodyRequest,
+      {featureFlags: enabled}
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({error: 'NAMED_DATA_INVALID_REF'});
+    expect(provider.openCount).toBe(0);
+    expect(provider.statCount).toBe(0);
+  });
+
+  it('requires HEAD metadata to satisfy the same size limit as GET', async () => {
+    const provider = new FakeNamedBodyProvider();
+    provider.seed('large', 'raw', {mediaType: 'application/octet-stream', byteLength: 4}, new Uint8Array(4));
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('large', 'raw'),
+      {featureFlags: enabled, method: 'HEAD', maxBodyBytes: 3}
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.text()).toBe('');
+    expect(provider.openCount).toBe(0);
+  });
+
+  it('rejects a buffered body whose declared length does not match its snapshot', async () => {
+    const provider = new FakeNamedBodyProvider();
+    provider.seed('profile', 'json', {mediaType: 'application/json', byteLength: 99}, encoder.encode('{}'));
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('profile', 'json'),
+      {featureFlags: enabled}
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({error: 'NAMED_RESPONSE_INVALID_METADATA'});
+    expect(provider.releases).toEqual(['error']);
+  });
+
+  it('keeps an opened stream snapshot isolated from same-name replacement', async () => {
+    const provider = new FakeNamedBodyProvider();
+    provider.seed('snapshot', 'raw', {mediaType: 'application/octet-stream'}, streamOf([1, 2]));
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('snapshot', 'raw'),
+      {featureFlags: enabled}
+    );
+
+    provider.seed('snapshot', 'raw', {mediaType: 'application/octet-stream'}, streamOf([9]));
+
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2]));
+    expect(provider.releases).toEqual(['complete']);
+  });
+
+  it('maps release failure without exposing the provider message', async () => {
+    const provider = new FakeNamedBodyProvider();
+    provider.releaseFailure = true;
+    provider.seed('profile', 'json', {mediaType: 'application/json'}, encoder.encode('{}'));
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('profile', 'json'),
+      {featureFlags: enabled}
+    );
+
+    expect(response.status).toBe(503);
+    const body = await response.text();
+    expect(JSON.parse(body)).toEqual({error: 'NAMED_DATA_PROVIDER_RELEASED'});
+    expect(body).not.toContain('private release detail');
   });
 });
 
@@ -185,6 +294,9 @@ class FakeNamedBodyProvider implements NamedBodyProvider {
   public readonly releases: NamedBodyReleaseReason[] = [];
   public statCount = 0;
   public openCount = 0;
+  public releaseFailure = false;
+
+  public constructor(private readonly namespace = 'test') {}
 
   public seed(
     name: string,
@@ -196,7 +308,7 @@ class FakeNamedBodyProvider implements NamedBodyProvider {
   }
 
   public canResolve(requestValue: NamedBodyRequest): boolean {
-    return requestValue.reference.namespace === 'test';
+    return requestValue.reference.namespace === this.namespace;
   }
 
   public stat(requestValue: NamedBodyRequest): NamedBodyMetadata | null {
@@ -213,17 +325,22 @@ class FakeNamedBodyProvider implements NamedBodyProvider {
       body: seeded.body,
       release: (reason) => {
         this.releases.push(reason);
+        if (this.releaseFailure) throw new Error('private release detail');
       }
     };
   }
 }
 
-function request(name: string, representation: NamedBodyRequest['representation']): NamedBodyRequest {
+function request(
+  name: string,
+  representation: NamedBodyRequest['representation'],
+  overrides: {namespace?: string; kind?: NamedBodyRequest['reference']['kind']} = {}
+): NamedBodyRequest {
   return {
     reference: {
-      namespace: 'test',
+      namespace: overrides.namespace ?? 'test',
       name,
-      kind: representation === 'raw' ? 'binary' : 'structured',
+      kind: overrides.kind ?? (representation === 'raw' ? 'binary' : 'structured'),
       scope: 'project'
     },
     representation
@@ -232,4 +349,13 @@ function request(name: string, representation: NamedBodyRequest['representation'
 
 function keyFor(requestValue: NamedBodyRequest): string {
   return `${requestValue.reference.name}\0${requestValue.representation}`;
+}
+
+function streamOf(bytes: number[]): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(bytes));
+      controller.close();
+    }
+  });
 }

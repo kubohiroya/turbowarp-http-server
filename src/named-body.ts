@@ -76,6 +76,12 @@ export interface NamedBodyResponseOptions {
 }
 
 const DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024;
+const NAMED_NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
+const TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const REPRESENTATIONS: readonly NamedBodyRepresentation[] = ['json', 'yaml', 'html', 'markdown', 'raw'];
+const KINDS: readonly NamedDataKind[] = ['structured', 'document', 'binary', 'asset'];
+const SCOPES: readonly NamedDataScope[] = ['target', 'project'];
+const MEDIA_TYPE_ESSENCE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u;
 
 export class NamedBodyResolver {
   public constructor(private readonly providers: readonly NamedBodyProvider[]) {}
@@ -104,16 +110,20 @@ export async function createNamedBodyResponse(
   request: NamedBodyRequest,
   options: NamedBodyResponseOptions = {}
 ): Promise<Response> {
+  const method = options.method?.toUpperCase() ?? 'GET';
   if (!(options.featureFlags ?? DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS).namedResponseBody) {
-    return errorResponse('NAMED_RESPONSE_BODY_DISABLED', 501);
+    return errorResponse('NAMED_RESPONSE_BODY_DISABLED', 501, method);
   }
 
+  if (!isValidRequest(request)) return errorResponse('NAMED_DATA_INVALID_REF', 400, method);
   const signal = options.signal ?? new AbortController().signal;
-  if (signal.aborted) return errorResponse('NAMED_DATA_ABORTED', 499);
-  if (!resolver.canResolve(request)) return errorResponse('NAMED_DATA_PROVIDER_NOT_FOUND', 501);
-  const method = options.method?.toUpperCase() ?? 'GET';
+  if (signal.aborted) return errorResponse('NAMED_DATA_ABORTED', 499, method);
+  if (!resolver.canResolve(request)) return errorResponse('NAMED_DATA_PROVIDER_NOT_FOUND', 501, method);
   const status = options.status ?? 200;
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+  if (!Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 1) {
+    return errorResponse('NAMED_RESPONSE_INVALID_METADATA', 500, method);
+  }
 
   if (method === 'HEAD') {
     let metadata: NamedBodyMetadata | null;
@@ -121,12 +131,12 @@ export async function createNamedBodyResponse(
       metadata = await resolver.stat(request, signal);
     } catch (error) {
       const response = providerErrorResponse(error);
-      if (response) return response;
+      if (response) return withoutResponseBody(response);
       throw error;
     }
-    if (!metadata) return errorResponse('NAMED_DATA_NOT_FOUND', 404);
-    const metadataError = validateMetadata(metadata, request.representation);
-    if (metadataError) return metadataError;
+    if (!metadata) return errorResponse('NAMED_DATA_NOT_FOUND', 404, method);
+    const metadataError = validateMetadata(metadata, request.representation, maxBodyBytes);
+    if (metadataError) return withoutResponseBody(metadataError);
     return new Response(null, {status, headers: responseHeaders(options.headers, metadata)});
   }
   if (isBodyForbidden(status)) return new Response(null, {status, headers: new Headers(options.headers)});
@@ -143,25 +153,28 @@ export async function createNamedBodyResponse(
   const release = releaseOnce(handle);
 
   if (signal.aborted) {
-    await release('abort');
+    const releaseError = await releaseErrorResponse(release, 'abort');
+    if (releaseError) return releaseError;
     return errorResponse('NAMED_DATA_ABORTED', 499);
   }
 
   const metadataError = validateMetadata(handle.metadata, request.representation, maxBodyBytes);
   if (metadataError) {
-    await release('error');
-    return metadataError;
+    return (await releaseErrorResponse(release, 'error')) ?? metadataError;
   }
 
   const headers = responseHeaders(options.headers, handle.metadata);
   if (handle.body instanceof Uint8Array) {
     if (handle.body.byteLength > maxBodyBytes) {
-      await release('error');
-      return errorResponse('NAMED_DATA_BODY_TOO_LARGE', 413);
+      return (await releaseErrorResponse(release, 'error')) ?? errorResponse('NAMED_DATA_BODY_TOO_LARGE', 413);
+    }
+    if (handle.metadata.byteLength !== undefined && handle.metadata.byteLength !== handle.body.byteLength) {
+      return (await releaseErrorResponse(release, 'error')) ?? errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
     }
     headers.set('Content-Length', String(handle.body.byteLength));
     const bytes = handle.body.slice();
-    await release('complete');
+    const releaseError = await releaseErrorResponse(release, 'complete');
+    if (releaseError) return releaseError;
     return new Response(toArrayBuffer(bytes), {status, headers});
   }
 
@@ -186,36 +199,35 @@ function managedBodyStream(
     await release(reason);
   };
   const onAbort = (): void => {
-    void finish('abort');
+    void finish('abort').catch(() => undefined);
     void reader.cancel(signal.reason);
   };
   signal.addEventListener('abort', onAbort, {once: true});
 
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
-      if (signal.aborted) {
-        controller.error(signal.reason ?? new Error('Request aborted.'));
-        await finish('abort');
-        return;
-      }
       try {
+        if (signal.aborted) throw namedBodyError('NAMED_DATA_ABORTED');
         const chunk = await reader.read();
         if (chunk.done) {
-          controller.close();
           await finish('complete');
+          controller.close();
           return;
         }
         total += chunk.value.byteLength;
         if (total > maxBodyBytes) {
           await reader.cancel('named_body_too_large');
-          controller.error(new Error('Named response body exceeds the configured limit.'));
-          await finish('error');
-          return;
+          throw namedBodyError('NAMED_DATA_BODY_TOO_LARGE');
         }
         controller.enqueue(chunk.value);
       } catch (error) {
-        controller.error(error);
-        await finish(signal.aborted ? 'abort' : 'error');
+        let failure = signal.aborted ? namedBodyError('NAMED_DATA_ABORTED') : error;
+        try {
+          await finish(signal.aborted ? 'abort' : 'error');
+        } catch (releaseError) {
+          failure = releaseError;
+        }
+        controller.error(failure);
       }
     },
     async cancel(reason) {
@@ -230,6 +242,9 @@ function validateMetadata(
   representation: NamedBodyRepresentation,
   maxBodyBytes?: number
 ): Response | null {
+  if (hasControlCharacter(metadata.mediaType) || metadata.mediaType.length > 255) {
+    return errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
+  }
   if (!isMediaTypeForRepresentation(metadata.mediaType, representation)) {
     return errorResponse('NAMED_DATA_REPRESENTATION_UNSUPPORTED', 415);
   }
@@ -241,12 +256,46 @@ function validateMetadata(
       return errorResponse('NAMED_DATA_BODY_TOO_LARGE', 413);
     }
   }
+  for (const identity of [metadata.etag, metadata.revision]) {
+    if (identity !== undefined && (identity.length < 1 || identity.length > 256 || hasControlCharacter(identity))) {
+      return errorResponse('NAMED_RESPONSE_INVALID_METADATA', 502);
+    }
+  }
   return null;
+}
+
+function isValidRequest(request: NamedBodyRequest): boolean {
+  if (typeof request !== 'object' || request === null) return false;
+  const reference = request.reference;
+  if (
+    typeof reference !== 'object' ||
+    reference === null ||
+    !NAMED_NAMESPACE.test(reference.namespace) ||
+    typeof reference.name !== 'string' ||
+    reference.name.length < 1 ||
+    reference.name.length > 256 ||
+    hasControlCharacter(reference.name) ||
+    !KINDS.includes(reference.kind) ||
+    !SCOPES.includes(reference.scope) ||
+    !REPRESENTATIONS.includes(request.representation)
+  ) {
+    return false;
+  }
+  if (reference.scope === 'target') return typeof request.targetId === 'string' && TARGET_ID.test(request.targetId);
+  return request.targetId === undefined;
+}
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0)!;
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
 }
 
 function isMediaTypeForRepresentation(mediaType: string, representation: NamedBodyRepresentation): boolean {
   const essence = mediaType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
-  if (representation === 'raw') return essence.length > 0 && essence.includes('/');
+  if (!MEDIA_TYPE_ESSENCE.test(essence)) return false;
+  if (representation === 'raw') return true;
   if (representation === 'json') return essence === 'application/json' || essence.endsWith('+json');
   if (representation === 'yaml') {
     return essence === 'application/yaml' || essence === 'application/x-yaml' || essence === 'text/yaml';
@@ -270,8 +319,24 @@ function releaseOnce(handle: NamedBodyHandle): (reason: NamedBodyReleaseReason) 
   return async (reason) => {
     if (released) return;
     released = true;
-    await handle.release(reason);
+    try {
+      await handle.release(reason);
+    } catch {
+      throw namedBodyError('NAMED_DATA_PROVIDER_RELEASED');
+    }
   };
+}
+
+async function releaseErrorResponse(
+  release: (reason: NamedBodyReleaseReason) => Promise<void>,
+  reason: NamedBodyReleaseReason
+): Promise<Response | null> {
+  try {
+    await release(reason);
+    return null;
+  } catch {
+    return errorResponse('NAMED_DATA_PROVIDER_RELEASED', 503);
+  }
 }
 
 function quoteEtag(value: string): string {
@@ -283,11 +348,15 @@ function isBodyForbidden(status: number): boolean {
   return status === 204 || status === 205 || status === 304;
 }
 
-function errorResponse(error: NamedBodyErrorCode, status: number): Response {
-  return new Response(JSON.stringify({error}), {
+function errorResponse(error: NamedBodyErrorCode, status: number, method = 'GET'): Response {
+  return new Response(method === 'HEAD' ? null : JSON.stringify({error}), {
     status,
     headers: {'Content-Type': 'application/json; charset=utf-8'}
   });
+}
+
+function withoutResponseBody(response: Response): Response {
+  return new Response(null, {status: response.status, statusText: response.statusText, headers: response.headers});
 }
 
 function providerErrorResponse(error: unknown): Response | null {
@@ -295,6 +364,10 @@ function providerErrorResponse(error: unknown): Response | null {
   const code = (error as {code?: unknown}).code;
   if (typeof code !== 'string' || !isNamedDataErrorCode(code)) return null;
   return errorResponse(code, statusForNamedDataError(code));
+}
+
+function namedBodyError(code: NamedDataErrorCode): Error & {code: NamedDataErrorCode} {
+  return Object.assign(new Error(code), {code});
 }
 
 function isNamedDataErrorCode(value: string): value is NamedDataErrorCode {
