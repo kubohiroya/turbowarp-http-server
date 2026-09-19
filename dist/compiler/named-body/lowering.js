@@ -1,5 +1,5 @@
 import { DEFAULT_MAX_BINARY_BYTES } from '../binary/types.js';
-const NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
+import { isNamedDataNamespace } from '../../named-data-namespace.js';
 const TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const KINDS = ['structured', 'document', 'binary', 'asset'];
 const SCOPES = ['target', 'project'];
@@ -20,7 +20,7 @@ export function lowerNamedBodyResponse(args, sourceRef) {
         maxBytes === undefined) {
         return { diagnostics };
     }
-    if (!NAMESPACE.test(namespace) || name.length < 1 || name.length > 256 || hasControlCharacter(name)) {
+    if (!isNamedDataNamespace(namespace) || name.length < 1 || name.length > 256 || hasControlCharacter(name)) {
         report(diagnostics, 'TW2_NAMED_INVALID_DESCRIPTOR', 'Named response namespace or name is invalid.', 'The canonical descriptor requires a safe logical namespace and a bounded non-control name.', 'Use a canonical namespace such as asset and a name from 1 to 256 characters.', sourceRef);
         return { diagnostics };
     }

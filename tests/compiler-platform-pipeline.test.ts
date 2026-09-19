@@ -1,11 +1,12 @@
 import {execFile} from 'node:child_process';
-import {mkdir, mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, symlink, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {pathToFileURL} from 'node:url';
+import {Writable} from 'node:stream';
 import {Hono} from 'hono';
 import {ModuleKind, ScriptTarget, transpileModule} from 'typescript';
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import {
   compileDeployIrV2,
   compileToDirectory,
@@ -37,7 +38,7 @@ describe('IR v2 platform pipeline', () => {
     expect(first.manifest).toMatchObject({
       formatVersion: 1,
       irVersion: 2,
-      adapter: {id: 'cloudflare-workers', version: '1.1.0'},
+      adapter: {id: 'cloudflare-workers', version: '1.3.1'},
       requirements: ['record-store'],
       plan: {requirements: ['record-store'], bindings: {recordDatabase: 'DB'}}
     });
@@ -160,6 +161,43 @@ describe('IR v2 platform pipeline', () => {
     expect(accessed).toBe(false);
   });
 
+  it('accepts R2 objects whose optional metadata maps are absent', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const uploaded = new Date('2026-09-19T00:00:00.000Z');
+    const bucket = {
+      head: async () => ({etag: 'etag-1', version: 'version-1', uploaded, size: 3})
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      resolve(locator: {namespace: string; key: string}): Promise<Record<string, unknown> | null>;
+    };
+
+    await expect(createObjectStore(bucket).resolve({namespace: 'asset', key: 'fixture.bin'})).resolves.toEqual({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      size: 3,
+      revision: `r2:${JSON.stringify(['version-1', 'etag-1', uploaded.getTime()])}`
+    });
+  });
+
+  it('rejects an R2 revision whose condition window exceeds the Date range', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const get = vi.fn();
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      get(ref: {namespace: string; key: string; revision: string}): Promise<unknown>;
+    };
+
+    await expect(createObjectStore({get}).get({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      revision: `r2:${JSON.stringify(['version-1', 'etag-1', -8_640_000_000_000_000])}`
+    })).resolves.toBeNull();
+    expect(get).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['put: checksum does not match (10037)', 'BINARY_INTEGRITY_MISMATCH'],
     ['put: access denied (10003)', 'BINARY_STORAGE_FAILURE']
@@ -186,6 +224,334 @@ describe('IR v2 platform pipeline', () => {
         1024
       )
     ).rejects.toMatchObject({code, message: code});
+  });
+
+  it('buffers a bounded R2 upload into an accepted fixed-size body', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const uploaded = new Date('2026-09-19T00:00:00.000Z');
+    const put = vi.fn(async (_key: string, body: Uint8Array) => ({
+      etag: 'etag-1', version: 'version-1', uploaded, size: body.byteLength
+    }));
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      put(
+        locator: {namespace: string; key: string},
+        source: {chunks: AsyncIterable<Uint8Array>; size?: number},
+        metadata: {size?: number},
+        maxBytes: number
+      ): Promise<unknown>;
+    };
+    const chunks = (async function* (): AsyncIterable<Uint8Array> {
+      yield new Uint8Array([1, 2]);
+      yield new Uint8Array([3]);
+    })();
+
+    await createObjectStore({put}).put(
+      {namespace: 'asset', key: 'fixture.bin'},
+      {chunks},
+      {size: 3},
+      1024
+    );
+
+    expect(put).toHaveBeenCalledWith('v1/asset/fixture.bin', new Uint8Array([1, 2, 3]), {});
+  });
+
+  it('rejects an R2 upload whose declared size differs from the consumed bytes', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const put = vi.fn();
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      put(
+        locator: {namespace: string; key: string},
+        source: {chunks: AsyncIterable<Uint8Array>},
+        metadata: {size: number},
+        maxBytes: number
+      ): Promise<unknown>;
+    };
+    const chunks = (async function* (): AsyncIterable<Uint8Array> {yield new Uint8Array([1]);})();
+
+    await expect(createObjectStore({put}).put(
+      {namespace: 'asset', key: 'fixture.bin'},
+      {chunks},
+      {size: 2},
+      1024
+    )).rejects.toMatchObject({code: 'BINARY_INTEGRITY_MISMATCH'});
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('uses an atomic R2 conditional tombstone for revision-aware delete', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const puts: Array<{key: string; value: unknown; options: unknown}> = [];
+    const uploaded = new Date('2026-09-19T00:00:00.000Z');
+    const current = {
+      etag: 'etag-1',
+      version: 'version-1',
+      uploaded,
+      size: 1,
+      httpMetadata: {},
+      customMetadata: {}
+    };
+    const bucket = {
+      head: async () => current,
+      delete: async () => {throw new Error('revision delete must not use unconditional delete');},
+      put: async (key: string, value: unknown, options: unknown) => {
+        puts.push({key, value, options});
+        return {etag: 'tombstone', version: 'v2', uploaded: new Date(), size: 0, httpMetadata: {}, customMetadata: {twDeleted: '1'}};
+      }
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      delete(target: {namespace: string; key: string; revision: string}): Promise<boolean>;
+    };
+
+    await expect(
+      createObjectStore(bucket).delete({
+        namespace: 'asset',
+        key: 'fixture.bin',
+        revision: `r2:${JSON.stringify(['version-1', 'etag-1', uploaded.getTime()])}`
+      })
+    ).resolves.toBe(true);
+    expect(puts).toEqual([
+      expect.objectContaining({
+        key: 'v1/asset/fixture.bin',
+        options: {
+          onlyIf: {
+            etagMatches: 'etag-1',
+            uploadedAfter: new Date(uploaded.getTime() - 1),
+            uploadedBefore: new Date(uploaded.getTime() + 1)
+          },
+          customMetadata: {twDeleted: '1'}
+        }
+      })
+    ]);
+  });
+
+  it('does not delete a later R2 upload that reuses an earlier ETag', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const previous = new Date('2026-09-19T00:00:00.000Z');
+    const replacement = new Date('2026-09-19T00:00:01.000Z');
+    const put = vi.fn();
+    const bucket = {
+      head: async () => ({
+        etag: 'same-etag',
+        version: 'version-2',
+        uploaded: replacement,
+        size: 1,
+        httpMetadata: {},
+        customMetadata: {}
+      }),
+      put
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      delete(target: {namespace: string; key: string; revision: string}): Promise<boolean>;
+    };
+
+    await expect(createObjectStore(bucket).delete({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      revision: `r2:${JSON.stringify(['version-1', 'same-etag', previous.getTime()])}`
+    })).resolves.toBe(false);
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('does not read a later R2 upload that reuses an earlier ETag', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const previous = new Date('2026-09-19T00:00:00.000Z');
+    const replacement = new Date('2026-09-19T00:00:01.000Z');
+    const bucket = {
+      get: async () => ({
+        etag: 'same-etag',
+        version: 'version-2',
+        uploaded: replacement,
+        size: 1,
+        httpMetadata: {},
+        customMetadata: {},
+        body: new ReadableStream<Uint8Array>()
+      })
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      get(target: {namespace: string; key: string; revision: string}): Promise<unknown>;
+    };
+
+    await expect(createObjectStore(bucket).get({
+      namespace: 'asset',
+      key: 'fixture.bin',
+      revision: `r2:${JSON.stringify(['version-1', 'same-etag', previous.getTime()])}`
+    })).resolves.toBeNull();
+  });
+
+  it('retries an R2 locator delete with the latest ETag instead of issuing an unconditional delete', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const revisions = [
+      {etag: 'etag-1', version: 'version-1', uploaded: new Date('2026-09-19T00:00:00.000Z')},
+      {etag: 'etag-2', version: 'version-2', uploaded: new Date('2026-09-19T00:00:01.000Z')}
+    ];
+    const matches: Array<{etagMatches: string}> = [];
+    const bucket = {
+      head: async () => ({
+        ...revisions[matches.length]!,
+        size: 1,
+        httpMetadata: {},
+        customMetadata: {}
+      }),
+      delete: async () => {throw new Error('locator delete must not use unconditional delete');},
+      put: async (_key: string, _value: unknown, options: {onlyIf: {etagMatches: string}}) => {
+        matches.push(options.onlyIf);
+        return matches.length === 1
+          ? null
+          : {etag: 'tombstone', version: 'v3', uploaded: new Date(), size: 0, httpMetadata: {}, customMetadata: {twDeleted: '1'}};
+      }
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      delete(target: {namespace: string; key: string}): Promise<boolean>;
+    };
+
+    await expect(createObjectStore(bucket).delete({namespace: 'asset', key: 'fixture.bin'})).resolves.toBe(true);
+    expect(matches.map(({etagMatches}) => etagMatches)).toEqual(['etag-1', 'etag-2']);
+  });
+
+  it('keeps an existing Firebase object when staged upload integrity fails', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'firebase-functions'});
+    if (!result.ok) throw new Error('Expected Firebase compilation to succeed.');
+    const platform = await loadModule(result.files['functions/src/platform.ts']!);
+    const destinationDelete = vi.fn();
+    const stagingDelete = vi.fn(async () => undefined);
+    const destination = {delete: destinationDelete};
+    const staging = {
+      createWriteStream: () => new Writable({write(_chunk, _encoding, callback) {callback();}}),
+      delete: stagingDelete
+    };
+    const bucket = {
+      file: (key: string) => key === 'v1/asset/fixture.bin' ? destination : staging
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      put(
+        locator: {namespace: string; key: string},
+        source: {chunks: AsyncIterable<Uint8Array>; size: number},
+        metadata: {integrity: string},
+        maxBytes: number
+      ): Promise<unknown>;
+    };
+    const chunks = (async function* (): AsyncIterable<Uint8Array> {yield new Uint8Array([1]);})();
+
+    await expect(
+      createObjectStore(bucket).put(
+        {namespace: 'asset', key: 'fixture.bin'},
+        {chunks, size: 1},
+        {integrity: `sha256:${'0'.repeat(64)}`},
+        1024
+      )
+    ).rejects.toMatchObject({code: 'BINARY_INTEGRITY_MISMATCH'});
+    expect(destinationDelete).not.toHaveBeenCalled();
+    expect(stagingDelete).toHaveBeenCalledWith({ignoreNotFound: true});
+  });
+
+  it('returns Firebase destination metadata from the copy response after staged validation', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'firebase-functions'});
+    if (!result.ok) throw new Error('Expected Firebase compilation to succeed.');
+    const platform = await loadModule(result.files['functions/src/platform.ts']!);
+    const destination = {};
+    const stagingDelete = vi.fn(async () => undefined);
+    const integrity = 'sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
+    const staging = {
+      createWriteStream: () => new Writable({write(_chunk, _encoding, callback) {callback();}}),
+      getMetadata: async () => [{generation: 'stage-1', metadata: {}}],
+      setMetadata: async () => [{}],
+      copy: async (target: unknown) => [target, {
+        done: true,
+        resource: {
+          generation: 'destination-7',
+          size: '3',
+          contentType: 'application/octet-stream',
+          metadata: {twIntegrity: integrity}
+        }
+      }],
+      delete: stagingDelete
+    };
+    const bucket = {file: (key: string) => key.startsWith('v1/.staging/') ? staging : destination};
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      put(
+        locator: {namespace: string; key: string},
+        source: {chunks: AsyncIterable<Uint8Array>; size: number},
+        metadata: {contentType: string},
+        maxBytes: number
+      ): Promise<{revision: string; size: number; contentType: string; integrity: string}>;
+    };
+    const chunks = (async function* (): AsyncIterable<Uint8Array> {yield new Uint8Array([1, 2, 3]);})();
+
+    await expect(createObjectStore(bucket).put(
+      {namespace: 'asset', key: 'fixture.bin'},
+      {chunks, size: 3},
+      {contentType: 'application/octet-stream'},
+      1024
+    )).resolves.toMatchObject({
+      revision: 'destination-7',
+      size: 3,
+      contentType: 'application/octet-stream',
+      integrity
+    });
+    expect(stagingDelete).toHaveBeenCalledWith({ignoreNotFound: true, ifGenerationMatch: 'stage-1'});
+  });
+
+  it('pins a Firebase body stream to the metadata generation', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'firebase-functions'});
+    if (!result.ok) throw new Error('Expected Firebase compilation to succeed.');
+    const platform = await loadModule(result.files['functions/src/platform.ts']!);
+    const calls: Array<{generation?: string | number} | undefined> = [];
+    const latest = {
+      getMetadata: async () => [{generation: '7', size: '2', contentType: 'application/octet-stream'}]
+    };
+    const pinned = {
+      createReadStream: async function* (): AsyncIterable<Uint8Array> {yield new Uint8Array([1, 2]);}
+    };
+    const bucket = {
+      file: (_key: string, options?: {generation?: string | number}) => {
+        calls.push(options);
+        return options === undefined ? latest : pinned;
+      }
+    };
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      get(ref: {namespace: string; key: string; revision: string}): Promise<{
+        chunks: AsyncIterable<Uint8Array>;
+        size: number;
+        contentType: string;
+      } | null>;
+    };
+
+    const source = await createObjectStore(bucket).get({namespace: 'asset', key: 'fixture.bin', revision: '7'});
+    expect(source).not.toBeNull();
+    const chunks: number[] = [];
+    for await (const chunk of source!.chunks) chunks.push(...chunk);
+    expect(chunks).toEqual([1, 2]);
+    expect(calls).toEqual([undefined, {generation: '7'}]);
+  });
+
+  it('uses a Firebase generation precondition for revision-aware delete', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'firebase-functions'});
+    if (!result.ok) throw new Error('Expected Firebase compilation to succeed.');
+    const platform = await loadModule(result.files['functions/src/platform.ts']!);
+    const remove = vi.fn(async () => Promise.reject(Object.assign(new Error('stale'), {code: 412})));
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      delete(target: {namespace: string; key: string; revision: string}): Promise<boolean>;
+    };
+
+    await expect(
+      createObjectStore({file: () => ({delete: remove})}).delete({
+        namespace: 'asset',
+        key: 'fixture.bin',
+        revision: '7'
+      })
+    ).resolves.toBe(false);
+    expect(remove).toHaveBeenCalledWith({ifGenerationMatch: '7'});
   });
 
   it('preserves v1 HTTP route behavior after upgrading to the v2 core', async () => {
@@ -283,37 +649,7 @@ async function loadModule(
 }
 
 async function installCloudflareTypecheckDependencies(output: string): Promise<void> {
-  const typesDirectory = join(output, 'node_modules/@cloudflare/workers-types');
-  await mkdir(typesDirectory, {recursive: true});
-  await writeFile(
-    join(typesDirectory, 'package.json'),
-    JSON.stringify({name: '@cloudflare/workers-types', version: '0.0.0-test', types: 'index.d.ts'})
-  );
-  await writeFile(join(typesDirectory, 'index.d.ts'), cloudflareSdkStubs());
-  await symlink(resolve('node_modules/hono'), join(output, 'node_modules/hono'));
-}
-
-function cloudflareSdkStubs(): string {
-  return `interface D1ResultMeta {changes: number}
-interface D1Result<T> {results: T[]; meta: D1ResultMeta}
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<D1Result<unknown>>;
-  all<T>(): Promise<D1Result<T>>;
-  first<T>(): Promise<T | null>;
-}
-interface D1Database {prepare(query: string): D1PreparedStatement}
-interface R2HTTPMetadata {contentType?: string}
-interface R2Object {version: string; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
-interface R2ObjectBody extends R2Object {body: ReadableStream<Uint8Array>}
-interface R2PutOptions {httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
-interface R2Bucket {
-  head(key: string): Promise<R2Object | null>;
-  get(key: string): Promise<R2ObjectBody | null>;
-  put(key: string, value: ReadableStream<Uint8Array>, options?: R2PutOptions): Promise<R2Object | null>;
-  delete(key: string): Promise<void>;
-}
-`;
+  await symlink(resolve('node_modules'), join(output, 'node_modules'));
 }
 
 function messageApp(): DeployIrV2 {

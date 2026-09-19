@@ -1,7 +1,7 @@
 import { findCapabilityOrigin } from '../pipeline/requirements.js';
 export const cloudflareWorkersAdapter = {
     id: 'cloudflare-workers',
-    version: '1.1.0',
+    version: '1.3.1',
     capabilities: () => ({
         keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
         maxBinaryBytes: 16 * 1024 * 1024
@@ -149,25 +149,37 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
     async resolve(locator) {
       try {
         const object = await bucket.head(storageKey(locator));
-        return object === null ? null : objectRef(locator, object);
+        return object === null || isTombstone(object) ? null : objectRef(locator, object);
       } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
     },
     async get(ref) {
       try {
-        const object = await bucket.get(storageKey(ref));
-        if (object === null || object.version !== ref.revision && ref.revision !== undefined) return null;
+        const key = storageKey(ref);
+        let object: R2ObjectBody | R2Object | null;
+        let expected: R2Revision | undefined;
+        if (ref.revision === undefined) {
+          object = await bucket.get(key);
+        } else {
+          expected = parseR2Revision(ref.revision);
+          if (expected === undefined) return null;
+          object = await bucket.get(key, {onlyIf: revisionCondition(expected)});
+        }
+        if (object === null || !hasR2Body(object) || isTombstone(object)) return null;
+        if (expected !== undefined && !matchesRevision(object, expected)) return null;
         return {
           chunks: readableChunks(object.body),
           size: object.size,
-          ...(object.httpMetadata.contentType === undefined ? {} : {contentType: object.httpMetadata.contentType})
+          ...(object.httpMetadata?.contentType === undefined ? {} : {contentType: object.httpMetadata.contentType})
         };
       } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
     },
     async put(locator, source, metadata, maxBytes) {
       try {
         if (source.size !== undefined && source.size > maxBytes) throw binaryFault('BINARY_TOO_LARGE');
+        const body = await collectBytes(source.chunks, maxBytes);
+        if (metadata.size !== undefined && metadata.size !== body.byteLength) throw binaryFault('BINARY_INTEGRITY_MISMATCH');
         const integrity = metadata.integrity?.startsWith('sha256:') === true ? metadata.integrity.slice(7) : undefined;
-        const object = await bucket.put(storageKey(locator), binaryStream(limitedChunks(source.chunks, maxBytes)), {
+        const object = await bucket.put(storageKey(locator), body, {
           ...(metadata.contentType === undefined ? {} : {httpMetadata: {contentType: metadata.contentType}}),
           ...(metadata.integrity === undefined ? {} : {customMetadata: {twIntegrity: metadata.integrity}}),
           ...(integrity === undefined ? {} : {sha256: integrity})
@@ -182,50 +194,90 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
     async delete(target) {
       try {
         const key = storageKey(target);
-        const current = await bucket.head(key);
-        if (current === null || 'revision' in target && target.revision !== undefined && current.version !== target.revision) return false;
-        await bucket.delete(key);
-        return true;
+        if ('revision' in target && target.revision !== undefined) {
+          const expected = parseR2Revision(target.revision);
+          if (expected === undefined) return false;
+          const current = await bucket.head(key);
+          if (current === null || isTombstone(current) || !matchesRevision(current, expected)) return false;
+          return putTombstone(bucket, key, current);
+        }
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const current = await bucket.head(key);
+          if (current === null || isTombstone(current)) return false;
+          if (await putTombstone(bucket, key, current)) return true;
+        }
+        throw binaryFault('BINARY_STORAGE_FAILURE');
       } catch (error) {if (isBinaryFault(error)) throw error; throw binaryFault('BINARY_STORAGE_FAILURE')}
     }
   };
 }
 function storageKey(locator: BinaryLocator): string {
-  if (!/^[A-Za-z][A-Za-z0-9._-]{0,63}$/u.test(locator.namespace) || locator.key.length > 512 || locator.key.includes('\\0') || locator.key.startsWith('/') || locator.key.includes('\\\\') || locator.key.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
+  if (!/^[a-z][a-z0-9.-]{0,63}$/u.test(locator.namespace) || locator.key.length > 512 || locator.key.includes('\\0') || locator.key.startsWith('/') || locator.key.includes('\\\\') || locator.key.split('/').some((part) => part.length === 0 || part === '.' || part === '..')) {
     throw binaryFault('BINARY_INVALID_REF');
   }
   return 'v1/' + locator.namespace + '/' + locator.key;
 }
 function objectRef(locator: BinaryLocator, object: R2Object): BinaryRef {
-  const integrity = object.customMetadata.twIntegrity;
-  const contentType = object.httpMetadata.contentType;
+  const integrity = object.customMetadata?.twIntegrity;
+  const contentType = object.httpMetadata?.contentType;
   return {
     ...locator,
     size: object.size,
-    revision: object.version,
+    revision: encodeR2Revision(object),
     ...(contentType === undefined ? {} : {contentType}),
     ...(integrity === undefined ? {} : {integrity})
   };
 }
-function binaryStream(chunks: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
-  const iterator = chunks[Symbol.asyncIterator]();
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {const item = await iterator.next(); if (item.done) controller.close(); else controller.enqueue(item.value);},
-    cancel() {return iterator.return?.().then(() => undefined)}
-  });
+interface R2Revision {version: string; etag: string; uploaded: number}
+function isTombstone(object: R2Object): boolean {return object.customMetadata?.twDeleted === '1'}
+function encodeR2Revision(object: R2Object): string {
+  const revision = 'r2:' + JSON.stringify([object.version, object.etag, object.uploaded.getTime()]);
+  if (revision.length > 256) throw binaryFault('BINARY_STORAGE_FAILURE');
+  return revision;
 }
+function parseR2Revision(value: string): R2Revision | undefined {
+  if (!value.startsWith('r2:')) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value.slice(3));
+    if (!Array.isArray(parsed) || parsed.length !== 3 || typeof parsed[0] !== 'string' || parsed[0].length === 0 || typeof parsed[1] !== 'string' || parsed[1].length === 0 || typeof parsed[2] !== 'number' || !Number.isSafeInteger(parsed[2]) || new Date(parsed[2] - 1).getTime() !== parsed[2] - 1 || new Date(parsed[2]).getTime() !== parsed[2] || new Date(parsed[2] + 1).getTime() !== parsed[2] + 1) return undefined;
+    return {version: parsed[0], etag: parsed[1], uploaded: parsed[2]};
+  } catch {return undefined}
+}
+function matchesRevision(object: R2Object, revision: R2Revision): boolean {
+  return object.version === revision.version && object.etag === revision.etag && object.uploaded.getTime() === revision.uploaded;
+}
+function revisionCondition(revision: R2Revision): R2Conditional {
+  return {
+    etagMatches: revision.etag,
+    uploadedAfter: new Date(revision.uploaded - 1),
+    uploadedBefore: new Date(revision.uploaded + 1)
+  };
+}
+async function putTombstone(bucket: R2Bucket, key: string, current: R2Object): Promise<boolean> {
+  const revision = {version: current.version, etag: current.etag, uploaded: current.uploaded.getTime()};
+  return await bucket.put(key, new Uint8Array(), {
+    onlyIf: revisionCondition(revision),
+    customMetadata: {twDeleted: '1'}
+  }) !== null;
+}
+function hasR2Body(object: R2Object): object is R2ObjectBody {return 'body' in object}
 async function* readableChunks(stream: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
   const reader = stream.getReader();
   try {while (true) {const item = await reader.read(); if (item.done) return; yield item.value;}}
   finally {reader.releaseLock()}
 }
-async function* limitedChunks(chunks: AsyncIterable<Uint8Array>, maximum: number): AsyncIterable<Uint8Array> {
+async function collectBytes(chunks: AsyncIterable<Uint8Array>, maximum: number): Promise<Uint8Array> {
+  const collected: Uint8Array[] = [];
   let size = 0;
   for await (const chunk of chunks) {
     size += chunk.byteLength;
     if (size > maximum) throw binaryFault('BINARY_TOO_LARGE');
-    yield chunk;
+    collected.push(chunk);
   }
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of collected) {result.set(chunk, offset); offset += chunk.byteLength}
+  return result;
 }
 function binaryFault(code: string): Error & {code: string} {return Object.assign(new Error(code), {code})}
 function isBinaryFault(error: unknown): error is Error & {code: string} {return error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('BINARY_')}
@@ -245,7 +297,7 @@ function packageJson(ir) {
 function tsconfig() {
     return `${JSON.stringify({
         compilerOptions: {
-            target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022', 'WebWorker'],
+            target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022'],
             strict: true, noEmit: true, skipLibCheck: true, types: ['@cloudflare/workers-types']
         },
         include: ['src/**/*.ts']
@@ -281,7 +333,7 @@ function generatedReadme(ir, plan) {
 
 Run \`npm install\`, ${setup}, replace only placeholder resource IDs, then run \`npm run dev\` or \`npm run deploy\`.${migration}
 
-R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
+R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. Revisions combine R2's unique upload version, ETag, and upload timestamp. Deletes use ETag-and-time-conditional zero-byte \`twDeleted\` tombstones that resolve/get treat as absent; locator deletes retry when a concurrent write wins, and a later put replaces the tombstone. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
 
 ## Rollback and cleanup
 

@@ -62,6 +62,8 @@ describe('named response body lowering', () => {
 
   it.each([
     [{NAMESPACE: text('../assets')}, 'TW2_NAMED_INVALID_DESCRIPTOR'],
+    [{NAMESPACE: text('Asset')}, 'TW2_NAMED_INVALID_DESCRIPTOR'],
+    [{NAMESPACE: text('asset_data')}, 'TW2_NAMED_INVALID_DESCRIPTOR'],
     [{NAME: text('bad\nname')}, 'TW2_NAMED_INVALID_DESCRIPTOR'],
     [{KIND: text('unknown')}, 'TW2_NAMED_INVALID_DESCRIPTOR'],
     [{SCOPE: text('target'), TARGET_ID: text('')}, 'TW2_NAMED_INVALID_DESCRIPTOR'],

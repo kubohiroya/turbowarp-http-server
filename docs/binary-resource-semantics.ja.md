@@ -17,7 +17,7 @@ Deploy IR v2はbinary payloadをJSON文字列やbase64として保持せず、�
 }
 ```
 
-`namespace`は64文字以下のlogical ID、`key`は512文字以下です。absolute path、backslash、空segment、`.`／`..` segment、NULを拒否します。`revision`はintegrityや共通ETagではなく、adapterだけが解釈するopaque tokenです。
+`namespace`は小文字英字で始まり、小文字英数字・`.`・`-`だけを使う64文字以下のlogical ID、`key`は512文字以下です。absolute path、backslash、空segment、`.`／`..` segment、NULを拒否します。`revision`はintegrityやplatform間共通ETagではなく、adapterだけが解釈するopaque tokenです。
 
 `binary-body`はIR JSONへ本体を格納しないresource bindingです。producerがbinding IDを宣言し、putまたはbinary responseが最大1回consumeします。clone、tee、base64化、同じbodyの保存とresponseへの併用はMVP対象外です。分岐後に利用するbodyは全continuing branchで同じ所有状態でなければならず、複数回実行し得るloopから外側bodyをconsumeできません。
 

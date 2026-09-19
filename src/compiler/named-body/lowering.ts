@@ -1,4 +1,5 @@
 import {DEFAULT_MAX_BINARY_BYTES} from '../binary/types.js';
+import {isNamedDataNamespace} from '../../named-data-namespace.js';
 import type {
   ExpressionIrV2,
   NamedBodyRepresentationV2,
@@ -29,7 +30,6 @@ export interface NamedBodyLoweringResult {
 
 export type NamedBodyArguments = Readonly<Record<string, ExpressionIrV2>>;
 
-const NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
 const TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const KINDS: readonly NamedDataKindV2[] = ['structured', 'document', 'binary', 'asset'];
 const SCOPES: readonly NamedDataScopeV2[] = ['target', 'project'];
@@ -62,7 +62,7 @@ export function lowerNamedBodyResponse(
   ) {
     return {diagnostics};
   }
-  if (!NAMESPACE.test(namespace) || name.length < 1 || name.length > 256 || hasControlCharacter(name)) {
+  if (!isNamedDataNamespace(namespace) || name.length < 1 || name.length > 256 || hasControlCharacter(name)) {
     report(
       diagnostics,
       'TW2_NAMED_INVALID_DESCRIPTOR',

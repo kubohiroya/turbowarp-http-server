@@ -26,7 +26,7 @@ describe('conformance target layer', () => {
       if (!first.ok) throw new Error(`Target ${target.id} did not compile.`);
       expect(first.manifest.adapter).toEqual({id: target.id, version: target.adapterVersion});
       expect(Object.keys(first.files)).toEqual(target.expectedFiles);
-      await typecheckGeneratedProject(first.files, target.tsconfig, target.id);
+      await typecheckGeneratedProject(first.files, target.tsconfig);
       expect(first.files[target.id === 'cloudflare-workers' ? 'src/core.generated.ts' : 'functions/src/core.generated.ts'])
         .not.toMatch(/Cloudflare|Firebase|D1Database|R2Bucket|Firestore/u);
       if (target.id === 'cloudflare-workers') {
@@ -99,8 +99,7 @@ describe('conformance target layer', () => {
 
 async function typecheckGeneratedProject(
   files: Readonly<Record<string, string>>,
-  tsconfig: string,
-  target: string
+  tsconfig: string
 ): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), 'tw-conformance-target-'));
   try {
@@ -109,19 +108,7 @@ async function typecheckGeneratedProject(
       await mkdir(dirname(destination), {recursive: true});
       await writeFile(destination, contents);
     }
-    if (target === 'cloudflare-workers') {
-      const typesDirectory = join(directory, 'node_modules/@cloudflare/workers-types');
-      await mkdir(typesDirectory, {recursive: true});
-      await writeFile(
-        join(typesDirectory, 'package.json'),
-        JSON.stringify({name: '@cloudflare/workers-types', version: '0.0.0-test', types: 'index.d.ts'})
-      );
-      await writeFile(join(typesDirectory, 'index.d.ts'), cloudflareSdkStubs());
-      await symlink(resolve('node_modules/hono'), join(directory, 'node_modules/hono'));
-    } else {
-      await symlink(resolve('node_modules'), join(directory, 'node_modules'));
-      await writeFile(join(directory, 'functions/src/conformance-sdk-stubs.d.ts'), firebaseSdkStubs());
-    }
+    await symlink(resolve('node_modules'), join(directory, 'node_modules'));
     try {
       await execFileAsync(resolve('node_modules/.bin/tsc'), ['--project', join(directory, tsconfig)], {
         cwd: resolve('.')
@@ -136,40 +123,6 @@ async function typecheckGeneratedProject(
   } finally {
     await rm(directory, {recursive: true, force: true});
   }
-}
-
-function cloudflareSdkStubs(): string {
-  return `interface D1ResultMeta {changes: number}
-interface D1Result<T> {results: T[]; meta: D1ResultMeta}
-interface D1PreparedStatement {
-  bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<D1Result<unknown>>;
-  all<T>(): Promise<D1Result<T>>;
-  first<T>(): Promise<T | null>;
-}
-interface D1Database {prepare(query: string): D1PreparedStatement}
-interface R2HTTPMetadata {contentType?: string}
-interface R2Object {version: string; size: number; httpMetadata: R2HTTPMetadata; customMetadata: Record<string, string>}
-interface R2ObjectBody extends R2Object {body: ReadableStream<Uint8Array>}
-interface R2PutOptions {httpMetadata?: R2HTTPMetadata; customMetadata?: Record<string, string>; sha256?: string}
-interface R2Bucket {
-  head(key: string): Promise<R2Object | null>;
-  get(key: string): Promise<R2ObjectBody | null>;
-  put(key: string, value: ReadableStream<Uint8Array>, options?: R2PutOptions): Promise<R2Object | null>;
-  delete(key: string): Promise<void>;
-}
-`;
-}
-
-function firebaseSdkStubs(): string {
-  return `declare module 'firebase-admin/app' {export function initializeApp(): unknown}
-declare module 'firebase-admin/firestore' {export function getFirestore(): import('./platform.js').FirestoreLike}
-declare module 'firebase-admin/storage' {export function getStorage(): {bucket(name?: string): import('./platform.js').BucketLike}}
-declare module 'firebase-functions/v2/https' {
-  import type {IncomingMessage, ServerResponse} from 'node:http';
-  export function onRequest(handler: (request: IncomingMessage, response: ServerResponse) => void | Promise<void>): unknown;
-}
-`;
 }
 
 function targetIr(): DeployIrV2 {

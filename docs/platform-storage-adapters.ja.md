@@ -15,7 +15,7 @@ binary storageは[Binary resource semantics](binary-resource-semantics.ja.md)の
 | HTTP runtime | Hono Fetch handler | HTTPS `onRequest` + Hono Node listener |
 | `record-store` | D1 `records` table | Firestore root collection |
 | `object-storage` | R2 bucket | Cloud Storage bucket |
-| object revision | R2 object version | Cloud Storage generation |
+| object revision | R2 upload version + ETag + upload時刻のopaque token | Cloud Storage generation |
 | binary integrity | 指定されたSHA-256をR2で検証しmetadataへ保持 | stream中にSHA-256を計算・検証してmetadataへ保持 |
 | local boundary | Wrangler local runtime | Firebase Emulator Suite |
 
@@ -33,14 +33,14 @@ objectの物理keyは両targetで次の形式です。
 v1/<namespace>/<key>
 ```
 
-- `namespace`は英字で始まる64文字以下のlogical IDです。
+- `namespace`は小文字英字で始まり、小文字英数字・`.`・`-`だけを使う64文字以下のlogical IDです。
 - `key`はrelative pathで、absolute path、backslash、空segment、`.`、`..`を拒否します。
 - user inputをbucket名、Firestore collection名、binding名へ直接展開しません。
 - binaryはbase64化してD1、Firestore、KVへ格納しません。
 - `contentType`はCR／LFを拒否し、`integrity`は`sha256:<lowercase-hex-64>`だけを受理します。
 - `revision`はadapter固有のopaque tokenで、target間で同じ値になることを保証しません。
 
-metadata envelopeのversionは物理key prefixの`v1`で固定します。Cloudflareは入力にintegrityがある場合だけ`twIntegrity`へ保持し、R2のSHA-256検証を利用します。R2の文書化された`BadDigest (10037)`だけをintegrity不一致へ変換し、その他のSDK例外はstorage failureとして扱います。Firebaseはupload streamをincremental hashし、計算したintegrityを`twIntegrity`へ保持します。共通coreが依存できるのはlogical descriptorだけで、R2 ETagやCloud Storage SDK objectを外へ公開しません。([R2 error codes](https://developers.cloudflare.com/r2/api/error-codes/))
+metadata envelopeのversionは物理key prefixの`v1`で固定します。Cloudflareは入力にintegrityがある場合だけ`twIntegrity`へ保持し、R2のSHA-256検証を利用します。R2の文書化された`BadDigest (10037)`だけをintegrity不一致へ変換し、その他のSDK例外はstorage failureとして扱います。Firebaseはupload streamを一時objectへ書きながらincremental hashし、size／integrity検証後にだけdestinationへcopyします。計算したintegrityは`twIntegrity`へ保持します。共通coreが依存できるのはlogical descriptorだけで、R2 ETagやCloud Storage SDK objectを外へ公開しません。([R2 error codes](https://developers.cloudflare.com/r2/api/error-codes/))
 
 ## target config
 
@@ -69,9 +69,9 @@ Firebaseではfunction export名、bucket名を読む環境変数名、Firestore
 
 ## access policyと整合性
 
-R2のWorkers APIはobjectのhead/get/put/deleteとstreamを提供し、objectとlistingのstrong consistencyを保証します。生成adapterはobject revisionを確認し、deleteの対象revisionが異なる場合は削除しません。D1とR2をまたぐ原子的transactionは提供しません。custom domain cacheを経由する場合の整合性はこのbinding contractの対象外です。([R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/), [R2 consistency](https://developers.cloudflare.com/r2/reference/consistency/))
+R2のWorkers APIはobjectのhead/get/put/deleteとstreamを提供し、objectとlistingのstrong consistencyを保証します。revisionはuploadごとに一意なR2 `version`、ETag、upload時刻を組み合わせたopaque tokenです。revision付きdeleteは事前に`version`を照合し、R2が原子的条件として提供するETagとupload時刻を使ったPUTでzero-byte tombstoneへ置換します。`version`自体はR2の条件付きPUTへ指定できないため、保証はR2の同一key書き込み制限とETag／upload時刻の識別性に依存します。revisionなしlocator deleteは条件不一致時に再解決して最大8回まで再試行しますが、rate limitなどR2が例外を返した場合はstorage failureです。resolve/getはtombstoneをnot foundとして扱います。D1とR2をまたぐ原子的transactionは提供しません。custom domain cacheを経由する場合の整合性はこのbinding contractの対象外です。([R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/), [R2 consistency](https://developers.cloudflare.com/r2/reference/consistency/), [R2 limits](https://developers.cloudflare.com/r2/platform/limits/))
 
-Firebase生成handlerはAdmin SDKと実行service accountのIAMでFirestore／Cloud Storageへaccessします。生成するFirestore RulesとStorage Rulesはbrowser clientのread/writeを既定で全拒否し、Admin SDKの認可境界とは混同しません。Firestoreのcollection + `createdAt` queryに必要なcomposite indexも生成します。([Admin SDK setup](https://firebase.google.com/docs/admin/setup), [Cloud Storage Admin](https://firebase.google.com/docs/storage/admin/start), [Firestore data](https://firebase.google.com/docs/firestore/manage-data/add-data))
+Firebase生成handlerはAdmin SDKと実行service accountのIAMでFirestore／Cloud Storageへaccessします。objectのreadはmetadataで確定したgenerationへstreamを固定し、copy完了時はAPI responseの`resource` metadataから宛先generationを取得します。revision付きdeleteと一時object cleanupにはgeneration preconditionを使用します。生成するFirestore RulesとStorage Rulesはbrowser clientのread/writeを既定で全拒否し、Admin SDKの認可境界とは混同しません。Firestoreのcollection + `createdAt` queryに必要なcomposite indexも生成します。([Admin SDK setup](https://firebase.google.com/docs/admin/setup), [Cloud Storage Admin](https://firebase.google.com/docs/storage/admin/start), [Firestore data](https://firebase.google.com/docs/firestore/manage-data/add-data))
 
 ## 検証とsmoke test
 

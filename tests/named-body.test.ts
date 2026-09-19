@@ -53,6 +53,51 @@ describe('named response body', () => {
     expect(contexts[0]?.target).toBe(target);
   });
 
+  it('dispatches one namespace by kind through the canonical registry', async () => {
+    const registry = new NamedDataRegistry();
+    const register = (
+      kind: 'structured' | 'asset',
+      representation: 'json' | 'raw',
+      mediaType: string,
+      bytes: Uint8Array
+    ): void => {
+      const metadata = (reference: NamedBodyRequest['reference']) => ({
+        reference,
+        nativeRepresentation: representation,
+        representation,
+        mediaType,
+        byteLength: bytes.byteLength,
+        revision: `fixture:${kind}:1`,
+        replayable: true
+      });
+      registry.registerProvider({
+        namespace: 'shared',
+        kind,
+        canResolve: (reference, requested) => reference.kind === kind && requested === representation,
+        stat: (reference) => metadata(reference),
+        openBody: (reference) => ({...metadata(reference), body: bytes, release: () => undefined}),
+        release: () => undefined
+      });
+    };
+    register('structured', 'json', 'application/json', encoder.encode('{"ok":true}'));
+    register('asset', 'raw', 'application/octet-stream', new Uint8Array([1, 2, 3]));
+    const resolver = new NamedDataRegistryResolver(registry, () => ({project: {}}));
+
+    const structured = await createNamedBodyResponse(
+      resolver,
+      request('value', 'json', {namespace: 'shared', kind: 'structured'}),
+      {featureFlags: enabled}
+    );
+    const asset = await createNamedBodyResponse(
+      resolver,
+      request('value', 'raw', {namespace: 'shared', kind: 'asset'}),
+      {featureFlags: enabled}
+    );
+
+    await expect(structured.json()).resolves.toEqual({ok: true});
+    expect(new Uint8Array(await asset.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
   it.each([
     ['json', 'profile', 'application/json; charset=utf-8', '{"name":"Ada"}'],
     ['yaml', 'profile', 'application/yaml; charset=utf-8', 'name: Ada\n'],
@@ -188,6 +233,29 @@ describe('named response body', () => {
     expect(provider.releases).toEqual(['complete']);
   });
 
+  it.each([
+    ['shorter', 3, [1, 2]],
+    ['longer', 1, [1, 2]]
+  ] as const)('rejects a stream %s than its declared byte length', async (_label, byteLength, bytes) => {
+    const provider = new FakeNamedBodyProvider();
+    provider.seed(
+      'stream-length',
+      'raw',
+      {mediaType: 'application/octet-stream', byteLength},
+      streamOf([...bytes])
+    );
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('stream-length', 'raw'),
+      {featureFlags: enabled, maxBodyBytes: 4}
+    );
+
+    expect(response.headers.get('content-length')).toBeNull();
+    await expect(response.arrayBuffer()).rejects.toMatchObject({code: 'NAMED_RESPONSE_INVALID_METADATA'});
+    expect(provider.releases).toEqual(['error']);
+  });
+
   it('cancels and releases an open body when the request is aborted', async () => {
     const cancel = vi.fn();
     const provider = new FakeNamedBodyProvider();
@@ -241,6 +309,8 @@ describe('named response body', () => {
 
   it.each([
     ['invalid namespace', {...request('profile', 'json'), reference: {...request('profile', 'json').reference, namespace: '../test'}}],
+    ['uppercase namespace', {...request('profile', 'json'), reference: {...request('profile', 'json').reference, namespace: 'Asset'}}],
+    ['underscore namespace', {...request('profile', 'json'), reference: {...request('profile', 'json').reference, namespace: 'asset_data'}}],
     ['control character', {...request('bad\nname', 'json')}],
     ['missing target identity', {...request('profile', 'json'), reference: {...request('profile', 'json').reference, scope: 'target'}}],
     ['project identity ambiguity', {...request('profile', 'json'), targetId: 'Stage:1'}]
@@ -415,6 +485,26 @@ describe('named response body', () => {
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({error: 'NAMED_DATA_INVALID_METADATA'});
   });
+
+  it.each(['NAMED_DATA_INVALID_REGISTRY', 'NAMED_DATA_PROVIDER_CONFLICT'] as const)(
+    'maps registry contract failure %s to an internal error',
+    async (code) => {
+      const provider: NamedBodyProvider = {
+        canResolve: () => true,
+        stat: async () => {throw Object.assign(new Error('private registry detail'), {code});},
+        openBody: async () => {throw Object.assign(new Error('private registry detail'), {code});}
+      };
+
+      const response = await createNamedBodyResponse(
+        new NamedBodyResolver([provider]),
+        request('profile', 'json'),
+        {featureFlags: enabled}
+      );
+
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({error: code});
+    }
+  );
 });
 
 interface SeededBody {

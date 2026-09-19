@@ -15,13 +15,13 @@ interface NamedDataReference {
 }
 ```
 
-- `namespace`は英字で始まる64文字以下のlogical IDです。
+- `namespace`は小文字英字で始まり、小文字英数字・`.`・`-`だけを使う64文字以下のlogical IDです。データ型ではなく所有領域を表します。
 - `name`は1〜256文字で、control characterを含めません。storage pathとして直接使用しません。
 - `target` scopeはruntime-localな`targetId`を必須とします。
 - `project` scopeへ`targetId`を付ける曖昧な参照は拒否します。
 - requested representationは`json`、`yaml`、`html`、`markdown`、`raw`のいずれかです。
 
-不正参照はproviderへ渡す前に`NAMED_DATA_INVALID_REF`で拒否します。providerは`canResolve`でnamespace／kind／scopeを選択し、複数登録時はregistry順の最初のproviderを使用します。
+不正参照はproviderへ渡す前に`NAMED_DATA_INVALID_REF`で拒否します。canonical registryは`(namespace, kind)`をdispatch keyとし、同じ論理namespaceへ異なるkindのproviderを登録できます。HTTP Server固有のresolverへproviderを直接並べる場合は、`canResolve`でnamespace／kind／scopeを選択し、registry順の最初のproviderを使用します。
 
 ## stat、openBody、snapshot
 
@@ -37,7 +37,7 @@ interface NamedBodyHandle {
 
 `HEAD`は`stat`だけを呼び、bodyをopenしません。status errorを含めてbodyは返しません。`GET`相当の処理は`openBody`で得たhandleを1回だけreleaseします。open済みhandleはsnapshotであり、同じ名前のresourceがreplaceされても途中で新しい内容へ切り替わりません。
 
-buffered bodyはresponseへ渡す前にcopyし、宣言`byteLength`と実byte数の不一致を502で拒否します。streamは既知lengthがなくてもchunkごとに上限をcountします。上限超過、consumer cancel、AbortSignal、正常完了をsource cancel／release reasonへ伝えます。release failureはprivate provider messageを返さず`NAMED_DATA_PROVIDER_RELEASED`へ変換します。
+buffered bodyはresponseへ渡す前にcopyし、宣言`byteLength`と実byte数の不一致を502で拒否します。streamは既知lengthがなくてもchunkごとに上限をcountし、宣言`byteLength`がある場合は完了時の実測値とも照合します。未検証streamへ`Content-Length`は設定しません。Response開始後に判明した上限超過またはlength不一致は別のHTTP statusへ変更できないため、streamをcancelしてstable error codeで終了します。上限超過、consumer cancel、AbortSignal、正常完了をsource cancel／release reasonへ伝えます。release failureはprivate provider messageを返さず`NAMED_DATA_PROVIDER_RELEASED`へ変換します。
 
 ## representationとHTTP metadata
 
@@ -66,6 +66,7 @@ metadataの`mediaType`、`byteLength`、`etag`／`revision`を検証し、Conten
 | `NAMED_DATA_ABORTED` | 499 |
 | `NAMED_DATA_PROVIDER_RELEASED` | 503 |
 | `NAMED_DATA_INVALID_REGISTRY`／`NAMED_DATA_PROVIDER_CONFLICT` | 500 |
+HTTP ServerはNamed Data `0.2.x`契約を要求します。`0.1.x`のruntime versioning error codeは受理せず、consumerはNamed DataとHTTP Serverを同時に更新します。
 
 feature無効時は`NAMED_RESPONSE_BODY_DISABLED`、provider metadata contract違反は`NAMED_RESPONSE_INVALID_METADATA`です。
 

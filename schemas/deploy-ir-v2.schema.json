@@ -70,7 +70,7 @@
       "additionalProperties": false,
       "required": ["namespace", "key"],
       "properties": {
-        "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]*$"},
+        "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{0,63}$"},
         "key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"},
         "contentType": {"type": "string", "minLength": 1, "maxLength": 255},
         "size": {"type": "integer", "minimum": 0},
@@ -83,7 +83,7 @@
       "additionalProperties": false,
       "required": ["namespace", "key"],
       "properties": {
-        "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]*$", "maxLength": 64},
+        "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{0,63}$"},
         "key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"}
       }
     },
@@ -725,7 +725,7 @@
           "additionalProperties": false,
           "required": ["namespace", "name", "kind", "scope"],
           "properties": {
-            "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"},
+            "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{0,63}$"},
             "name": {"type": "string", "minLength": 1, "maxLength": 256},
             "kind": {"enum": ["structured", "document", "binary", "asset"]},
             "scope": {"enum": ["target", "project"]}

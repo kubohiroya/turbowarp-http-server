@@ -4,6 +4,7 @@ import type {
   NamedBodyRequest,
   NamedDataErrorCode
 } from './named-body.js';
+import {isNamedDataNamespace} from './named-data-namespace.js';
 import type {ResourceCapability, ResourceMetadata, ResourceSnapshot} from './server.js';
 
 export interface AssetManagerNamedBodyProviderOptions {
@@ -12,7 +13,6 @@ export interface AssetManagerNamedBodyProviderOptions {
 }
 
 const DEFAULT_NAMESPACE = 'asset';
-const NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
 
 /** Adapts the public Asset Manager resource capability without reading extension-private state. */
 export function createAssetManagerNamedBodyProvider(
@@ -21,10 +21,11 @@ export function createAssetManagerNamedBodyProvider(
 ): NamedBodyProvider {
   const namespace = options.namespace ?? DEFAULT_NAMESPACE;
   const projectRouteName = options.projectRouteName ?? '';
-  if (!NAMESPACE.test(namespace)) throw new TypeError('Asset Manager provider namespace is invalid.');
+  if (!isNamedDataNamespace(namespace)) throw new TypeError('Asset Manager provider namespace is invalid.');
 
   return {
-    canResolve: (request) => request.reference.namespace === namespace,
+    canResolve: (request) =>
+      request.reference.namespace === namespace && request.reference.kind === 'asset',
     async stat(request, signal) {
       assertSupportedRequest(request);
       throwIfAborted(signal);
