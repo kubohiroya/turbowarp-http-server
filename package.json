@@ -40,14 +40,14 @@
   ],
   "packageManager": "pnpm@11.11.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18.0"
   },
   "scripts": {
     "dev": "vite build --watch",
     "dev:server": "tsx watch src/cli.ts",
     "typecheck": "tsc --noEmit",
     "build": "vite build && tsc -p tsconfig.cli.json",
-    "lint": "eslint src tests vite.config.ts",
+    "lint": "eslint src tests scripts/check-target-runtimes.mts vite.config.ts",
     "test": "vitest run",
     "test:conformance": "vitest run tests/conformance",
     "test:conformance:frontend": "vitest run tests/conformance/frontend.test.ts",

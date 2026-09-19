@@ -71,12 +71,13 @@ async function checkCloudflare(directory: string): Promise<void> {
 async function checkFirebase(directory: string): Promise<void> {
   await symlink(resolve('node_modules'), join(directory, 'functions/node_modules'));
   await execute(binaries.tsc, ['--project', join(directory, 'functions/tsconfig.json')], root);
+  const allocatedPorts = await freePorts(5);
   const ports = {
-    functions: await freePort(),
-    firestore: await freePort(),
-    storage: await freePort(),
-    hub: await freePort(),
-    logging: await freePort()
+    functions: allocatedPorts[0]!,
+    firestore: allocatedPorts[1]!,
+    storage: allocatedPorts[2]!,
+    hub: allocatedPorts[3]!,
+    logging: allocatedPorts[4]!
   };
   await writeFile(
     join(directory, 'firebase.runtime.json'),
@@ -241,6 +242,12 @@ async function freePort(): Promise<number> {
       server.close((error) => error === undefined ? resolvePort(address.port) : rejectPort(error));
     });
   });
+}
+
+async function freePorts(count: number): Promise<number[]> {
+  const ports = new Set<number>();
+  while (ports.size < count) ports.add(await freePort());
+  return [...ports];
 }
 
 function fail(message: string): never {
