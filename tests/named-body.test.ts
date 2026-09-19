@@ -289,6 +289,56 @@ describe('named response body', () => {
     expect(provider.releases).toEqual(['error']);
   });
 
+  it('rejects a stream that ends before its declared length', async () => {
+    const provider = new FakeNamedBodyProvider();
+    provider.seed(
+      'stream',
+      'raw',
+      {mediaType: 'application/octet-stream', byteLength: 4},
+      streamOf([1, 2, 3])
+    );
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('stream', 'raw'),
+      {featureFlags: enabled}
+    );
+
+    await expect(response.arrayBuffer()).rejects.toMatchObject({
+      code: 'NAMED_RESPONSE_INVALID_METADATA',
+      message: 'NAMED_RESPONSE_INVALID_METADATA'
+    });
+    expect(provider.releases).toEqual(['error']);
+  });
+
+  it('cancels a stream as soon as it exceeds its declared length', async () => {
+    const cancel = vi.fn();
+    const provider = new FakeNamedBodyProvider();
+    provider.seed(
+      'stream',
+      'raw',
+      {mediaType: 'application/octet-stream', byteLength: 2},
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3]));
+        },
+        cancel
+      })
+    );
+
+    const response = await createNamedBodyResponse(
+      new NamedBodyResolver([provider]),
+      request('stream', 'raw'),
+      {featureFlags: enabled}
+    );
+
+    await expect(response.arrayBuffer()).rejects.toMatchObject({
+      code: 'NAMED_RESPONSE_INVALID_METADATA'
+    });
+    expect(cancel).toHaveBeenCalledWith('named_body_length_mismatch');
+    expect(provider.releases).toEqual(['error']);
+  });
+
   it('keeps an opened stream snapshot isolated from same-name replacement', async () => {
     const provider = new FakeNamedBodyProvider();
     provider.seed('snapshot', 'raw', {mediaType: 'application/octet-stream'}, streamOf([1, 2]));
