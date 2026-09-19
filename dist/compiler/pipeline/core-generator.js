@@ -20,6 +20,11 @@ export interface BinaryObjectStore {
   put(locator: BinaryLocator, source: BinaryBodySource, metadata: BinaryMetadata, maxBytes: number): Promise<BinaryRef>;
   delete(target: BinaryLocator | BinaryRef): Promise<boolean>;
 }
+export type NamedDataReference = {namespace: string; name: string; kind: 'structured' | 'document' | 'binary' | 'asset'; scope: 'target' | 'project'};
+export type NamedBodyRequest = {reference: NamedDataReference; representation: 'json' | 'yaml' | 'html' | 'markdown' | 'raw'; targetId?: string};
+export interface NamedBodyService {
+  respond(request: NamedBodyRequest, options: {method: string; status: number; headers: Headers; signal: AbortSignal; maxBodyBytes: number}): Promise<Response>;
+}
 export interface RecordStore {
   create(collection: string, data: unknown): Promise<StoredRecord>;
   list(collection: string): Promise<StoredRecord[]>;
@@ -29,6 +34,7 @@ export interface RecordStore {
 export interface CoreServices {
   records?: (context: unknown) => RecordStore;
   objects?: (context: unknown) => BinaryObjectStore;
+  namedBodies?: (context: unknown) => NamedBodyService;
   clientAddress?: (context: unknown) => string;
 }
 type App = Hono<any>;
@@ -112,6 +118,21 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
             iterations.delete(statement.loopId);
           }
         }
+      } else if (statement.kind === 'respond-named-body') {
+        return requiredNamedBodies().respond(
+          {
+            reference: statement.reference,
+            representation: statement.representation,
+            ...(statement.targetId === undefined ? {} : {targetId: statement.targetId})
+          },
+          {
+            method: c.req.method,
+            status,
+            headers: new Headers(headers),
+            signal: c.req.raw.signal,
+            maxBodyBytes: statement.maxBytes
+          }
+        );
       } else if (statement.kind === 'respond-binary') {
         const source = requiredBinaryBody(statement.body).take();
         if (source.contentType !== undefined && !headers.has('content-type')) headers.set('content-type', source.contentType);
@@ -168,6 +189,10 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
   function requiredObjects(): BinaryObjectStore {
     if (!services.objects) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
     return services.objects(c);
+  }
+  function requiredNamedBodies(): NamedBodyService {
+    if (!services.namedBodies) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
+    return services.namedBodies(c);
   }
   function requiredBinaryBody(id: string): BinaryBodyHandle {
     const value = bindings.get(id);

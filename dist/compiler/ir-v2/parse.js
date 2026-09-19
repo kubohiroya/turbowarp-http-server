@@ -1,6 +1,8 @@
 import { parseJsonWithoutDuplicateKeys } from './strict-json.js';
 import { DEPLOY_IR_V2_VERSION, JSON_VALUE_TYPE_V2 } from './types.js';
-const METHODS = new Set(['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+const METHODS = new Set(['ALL', 'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
+const NAMED_NAMESPACE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u;
+const NAMED_TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const ATOMIC_TYPES = new Set([
     'null',
     'boolean',
@@ -97,7 +99,7 @@ function parseCapability(value, location) {
         exactKeys(capability, ['kind'], location);
         return { kind };
     }
-    if (kind === 'object-storage' || kind === 'streaming-body') {
+    if (kind === 'object-storage' || kind === 'streaming-body' || kind === 'named-body-provider') {
         exactKeys(capability, ['kind'], location);
         return { kind };
     }
@@ -278,6 +280,46 @@ function parseStatement(value, location) {
             ? undefined
             : parseBinaryDisposition(statement.disposition, `${location}.disposition`);
         return optional(optional({ kind, body: bindingId(statement.body, `${location}.body`) }, 'disposition', disposition), 'sourceRef', sourceRef);
+    }
+    if (kind === 'respond-named-body') {
+        exactKeys(statement, ['kind', 'reference', 'representation', 'targetId', 'maxBytes', 'sourceRef'], location);
+        const referenceValue = object(statement.reference, `${location}.reference`);
+        exactKeys(referenceValue, ['namespace', 'name', 'kind', 'scope'], `${location}.reference`);
+        const namespace = nonEmptyString(referenceValue.namespace, `${location}.reference.namespace`);
+        if (!NAMED_NAMESPACE.test(namespace))
+            throw new Error(`${location}.reference.namespace is invalid.`);
+        const name = nonEmptyString(referenceValue.name, `${location}.reference.name`);
+        if (name.length > 256 || [...name].some(isControlCharacter)) {
+            throw new Error(`${location}.reference.name is invalid.`);
+        }
+        const dataKind = referenceValue.kind;
+        if (dataKind !== 'structured' && dataKind !== 'document' && dataKind !== 'binary' && dataKind !== 'asset') {
+            throw new Error(`${location}.reference.kind is invalid.`);
+        }
+        const scope = referenceValue.scope;
+        if (scope !== 'target' && scope !== 'project')
+            throw new Error(`${location}.reference.scope is invalid.`);
+        const representation = statement.representation;
+        if (representation !== 'json' &&
+            representation !== 'yaml' &&
+            representation !== 'html' &&
+            representation !== 'markdown' &&
+            representation !== 'raw') {
+            throw new Error(`${location}.representation is invalid.`);
+        }
+        const targetId = optionalString(statement.targetId, `${location}.targetId`);
+        if (scope === 'target' && (targetId === undefined || !NAMED_TARGET_ID.test(targetId))) {
+            throw new Error(`${location}.targetId is required for target scope.`);
+        }
+        if (scope === 'project' && targetId !== undefined) {
+            throw new Error(`${location}.targetId is not allowed for project scope.`);
+        }
+        return optional(optional({
+            kind,
+            reference: { namespace, name, kind: dataKind, scope },
+            representation,
+            maxBytes: binaryLimit(statement.maxBytes, `${location}.maxBytes`)
+        }, 'targetId', targetId), 'sourceRef', sourceRef);
     }
     throw new Error(`${location}.kind is unsupported: ${kind}`);
 }
@@ -662,6 +704,10 @@ function integer(value, location) {
     if (typeof value !== 'number' || !Number.isSafeInteger(value))
         throw new Error(`${location} must be a safe integer.`);
     return value;
+}
+function isControlCharacter(character) {
+    const codePoint = character.codePointAt(0);
+    return codePoint <= 0x1f || codePoint === 0x7f;
 }
 function exactKeys(record, allowed, location) {
     const allowedSet = new Set(allowed);

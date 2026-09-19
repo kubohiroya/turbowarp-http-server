@@ -1,11 +1,17 @@
 import { cloudflareWorkersAdapter } from '../adapters/cloudflare.js';
 import { firebaseFunctionsAdapter } from '../adapters/firebase.js';
+import { DEFAULT_COMPILER_FEATURE_FLAGS } from '../feature-flags.js';
 import { validateDeployIrV2Subset } from '../validator/ir-validator.js';
 import { generateHonoCore } from './core-generator.js';
 import { PlatformAdapterRegistry } from './registry.js';
 import { extractCapabilityRequirements } from './requirements.js';
 export function compileDeployIrV2(ir, options) {
-    const targetNeutral = validateDeployIrV2Subset(ir);
+    const featureFlags = {
+        ...DEFAULT_COMPILER_FEATURE_FLAGS,
+        ...options.featureFlags,
+        compilerIrV2: true
+    };
+    const targetNeutral = validateDeployIrV2Subset(ir, undefined, featureFlags);
     if (targetNeutral.length > 0)
         return { ok: false, diagnostics: targetNeutral };
     const registry = new PlatformAdapterRegistry();
@@ -69,7 +75,8 @@ function visitStatements(statements, routeId, maximum, targetId, diagnostics) {
     for (const statement of statements) {
         if ((statement.kind === 'request-body-binary' ||
             statement.kind === 'asset-object-get' ||
-            statement.kind === 'asset-object-put') &&
+            statement.kind === 'asset-object-put' ||
+            statement.kind === 'respond-named-body') &&
             statement.maxBytes > maximum) {
             diagnostics.push({
                 severity: 'error',

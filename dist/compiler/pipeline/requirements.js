@@ -48,6 +48,8 @@ function statementRequires(statement, key) {
         return statement.kind.startsWith('record-');
     if (key === 'object-storage')
         return statement.kind.startsWith('asset-');
+    if (key === 'named-body-provider')
+        return statement.kind === 'respond-named-body';
     if (key === 'streaming-body') {
         return (statement.kind === 'request-body-binary' ||
             statement.kind === 'asset-object-get' ||

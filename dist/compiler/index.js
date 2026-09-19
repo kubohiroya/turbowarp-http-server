@@ -31,7 +31,11 @@ export async function compileToDirectory(options) {
         const targetConfig = options.targetConfig === undefined
             ? undefined
             : JSON.parse(await readFile(resolve(options.targetConfig), 'utf8'));
-        const result = compileDeployIrV2(ir, { target: options.target, targetConfig });
+        const result = compileDeployIrV2(ir, {
+            target: options.target,
+            targetConfig,
+            featureFlags: { namedResponseBody: options.namedResponseBody === true }
+        });
         if (!result.ok)
             throw new CompilerDiagnosticsError(result.diagnostics);
         await writeGeneratedFiles(outputPath, result.files, options.force === true);

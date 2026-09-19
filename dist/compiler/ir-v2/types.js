@@ -43,6 +43,7 @@ export const IR_V2_STATEMENT_KINDS = [
     'bounded-loop',
     'json-for-each',
     'respond-binary',
+    'respond-named-body',
     'respond'
 ];
 export const IR_V2_STATEMENT_EFFECTS = {
@@ -66,6 +67,7 @@ export const IR_V2_STATEMENT_EFFECTS = {
     'bounded-loop': ['control'],
     'json-for-each': ['control'],
     'respond-binary': ['response-write', 'binary-consume'],
+    'respond-named-body': ['response-write'],
     respond: ['response-write']
 };
 export const JSON_VALUE_TYPE_V2 = {

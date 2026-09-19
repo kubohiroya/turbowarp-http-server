@@ -105,6 +105,17 @@ export class NamedBodyResolver {
   }
 }
 
+export class NamedBodyResponder {
+  public constructor(
+    private readonly resolver: NamedBodyResolver,
+    private readonly featureFlags: Readonly<NamedResponseBodyFeatureFlags> = DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS
+  ) {}
+
+  public respond(request: NamedBodyRequest, options: NamedBodyResponseOptions = {}): Promise<Response> {
+    return createNamedBodyResponse(this.resolver, request, {...options, featureFlags: this.featureFlags});
+  }
+}
+
 export async function createNamedBodyResponse(
   resolver: NamedBodyResolver,
   request: NamedBodyRequest,

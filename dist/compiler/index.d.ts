@@ -19,6 +19,7 @@ export interface CompileOptions {
     irVersion?: 1 | 2;
     target?: string;
     targetConfig?: string;
+    namedResponseBody?: boolean;
 }
 export interface CompilerOutput {
     ir: DeployIr | DeployIrV2;

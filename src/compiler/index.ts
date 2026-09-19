@@ -27,6 +27,7 @@ export interface CompileOptions {
   irVersion?: 1 | 2;
   target?: string;
   targetConfig?: string;
+  namedResponseBody?: boolean;
 }
 
 export interface CompilerOutput {
@@ -52,7 +53,11 @@ export async function compileToDirectory(options: CompileOptions): Promise<Compi
       options.targetConfig === undefined
         ? undefined
         : (JSON.parse(await readFile(resolve(options.targetConfig), 'utf8')) as unknown);
-    const result = compileDeployIrV2(ir, {target: options.target, targetConfig});
+    const result = compileDeployIrV2(ir, {
+      target: options.target,
+      targetConfig,
+      featureFlags: {namedResponseBody: options.namedResponseBody === true}
+    });
     if (!result.ok) throw new CompilerDiagnosticsError(result.diagnostics);
     await writeGeneratedFiles(outputPath, result.files, options.force === true);
     return {ir, diagnostics: [], files: Object.keys(result.files).sort()};

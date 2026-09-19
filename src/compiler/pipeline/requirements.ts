@@ -59,6 +59,7 @@ function findInStatements(statements: readonly StatementIrV2[], key: string): Lo
 function statementRequires(statement: StatementIrV2, key: string): boolean {
   if (key === 'record-store') return statement.kind.startsWith('record-');
   if (key === 'object-storage') return statement.kind.startsWith('asset-');
+  if (key === 'named-body-provider') return statement.kind === 'respond-named-body';
   if (key === 'streaming-body') {
     return (
       statement.kind === 'request-body-binary' ||

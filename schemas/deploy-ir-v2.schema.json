@@ -176,7 +176,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["kind"],
-          "properties": {"kind": {"enum": ["object-storage", "streaming-body"]}}
+          "properties": {"kind": {"enum": ["object-storage", "streaming-body", "named-body-provider"]}}
         },
         {
           "type": "object",
@@ -475,6 +475,7 @@
         {"$ref": "#/$defs/boundedLoop"},
         {"$ref": "#/$defs/jsonForEach"},
         {"$ref": "#/$defs/respondBinary"},
+        {"$ref": "#/$defs/respondNamedBody"},
         {"$ref": "#/$defs/respond"}
       ]
     },
@@ -713,6 +714,36 @@
         "sourceRef": {"$ref": "#/$defs/sourceRef"}
       }
     },
+    "respondNamedBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reference", "representation", "maxBytes"],
+      "properties": {
+        "kind": {"const": "respond-named-body"},
+        "reference": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["namespace", "name", "kind", "scope"],
+          "properties": {
+            "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"},
+            "name": {"type": "string", "minLength": 1, "maxLength": 256},
+            "kind": {"enum": ["structured", "document", "binary", "asset"]},
+            "scope": {"enum": ["target", "project"]}
+          }
+        },
+        "representation": {"enum": ["json", "yaml", "html", "markdown", "raw"]},
+        "targetId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"reference": {"properties": {"scope": {"const": "target"}}}}},
+          "then": {"required": ["targetId"]},
+          "else": {"not": {"required": ["targetId"]}}
+        }
+      ]
+    },
     "respond": {
       "type": "object",
       "additionalProperties": false,
@@ -730,7 +761,7 @@
       "required": ["id", "method", "path", "auth", "body"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
-        "method": {"enum": ["ALL", "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]},
+        "method": {"enum": ["ALL", "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]},
         "path": {"type": "string", "minLength": 1},
         "auth": {"enum": ["public", "required"]},
         "body": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/statement"}},

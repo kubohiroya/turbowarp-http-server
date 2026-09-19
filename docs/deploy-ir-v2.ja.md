@@ -16,7 +16,7 @@ Cloudflare／Firebaseのstorage mappingとtarget設定は[IR v2 platform storage
 
 layer横断のgolden／trace検証は[IR v2 semantic conformance harness](ir-v2-conformance.ja.md)を参照してください。
 
-Structured／document／binaryを共通HTTP bodyとして返す将来contractは[Named response body provider contract](named-response-body.ja.md)を参照してください。現時点ではprovider APIだけで、IR statementは未実装です。
+Structured／document／binaryを共通HTTP bodyとして返すprovider contractと`respond-named-body` statementは[Named response body provider contract](named-response-body.ja.md)を参照してください。実provider adapterは後続実装です。
 
 ## Versionと有効化
 
@@ -101,6 +101,7 @@ IR coreは製品名ではなく、次のような論理requirementを持ちま�
 - `record-store`
 - `object-storage`
 - `streaming-body`
+- `named-body-provider`
 - `request-metadata: client-address`
 - `auth: external-jwt | trusted-access-jwt`
 

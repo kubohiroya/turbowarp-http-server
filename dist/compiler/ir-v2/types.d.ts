@@ -1,6 +1,6 @@
 export declare const DEPLOY_IR_V2_VERSION: 2;
 export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "binding", "json-text-coerce", "json-parse", "json-stringify", "json-is-valid", "json-get", "json-has", "json-set", "json-delete", "json-keys", "json-length", "iteration-key", "iteration-index", "iteration-value"];
-export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "record-create", "record-list", "record-get", "record-delete", "asset-resolve", "request-body-binary", "asset-object-get", "asset-object-put", "asset-object-delete", "if", "bounded-loop", "json-for-each", "respond-binary", "respond"];
+export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "record-create", "record-list", "record-get", "record-delete", "asset-resolve", "request-body-binary", "asset-object-get", "asset-object-put", "asset-object-delete", "if", "bounded-loop", "json-for-each", "respond-binary", "respond-named-body", "respond"];
 export type EffectKindV2 = 'response-write' | 'handler-state-write' | 'record-read' | 'record-write' | 'object-read' | 'object-write' | 'binary-consume' | 'control';
 export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'set-status': readonly ["response-write"];
@@ -23,6 +23,7 @@ export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'bounded-loop': readonly ["control"];
     readonly 'json-for-each': readonly ["control"];
     readonly 'respond-binary': readonly ["response-write", "binary-consume"];
+    readonly 'respond-named-body': readonly ["response-write"];
     readonly respond: readonly ["response-write"];
 };
 export type JsonPrimitive = null | boolean | number | string;
@@ -60,6 +61,15 @@ export type BinaryContentDispositionV2 = {
     kind: 'attachment';
     filename: string;
 };
+export type NamedDataKindV2 = 'structured' | 'document' | 'binary' | 'asset';
+export type NamedDataScopeV2 = 'target' | 'project';
+export type NamedBodyRepresentationV2 = 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+export interface NamedDataReferenceV2 {
+    namespace: string;
+    name: string;
+    kind: NamedDataKindV2;
+    scope: NamedDataScopeV2;
+}
 export type AtomicValueTypeV2 = 'null' | 'boolean' | 'number' | 'string' | 'json-text' | 'json-array' | 'json-object' | 'binary-ref';
 export type ValueTypeV2 = AtomicValueTypeV2 | {
     kind: 'union';
@@ -313,6 +323,13 @@ export type StatementIrV2 = {
     disposition?: BinaryContentDispositionV2;
     sourceRef?: SourceRefV2;
 } | {
+    kind: 'respond-named-body';
+    reference: NamedDataReferenceV2;
+    representation: NamedBodyRepresentationV2;
+    targetId?: string;
+    maxBytes: number;
+    sourceRef?: SourceRefV2;
+} | {
     kind: 'respond';
     format: 'text' | 'html' | 'json';
     body: ExpressionIrV2;
@@ -324,6 +341,8 @@ export type CapabilityRequirementV2 = {
     kind: 'object-storage';
 } | {
     kind: 'streaming-body';
+} | {
+    kind: 'named-body-provider';
 } | {
     kind: 'request-metadata';
     field: 'client-address';
@@ -337,7 +356,7 @@ export type AuthPolicyV2 = {
     kind: 'jwt';
     scheme: 'external-jwt' | 'trusted-access-jwt';
 };
-export type HttpMethodV2 = 'ALL' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
+export type HttpMethodV2 = 'ALL' | 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 export interface RouteIrV2 {
     id: string;
     method: HttpMethodV2;

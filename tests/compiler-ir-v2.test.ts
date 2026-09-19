@@ -145,9 +145,9 @@ describe('Deploy IR v2 schema foundation', () => {
   });
 
   it('keeps IR v2 disabled unless version 2 is explicitly selected', () => {
-    expect(DEFAULT_COMPILER_FEATURE_FLAGS).toEqual({compilerIrV2: false});
-    expect(compilerFeatureFlagsForIrVersion(1)).toEqual({compilerIrV2: false});
-    expect(compilerFeatureFlagsForIrVersion(2)).toEqual({compilerIrV2: true});
+    expect(DEFAULT_COMPILER_FEATURE_FLAGS).toEqual({compilerIrV2: false, namedResponseBody: false});
+    expect(compilerFeatureFlagsForIrVersion(1)).toEqual({compilerIrV2: false, namedResponseBody: false});
+    expect(compilerFeatureFlagsForIrVersion(2)).toEqual({compilerIrV2: true, namedResponseBody: false});
   });
 
   it('parses the committed v2 example and normalizes set-like type metadata', async () => {

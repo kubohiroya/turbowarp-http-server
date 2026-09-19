@@ -5,7 +5,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { WebSocketServer } from 'ws';
 import { createCommunityApp } from './community.js';
 import { HTTP_BRIDGE_PROTOCOL, HTTP_BRIDGE_PROTOCOL_VERSION, isBodyForbidden, isForbiddenResponseHeader, isValidHttpStatus, normalizeHeaderName, parseBridgeClientMessage, validateHeaderName, validateHeaderValue } from './protocol.js';
-export { createNamedBodyResponse, DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS, NAMED_DATA_ERROR_CODES, NamedBodyResolver } from './named-body.js';
+export { createNamedBodyResponse, DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS, NAMED_DATA_ERROR_CODES, NamedBodyResponder, NamedBodyResolver } from './named-body.js';
 const DEFAULT_MAX_RESOURCE_BODY_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 5000;

@@ -54,4 +54,10 @@ export declare class NamedBodyResolver {
     canResolve(request: NamedBodyRequest): boolean;
     private providerFor;
 }
+export declare class NamedBodyResponder {
+    private readonly resolver;
+    private readonly featureFlags;
+    constructor(resolver: NamedBodyResolver, featureFlags?: Readonly<NamedResponseBodyFeatureFlags>);
+    respond(request: NamedBodyRequest, options?: NamedBodyResponseOptions): Promise<Response>;
+}
 export declare function createNamedBodyResponse(resolver: NamedBodyResolver, request: NamedBodyRequest, options?: NamedBodyResponseOptions): Promise<Response>;

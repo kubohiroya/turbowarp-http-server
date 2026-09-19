@@ -42,6 +42,7 @@ record IDはtest adapterが`record-0001`から決定的に採番します。cloc
 
 - Structured Data: immutable path更新、Unicode code point順serialize、nested iteration、安定422 error
 - Binary: file-backed put/get/delete、stream size limit、consume-once/error contract
+- Named body: fake Structured Data／Asset Manager provider、JSON／raw response、HEAD metadata
 - v1→v2: status／header／bodyのobservable parity
 - Target: Cloudflare／Firebase adapterのdeterministic artifact、manifest、TypeScript typecheck
 

@@ -1,5 +1,6 @@
 import {cloudflareWorkersAdapter} from '../adapters/cloudflare.js';
 import {firebaseFunctionsAdapter} from '../adapters/firebase.js';
+import {DEFAULT_COMPILER_FEATURE_FLAGS, type CompilerFeatureFlags} from '../feature-flags.js';
 import type {DeployIrV2, StatementIrV2} from '../ir-v2/types.js';
 import {validateDeployIrV2Subset} from '../validator/ir-validator.js';
 import {generateHonoCore} from './core-generator.js';
@@ -16,6 +17,7 @@ export interface CompileDeployIrV2Options {
   target: string;
   targetConfig?: unknown;
   adapters?: readonly PlatformAdapter[];
+  featureFlags?: Partial<CompilerFeatureFlags>;
 }
 
 export type CompileDeployIrV2Result =
@@ -26,7 +28,12 @@ export function compileDeployIrV2(
   ir: DeployIrV2,
   options: CompileDeployIrV2Options
 ): CompileDeployIrV2Result {
-  const targetNeutral = validateDeployIrV2Subset(ir);
+  const featureFlags: CompilerFeatureFlags = {
+    ...DEFAULT_COMPILER_FEATURE_FLAGS,
+    ...options.featureFlags,
+    compilerIrV2: true
+  };
+  const targetNeutral = validateDeployIrV2Subset(ir, undefined, featureFlags);
   if (targetNeutral.length > 0) return {ok: false, diagnostics: targetNeutral};
 
   const registry = new PlatformAdapterRegistry();
@@ -99,7 +106,8 @@ function visitStatements(
     if (
       (statement.kind === 'request-body-binary' ||
         statement.kind === 'asset-object-get' ||
-        statement.kind === 'asset-object-put') &&
+        statement.kind === 'asset-object-put' ||
+        statement.kind === 'respond-named-body') &&
       statement.maxBytes > maximum
     ) {
       diagnostics.push({

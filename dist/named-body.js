@@ -39,6 +39,15 @@ export class NamedBodyResolver {
         return this.providers.find((provider) => provider.canResolve(request));
     }
 }
+export class NamedBodyResponder {
+    constructor(resolver, featureFlags = DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS) {
+        this.resolver = resolver;
+        this.featureFlags = featureFlags;
+    }
+    respond(request, options = {}) {
+        return createNamedBodyResponse(this.resolver, request, { ...options, featureFlags: this.featureFlags });
+    }
+}
 export async function createNamedBodyResponse(resolver, request, options = {}) {
     const method = options.method?.toUpperCase() ?? 'GET';
     if (!(options.featureFlags ?? DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS).namedResponseBody) {

@@ -45,6 +45,7 @@ export const IR_V2_STATEMENT_KINDS = [
   'bounded-loop',
   'json-for-each',
   'respond-binary',
+  'respond-named-body',
   'respond'
 ] as const;
 
@@ -79,6 +80,7 @@ export const IR_V2_STATEMENT_EFFECTS = {
   'bounded-loop': ['control'],
   'json-for-each': ['control'],
   'respond-binary': ['response-write', 'binary-consume'],
+  'respond-named-body': ['response-write'],
   respond: ['response-write']
 } as const satisfies Record<(typeof IR_V2_STATEMENT_KINDS)[number], readonly EffectKindV2[]>;
 
@@ -113,6 +115,17 @@ export type BinaryDeleteTargetV2 =
 export type BinaryContentDispositionV2 =
   | {kind: 'inline'}
   | {kind: 'attachment'; filename: string};
+
+export type NamedDataKindV2 = 'structured' | 'document' | 'binary' | 'asset';
+export type NamedDataScopeV2 = 'target' | 'project';
+export type NamedBodyRepresentationV2 = 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+
+export interface NamedDataReferenceV2 {
+  namespace: string;
+  name: string;
+  kind: NamedDataKindV2;
+  scope: NamedDataScopeV2;
+}
 
 export type AtomicValueTypeV2 =
   | 'null'
@@ -353,6 +366,14 @@ export type StatementIrV2 =
       sourceRef?: SourceRefV2;
     }
   | {
+      kind: 'respond-named-body';
+      reference: NamedDataReferenceV2;
+      representation: NamedBodyRepresentationV2;
+      targetId?: string;
+      maxBytes: number;
+      sourceRef?: SourceRefV2;
+    }
+  | {
       kind: 'respond';
       format: 'text' | 'html' | 'json';
       body: ExpressionIrV2;
@@ -363,6 +384,7 @@ export type CapabilityRequirementV2 =
   | {kind: 'record-store'}
   | {kind: 'object-storage'}
   | {kind: 'streaming-body'}
+  | {kind: 'named-body-provider'}
   | {kind: 'request-metadata'; field: 'client-address'}
   | {kind: 'auth'; scheme: 'external-jwt' | 'trusted-access-jwt'};
 
@@ -370,7 +392,7 @@ export type AuthPolicyV2 =
   | {kind: 'none'}
   | {kind: 'jwt'; scheme: 'external-jwt' | 'trusted-access-jwt'};
 
-export type HttpMethodV2 = 'ALL' | 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
+export type HttpMethodV2 = 'ALL' | 'GET' | 'HEAD' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 
 export interface RouteIrV2 {
   id: string;

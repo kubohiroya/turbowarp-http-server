@@ -25,6 +25,7 @@ export {
   createNamedBodyResponse,
   DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS,
   NAMED_DATA_ERROR_CODES,
+  NamedBodyResponder,
   NamedBodyResolver
 } from './named-body.js';
 export type {

@@ -10,6 +10,10 @@ import type {
   ValueTypeV2
 } from '../ir-v2/types.js';
 import {
+  DEFAULT_COMPILER_FEATURE_FLAGS,
+  type CompilerFeatureFlags
+} from '../feature-flags.js';
+import {
   DEFAULT_SERVER_SUBSET_POLICY,
   type ServerSubsetDiagnosticCode,
   type ServerSubsetPolicy,
@@ -28,6 +32,7 @@ interface ValidationContext {
   loopDepth: number;
   iterationLoopIds: ReadonlySet<string>;
   binaryBodies: BinaryBodyLifetimeTracker;
+  featureFlags: Readonly<CompilerFeatureFlags>;
 }
 
 interface FlowResult {
@@ -38,7 +43,8 @@ interface FlowResult {
 
 export function validateDeployIrV2Subset(
   ir: DeployIrV2,
-  policy: Readonly<ServerSubsetPolicy> = DEFAULT_SERVER_SUBSET_POLICY
+  policy: Readonly<ServerSubsetPolicy> = DEFAULT_SERVER_SUBSET_POLICY,
+  featureFlags: Readonly<CompilerFeatureFlags> = DEFAULT_COMPILER_FEATURE_FLAGS
 ): TargetNeutralDiagnostic[] {
   const diagnostics: TargetNeutralDiagnostic[] = [];
   const capabilities = new Set(ir.capabilities.map(capabilityKey));
@@ -50,7 +56,8 @@ export function validateDeployIrV2Subset(
       policy,
       loopDepth: 0,
       iterationLoopIds: new Set(),
-      binaryBodies: new BinaryBodyLifetimeTracker(ir.routes[0].id, diagnostics)
+      binaryBodies: new BinaryBodyLifetimeTracker(ir.routes[0].id, diagnostics),
+      featureFlags
     };
     requireCapability({kind: 'auth', scheme: ir.auth.scheme}, context, ir.routes[0].sourceRef);
   }
@@ -62,7 +69,8 @@ export function validateDeployIrV2Subset(
       policy,
       loopDepth: 0,
       iterationLoopIds: new Set(),
-      binaryBodies: new BinaryBodyLifetimeTracker(route.id, diagnostics)
+      binaryBodies: new BinaryBodyLifetimeTracker(route.id, diagnostics),
+      featureFlags
     };
     const flow = analyzeSequence(route.body, new Map(), context);
     if (flow.mayContinue || !flow.mayTerminate) {
@@ -120,10 +128,10 @@ function analyzeSequence(
     if (!flow.mayContinue) {
       report(
         context,
-        statement.kind === 'respond' || statement.kind === 'respond-binary'
+        isTerminalResponse(statement)
           ? 'TW2_MULTIPLE_RESPONSE'
           : 'TW2_RESPONSE_AFTER_TERMINAL',
-        statement.kind === 'respond' || statement.kind === 'respond-binary'
+        isTerminalResponse(statement)
           ? 'A control-flow path contains more than one terminal response.'
           : 'A statement appears after a terminal response.',
         'Terminal response ends the current handler path.',
@@ -303,11 +311,24 @@ function analyzeStatement(
       binaryBodies: loopBodies
     });
     context.binaryBodies.absorbPossibleExecution(loopBodies, statement.maxIterations, statement.sourceRef);
-  } else if (statement.kind === 'respond' || statement.kind === 'respond-binary') {
+  } else if (isTerminalResponse(statement)) {
     if (statement.kind === 'respond') validateExpression(statement.body, bindings, context);
-    else {
+    else if (statement.kind === 'respond-binary') {
       requireCapability({kind: 'streaming-body'}, context, statement.sourceRef);
       context.binaryBodies.consume(statement.body, statement.sourceRef);
+    } else {
+      requireCapability({kind: 'named-body-provider'}, context, statement.sourceRef);
+      validateBinaryLimit(statement.maxBytes, context, statement.sourceRef);
+      if (!context.featureFlags.namedResponseBody) {
+        report(
+          context,
+          'TW2_NAMED_RESPONSE_BODY_DISABLED',
+          'Named response body is disabled.',
+          'The experimental named body provider contract is protected by a startup-fixed feature flag.',
+          'Enable namedResponseBody explicitly for this compiler invocation or use an existing response operation.',
+          statement.sourceRef
+        );
+      }
     }
     if (context.loopDepth > 0) {
       report(
@@ -322,6 +343,12 @@ function analyzeStatement(
     return {mayContinue: false, mayTerminate: true, bindings};
   }
   return {mayContinue: true, mayTerminate: false, bindings};
+}
+
+function isTerminalResponse(
+  statement: StatementIrV2
+): statement is Extract<StatementIrV2, {kind: 'respond' | 'respond-binary' | 'respond-named-body'}> {
+  return statement.kind === 'respond' || statement.kind === 'respond-binary' || statement.kind === 'respond-named-body';
 }
 
 function declareBinaryBody(
@@ -701,7 +728,8 @@ function capabilityKey(capability: CapabilityRequirementV2): string {
   if (
     capability.kind === 'record-store' ||
     capability.kind === 'object-storage' ||
-    capability.kind === 'streaming-body'
+    capability.kind === 'streaming-body' ||
+    capability.kind === 'named-body-provider'
   ) {
     return capability.kind;
   }

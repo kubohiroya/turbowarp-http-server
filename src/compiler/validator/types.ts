@@ -27,7 +27,8 @@ export type ServerSubsetDiagnosticCode =
   | 'TW2_BINARY_BODY_CONSUMED'
   | 'TW2_BINARY_BODY_SCOPE'
   | 'TW2_BINARY_BODY_UNDECLARED'
-  | 'TW2_BINARY_LIMIT_INVALID';
+  | 'TW2_BINARY_LIMIT_INVALID'
+  | 'TW2_NAMED_RESPONSE_BODY_DISABLED';
 
 export interface TargetNeutralDiagnostic {
   severity: 'error';

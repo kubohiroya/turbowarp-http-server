@@ -2,7 +2,7 @@
 
 Named response bodyは、Structured Data、将来のDocument Data、binary／Asset Manager dataを、HTTP Serverから同じsnapshot／stream契約で返すための実験的な内部APIです。各extensionのprivate state、IndexedDB／OPFS layout、platform SDK objectはHTTP Serverへ公開しません。
 
-現時点ではprovider contractと共通Response builderだけを提供します。TurboWarp block、Deploy IR v2 statement、実Structured Data／Asset Manager providerへの接続は未実装です。`namedResponseBody`は既定falseで、明示的に有効化された呼び出しだけがproviderを参照します。
+現時点ではprovider contract、共通Response builder、Deploy IR v2のcanonical terminal statementを提供します。TurboWarp blockと実Structured Data／Asset Manager providerへの接続は未実装です。`namedResponseBody`は既定falseで、`--enable-named-response-body`を指定したcompiler呼び出しだけが新statementを受理します。
 
 ## 参照とscope
 
@@ -67,10 +67,28 @@ metadataの`mediaType`、`byteLength`、`etag`／`revision`を検証し、Conten
 
 feature無効時は`NAMED_RESPONSE_BODY_DISABLED`、provider metadata contract違反は`NAMED_RESPONSE_INVALID_METADATA`です。
 
-## IR統合の境界
+## IR統合
 
-後続実装では、named descriptorとrepresentationを持つ単一terminal response statementをDeploy IR v2へ追加します。requestのaffine `binary-body`はnamed snapshotへ暗黙変換せず、明示import operationが定義されるまで既存`respond-binary`と別型のまま維持します。実providerを持たないtargetはtext／base64へfallbackせずcapability diagnosticで拒否します。
+`respond-named-body`はdescriptor、representation、最大byte数、target scopeの場合だけ`targetId`を持つ単一terminal statementです。
+
+```json
+{
+  "kind": "respond-named-body",
+  "reference": {
+    "namespace": "structured-data",
+    "name": "profile",
+    "kind": "structured",
+    "scope": "project"
+  },
+  "representation": "json",
+  "maxBytes": 1048576
+}
+```
+
+IRは`named-body-provider` capabilityを明示しなければなりません。生成Hono coreは`CoreServices.namedBodies`だけに依存し、provider SDKや保存形式をimportしません。現在のCloudflare／Firebase adapterは実providerを持たないため、flagを有効にしても`TW2_TARGET_CAPABILITY_UNSUPPORTED`でcompileを停止します。test adapterとfake providerでJSON／raw binary／HEADのsemantic parityを検証します。
+
+requestのaffine `binary-body`はnamed snapshotへ暗黙変換せず、明示import operationが定義されるまで既存`respond-binary`と別型のまま維持します。text／base64 fallbackは行いません。
 
 ## ロールバック
 
-`namedResponseBody=false`ではproviderを参照せず501 `NAMED_RESPONSE_BODY_DISABLED`を返します。既存`respond`／`respond-binary`、IR v1、browser runtime、cloud objectは変更・削除しません。問題時は新しい呼び出し経路だけを停止できます。
+compiler flagがOFFの場合は`TW2_NAMED_RESPONSE_BODY_DISABLED`で生成前に拒否します。runtimeの`namedResponseBody=false`ではproviderを参照せず501 `NAMED_RESPONSE_BODY_DISABLED`を返します。既存`respond`／`respond-binary`、IR v1、browser runtime、cloud objectは変更・削除しません。問題時は新しい呼び出し経路だけを停止できます。

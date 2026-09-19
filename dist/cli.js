@@ -69,6 +69,7 @@ function parseCompileArgs(args) {
     let irVersion = 1;
     let target;
     let targetConfig;
+    let namedResponseBody = false;
     for (let index = 0; index < args.length; index += 1) {
         const arg = args[index];
         if (arg === '--input') {
@@ -104,6 +105,9 @@ function parseCompileArgs(args) {
             targetConfig = requireValue(args, index, '--target-config');
             index += 1;
         }
+        else if (arg === '--enable-named-response-body') {
+            namedResponseBody = true;
+        }
         else if (arg === '--help' || arg === '-h') {
             printCompileHelp();
             process.exit(0);
@@ -118,12 +122,16 @@ function parseCompileArgs(args) {
         throw new Error('compile requires --output <directory>.');
     if (irVersion === 2 && target === undefined)
         throw new Error('IR v2 compilation requires --target <id>.');
+    if (namedResponseBody && irVersion !== 2) {
+        throw new Error('--enable-named-response-body requires --ir-version 2.');
+    }
     return {
         input,
         output,
         format,
         force,
         irVersion,
+        namedResponseBody,
         ...(target === undefined ? {} : { target }),
         ...(targetConfig === undefined ? {} : { targetConfig })
     };
@@ -171,6 +179,7 @@ Options:
   --ir-version <1|2>  Select compiler pipeline. Defaults to 1.
   --target <id>        Required for IR v2; for example cloudflare-workers.
   --target-config <file> Adapter config containing binding names, never secrets.
+  --enable-named-response-body Enable the experimental named body IR operation (default OFF).
   --force              Replace generated files in a non-empty output directory.
   -h, --help           Show this help.
 `);
