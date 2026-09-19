@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, resolve } from 'node:path';
 import { generateCloudflareWorker } from './generator.js';
 import { compileTurboWarpProject } from './turbowarp.js';
+import { compileTurboWarpProjectV2 } from './turbowarp-v2.js';
 import { parseDeployIr } from './validate.js';
 import { parseDeployIrV2 } from './ir-v2/index.js';
 import { compileDeployIrV2 } from './pipeline/index.js';
@@ -14,6 +15,7 @@ export * from './named-body/index.js';
 export * from './pipeline/index.js';
 export * from './runtime/index.js';
 export * from './structured-data/index.js';
+export * from './turbowarp-v2.js';
 export * from './validator/index.js';
 export async function compileToDirectory(options) {
     if (extname(options.input).toLowerCase() === '.sb3') {
@@ -25,10 +27,13 @@ export async function compileToDirectory(options) {
     if (options.irVersion === 2) {
         if (!options.target)
             throw new Error('IR v2 compilation requires --target <id>.');
-        if (options.format !== 'ir') {
-            throw new Error('IR v2 TurboWarp frontend is not connected yet; use --format ir.');
-        }
-        const ir = parseDeployIrV2(raw);
+        const frontend = options.format === 'ir'
+            ? { ir: parseDeployIrV2(raw), diagnostics: [] }
+            : compileTurboWarpProjectV2(raw);
+        const frontendErrors = frontend.diagnostics.filter(({ severity }) => severity === 'error');
+        if (frontendErrors.length > 0)
+            throw new CompilerDiagnosticsError(frontendErrors);
+        const ir = frontend.ir;
         const targetConfig = options.targetConfig === undefined
             ? undefined
             : JSON.parse(await readFile(resolve(options.targetConfig), 'utf8'));
@@ -40,7 +45,7 @@ export async function compileToDirectory(options) {
         if (!result.ok)
             throw new CompilerDiagnosticsError(result.diagnostics);
         await writeGeneratedFiles(outputPath, result.files, options.force === true);
-        return { ir, diagnostics: [], files: Object.keys(result.files).sort() };
+        return { ir, diagnostics: frontend.diagnostics, files: Object.keys(result.files).sort() };
     }
     const compiled = options.format === 'ir'
         ? { ir: parseDeployIr(raw), diagnostics: [] }
@@ -73,9 +78,18 @@ export class CompilerDiagnosticsError extends Error {
     }
 }
 function formatDiagnostic(diagnostic) {
-    const location = 'reason' in diagnostic
-        ? [diagnostic.targetId, diagnostic.routeId, diagnostic.sourceRef?.blockId].filter(Boolean).join(':')
-        : [diagnostic.target, diagnostic.blockId].filter(Boolean).join(':');
+    const location = diagnosticLocation(diagnostic);
     return `[${diagnostic.code}]${location ? ` ${location}` : ''} ${diagnostic.message}`;
+}
+function diagnosticLocation(diagnostic) {
+    if ('reason' in diagnostic) {
+        return [diagnostic.targetId, diagnostic.routeId, diagnostic.sourceRef?.blockId].filter(Boolean).join(':');
+    }
+    if (diagnostic.code.startsWith('TW2_')) {
+        const sourceRef = diagnostic.sourceRef;
+        return [sourceRef?.targetName, sourceRef?.blockId].filter(Boolean).join(':');
+    }
+    const legacy = diagnostic;
+    return [legacy.target, legacy.blockId].filter(Boolean).join(':');
 }
 //# sourceMappingURL=index.js.map

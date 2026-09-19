@@ -28,9 +28,10 @@ turbowarp-http-server compile \
 同じIRをFirebase Functionsへ生成する場合は`--target firebase-functions`へ切り替えます。target固有のbinding／環境変数名は`--target-config`で指定し、IRは変更しません。
 
 - v2では`--target`を必須とし、targetを推測しません。
-- 現在のv2 CLI入力は`--format ir`だけです。TurboWarp project frontendとの接続は後続作業です。
+- v2 CLI入力はcanonical `--format ir`に加え、既存built-in HTTP block subsetの`--format turbowarp-json`を受理します。
 - `--target-config <file>`はadapter設定です。IRへmergeせず、secret値を受け取りません。
 - `--enable-named-response-body`は実験的な`respond-named-body`だけを有効化し、既定OFFです。選択targetに`named-body-provider`がなければ生成しません。
+- `--format turbowarp-json --ir-version 2`は既存built-in HTTP block subsetをv1互換frontend経由でv2へupgradeし、`respondWithNamedBody`だけをcanonical statementへ差し替えます。extension manifest由来blockのproject-wide loweringは後続です。
 - Cloudflare adapterはD1／R2 binding名、Firebase adapterはfunction名／bucket環境変数名／Firestore collection名だけを受け取ります。secretやproject IDは受け取りません。詳細は[IR v2 platform storage adapter](platform-storage-adapters.ja.md)を参照してください。
 - v1は引き続き既存Cloudflare generatorを使用し、`--ir-version`省略時の動作もv1のままです。
 

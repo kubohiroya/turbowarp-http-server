@@ -3,8 +3,9 @@ import {dirname, extname, join, resolve} from 'node:path';
 import {generateCloudflareWorker, type GeneratedFiles} from './generator.js';
 import type {CompilerDiagnostic, DeployIr} from './ir.js';
 import {compileTurboWarpProject} from './turbowarp.js';
+import {compileTurboWarpProjectV2} from './turbowarp-v2.js';
 import {parseDeployIr} from './validate.js';
-import {parseDeployIrV2, type DeployIrV2} from './ir-v2/index.js';
+import {parseDeployIrV2, type CompilerDiagnosticV2, type DeployIrV2} from './ir-v2/index.js';
 import {compileDeployIrV2, type PipelineDiagnostic} from './pipeline/index.js';
 
 export * from './feature-flags.js';
@@ -16,6 +17,7 @@ export * from './named-body/index.js';
 export * from './pipeline/index.js';
 export * from './runtime/index.js';
 export * from './structured-data/index.js';
+export * from './turbowarp-v2.js';
 export * from './validator/index.js';
 
 export type CompilerInputFormat = 'turbowarp-json' | 'ir';
@@ -33,7 +35,7 @@ export interface CompileOptions {
 
 export interface CompilerOutput {
   ir: DeployIr | DeployIrV2;
-  diagnostics: Array<CompilerDiagnostic | PipelineDiagnostic>;
+  diagnostics: Array<CompilerDiagnostic | CompilerDiagnosticV2 | PipelineDiagnostic>;
   files: string[];
 }
 
@@ -46,10 +48,13 @@ export async function compileToDirectory(options: CompileOptions): Promise<Compi
   const raw = JSON.parse(await readFile(inputPath, 'utf8')) as unknown;
   if (options.irVersion === 2) {
     if (!options.target) throw new Error('IR v2 compilation requires --target <id>.');
-    if (options.format !== 'ir') {
-      throw new Error('IR v2 TurboWarp frontend is not connected yet; use --format ir.');
-    }
-    const ir = parseDeployIrV2(raw);
+    const frontend =
+      options.format === 'ir'
+        ? {ir: parseDeployIrV2(raw), diagnostics: []}
+        : compileTurboWarpProjectV2(raw);
+    const frontendErrors = frontend.diagnostics.filter(({severity}) => severity === 'error');
+    if (frontendErrors.length > 0) throw new CompilerDiagnosticsError(frontendErrors);
+    const ir = frontend.ir;
     const targetConfig =
       options.targetConfig === undefined
         ? undefined
@@ -61,7 +66,7 @@ export async function compileToDirectory(options: CompileOptions): Promise<Compi
     });
     if (!result.ok) throw new CompilerDiagnosticsError(result.diagnostics);
     await writeGeneratedFiles(outputPath, result.files, options.force === true);
-    return {ir, diagnostics: [], files: Object.keys(result.files).sort()};
+    return {ir, diagnostics: frontend.diagnostics, files: Object.keys(result.files).sort()};
   }
   const compiled =
     options.format === 'ir'
@@ -88,7 +93,7 @@ async function writeGeneratedFiles(output: string, files: GeneratedFiles, force:
   }
 }
 
-type AnyCompilerDiagnostic = CompilerDiagnostic | PipelineDiagnostic;
+type AnyCompilerDiagnostic = CompilerDiagnostic | CompilerDiagnosticV2 | PipelineDiagnostic;
 
 export class CompilerDiagnosticsError extends Error {
   public constructor(public readonly diagnostics: AnyCompilerDiagnostic[]) {
@@ -98,9 +103,18 @@ export class CompilerDiagnosticsError extends Error {
 }
 
 function formatDiagnostic(diagnostic: AnyCompilerDiagnostic): string {
-  const location =
-    'reason' in diagnostic
-      ? [diagnostic.targetId, diagnostic.routeId, diagnostic.sourceRef?.blockId].filter(Boolean).join(':')
-      : [diagnostic.target, diagnostic.blockId].filter(Boolean).join(':');
+  const location = diagnosticLocation(diagnostic);
   return `[${diagnostic.code}]${location ? ` ${location}` : ''} ${diagnostic.message}`;
+}
+
+function diagnosticLocation(diagnostic: AnyCompilerDiagnostic): string {
+  if ('reason' in diagnostic) {
+    return [diagnostic.targetId, diagnostic.routeId, diagnostic.sourceRef?.blockId].filter(Boolean).join(':');
+  }
+  if (diagnostic.code.startsWith('TW2_')) {
+    const sourceRef = (diagnostic as CompilerDiagnosticV2).sourceRef;
+    return [sourceRef?.targetName, sourceRef?.blockId].filter(Boolean).join(':');
+  }
+  const legacy = diagnostic as CompilerDiagnostic;
+  return [legacy.target, legacy.blockId].filter(Boolean).join(':');
 }

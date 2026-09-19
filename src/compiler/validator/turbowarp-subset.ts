@@ -42,6 +42,7 @@ const HTTP_SERVER_OPCODES = new Set(
     'respondWithText',
     'respondWithHtml',
     'respondWithJson',
+    'respondWithNamedBody',
     'sendResponse',
     'currentHttpMethod',
     'currentRequestPath',
