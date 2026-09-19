@@ -34,9 +34,15 @@ export const IR_V2_STATEMENT_KINDS = [
     'record-list',
     'record-get',
     'record-delete',
+    'asset-resolve',
+    'request-body-binary',
+    'asset-object-get',
+    'asset-object-put',
+    'asset-object-delete',
     'if',
     'bounded-loop',
     'json-for-each',
+    'respond-binary',
     'respond'
 ];
 export const IR_V2_STATEMENT_EFFECTS = {
@@ -51,9 +57,15 @@ export const IR_V2_STATEMENT_EFFECTS = {
     'record-list': ['record-read'],
     'record-get': ['record-read'],
     'record-delete': ['record-write'],
+    'asset-resolve': ['object-read'],
+    'request-body-binary': ['control'],
+    'asset-object-get': ['object-read'],
+    'asset-object-put': ['object-write', 'binary-consume'],
+    'asset-object-delete': ['object-write'],
     if: ['control'],
     'bounded-loop': ['control'],
     'json-for-each': ['control'],
+    'respond-binary': ['response-write', 'binary-consume'],
     respond: ['response-write']
 };
 export const JSON_VALUE_TYPE_V2 = {

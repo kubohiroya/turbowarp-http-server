@@ -1,4 +1,5 @@
 import { DEFAULT_SERVER_SUBSET_POLICY } from './types.js';
+import { BinaryBodyLifetimeTracker } from './resource-lifetime.js';
 export function validateDeployIrV2Subset(ir, policy = DEFAULT_SERVER_SUBSET_POLICY) {
     const diagnostics = [];
     const capabilities = new Set(ir.capabilities.map(capabilityKey));
@@ -9,7 +10,8 @@ export function validateDeployIrV2Subset(ir, policy = DEFAULT_SERVER_SUBSET_POLI
             capabilities,
             policy,
             loopDepth: 0,
-            iterationLoopIds: new Set()
+            iterationLoopIds: new Set(),
+            binaryBodies: new BinaryBodyLifetimeTracker(ir.routes[0].id, diagnostics)
         };
         requireCapability({ kind: 'auth', scheme: ir.auth.scheme }, context, ir.routes[0].sourceRef);
     }
@@ -20,7 +22,8 @@ export function validateDeployIrV2Subset(ir, policy = DEFAULT_SERVER_SUBSET_POLI
             capabilities,
             policy,
             loopDepth: 0,
-            iterationLoopIds: new Set()
+            iterationLoopIds: new Set(),
+            binaryBodies: new BinaryBodyLifetimeTracker(route.id, diagnostics)
         };
         const flow = analyzeSequence(route.body, new Map(), context);
         if (flow.mayContinue || !flow.mayTerminate) {
@@ -52,7 +55,9 @@ function analyzeSequence(statements, initialBindings, context) {
     let flow = { mayContinue: true, mayTerminate: false, bindings: initialBindings };
     for (const statement of statements) {
         if (!flow.mayContinue) {
-            report(context, statement.kind === 'respond' ? 'TW2_MULTIPLE_RESPONSE' : 'TW2_RESPONSE_AFTER_TERMINAL', statement.kind === 'respond'
+            report(context, statement.kind === 'respond' || statement.kind === 'respond-binary'
+                ? 'TW2_MULTIPLE_RESPONSE'
+                : 'TW2_RESPONSE_AFTER_TERMINAL', statement.kind === 'respond' || statement.kind === 'respond-binary'
                 ? 'A control-flow path contains more than one terminal response.'
                 : 'A statement appears after a terminal response.', 'Terminal response ends the current handler path.', 'Remove the unreachable statement or move it before the response.', statement.sourceRef);
             continue;
@@ -99,15 +104,47 @@ function analyzeStatement(statement, bindings, context) {
         requireScratchScalar(validateExpression(statement.id, bindings, context), context, statement.sourceRef, 'Record IDs');
         declareBinding(statement.result, { kind: 'value', valueType: 'boolean' }, bindings, context, statement.sourceRef);
     }
+    else if (statement.kind === 'asset-resolve') {
+        requireCapability({ kind: 'object-storage' }, context, statement.sourceRef);
+        declareBinding(statement.result, { kind: 'value', valueType: { kind: 'union', members: ['null', 'binary-ref'] } }, bindings, context, statement.sourceRef);
+    }
+    else if (statement.kind === 'request-body-binary') {
+        requireCapability({ kind: 'streaming-body' }, context, statement.sourceRef);
+        validateBinaryLimit(statement.maxBytes, context, statement.sourceRef);
+        declareBinaryBody(statement.result, bindings, context, statement.sourceRef);
+    }
+    else if (statement.kind === 'asset-object-get') {
+        requireCapability({ kind: 'object-storage' }, context, statement.sourceRef);
+        requireCapability({ kind: 'streaming-body' }, context, statement.sourceRef);
+        validateBinaryLimit(statement.maxBytes, context, statement.sourceRef);
+        requireValueType(validateExpression(statement.ref, bindings, context), 'binary-ref', context, statement.ref.sourceRef ?? statement.sourceRef, 'Asset object reference');
+        declareBinaryBody(statement.result, bindings, context, statement.sourceRef);
+    }
+    else if (statement.kind === 'asset-object-put') {
+        requireCapability({ kind: 'object-storage' }, context, statement.sourceRef);
+        validateBinaryLimit(statement.maxBytes, context, statement.sourceRef);
+        context.binaryBodies.consume(statement.body, statement.sourceRef);
+        declareBinding(statement.result, { kind: 'value', valueType: 'binary-ref' }, bindings, context, statement.sourceRef);
+    }
+    else if (statement.kind === 'asset-object-delete') {
+        requireCapability({ kind: 'object-storage' }, context, statement.sourceRef);
+        if (statement.target.kind === 'ref') {
+            requireValueType(validateExpression(statement.target.ref, bindings, context), 'binary-ref', context, statement.target.ref.sourceRef ?? statement.sourceRef, 'Asset delete reference');
+        }
+        declareBinding(statement.result, { kind: 'value', valueType: 'boolean' }, bindings, context, statement.sourceRef);
+    }
     else if (statement.kind === 'if') {
         const conditionType = validateExpression(statement.condition, bindings, context);
         if (!sameValueType(conditionType, 'boolean')) {
             report(context, 'TW2_CONDITION_TYPE', 'IR if condition must have boolean type.', 'IR v2 does not infer Scratch truthiness for direct IR input.', 'Insert an explicit boolean comparison in the frontend.', statement.condition.sourceRef ?? statement.sourceRef);
         }
-        const thenFlow = analyzeSequence(statement.then, cloneBindings(bindings), context);
+        const thenContext = { ...context, binaryBodies: context.binaryBodies.fork() };
+        const elseContext = { ...context, binaryBodies: context.binaryBodies.fork() };
+        const thenFlow = analyzeSequence(statement.then, cloneBindings(bindings), thenContext);
         const elseFlow = statement.else === undefined
             ? { mayContinue: true, mayTerminate: false, bindings: cloneBindings(bindings) }
-            : analyzeSequence(statement.else, cloneBindings(bindings), context);
+            : analyzeSequence(statement.else, cloneBindings(bindings), elseContext);
+        context.binaryBodies.mergeBranches(thenContext.binaryBodies, elseContext.binaryBodies);
         return mergeBranchFlows(bindings, thenFlow, elseFlow, context, statement.sourceRef);
     }
     else if (statement.kind === 'bounded-loop' || statement.kind === 'json-for-each') {
@@ -130,20 +167,39 @@ function analyzeStatement(statement, bindings, context) {
         const iterationLoopIds = statement.kind === 'json-for-each'
             ? new Set([...context.iterationLoopIds, statement.loopId])
             : context.iterationLoopIds;
+        const loopBodies = context.binaryBodies.fork();
         analyzeSequence(statement.body, cloneBindings(bindings), {
             ...context,
             loopDepth: nextDepth,
-            iterationLoopIds
+            iterationLoopIds,
+            binaryBodies: loopBodies
         });
+        context.binaryBodies.absorbPossibleExecution(loopBodies, statement.maxIterations, statement.sourceRef);
     }
-    else if (statement.kind === 'respond') {
-        validateExpression(statement.body, bindings, context);
+    else if (statement.kind === 'respond' || statement.kind === 'respond-binary') {
+        if (statement.kind === 'respond')
+            validateExpression(statement.body, bindings, context);
+        else {
+            requireCapability({ kind: 'streaming-body' }, context, statement.sourceRef);
+            context.binaryBodies.consume(statement.body, statement.sourceRef);
+        }
         if (context.loopDepth > 0) {
             report(context, 'TW2_RESPONSE_IN_LOOP', 'Terminal response is not allowed inside a loop.', 'A loop can execute zero or multiple times, so response cardinality would be ambiguous.', 'Move the response after the outermost loop.', statement.sourceRef);
         }
         return { mayContinue: false, mayTerminate: true, bindings };
     }
     return { mayContinue: true, mayTerminate: false, bindings };
+}
+function declareBinaryBody(declaration, bindings, context, sourceRef) {
+    const alreadyDeclared = bindings.has(declaration.id);
+    declareBinding(declaration, { kind: 'resource', resourceType: 'binary-body' }, bindings, context, sourceRef);
+    if (!alreadyDeclared)
+        context.binaryBodies.declare(declaration.id, sourceRef);
+}
+function validateBinaryLimit(value, context, sourceRef) {
+    if (Number.isSafeInteger(value) && value >= 1 && value <= context.policy.maxBinaryBytes)
+        return;
+    report(context, 'TW2_BINARY_LIMIT_INVALID', `Binary maxBytes must be an integer from 1 to ${context.policy.maxBinaryBytes}.`, 'Every binary source or sink requires a static limit within compiler policy.', 'Use a smaller literal maxBytes value.', sourceRef);
 }
 function validateExpression(expression, bindings, context) {
     if (expression.kind === 'request' && expression.source === 'client-address') {
@@ -325,8 +381,11 @@ function saturatedMultiply(left, right, limit) {
     return left * right;
 }
 function capabilityKey(capability) {
-    if (capability.kind === 'record-store')
+    if (capability.kind === 'record-store' ||
+        capability.kind === 'object-storage' ||
+        capability.kind === 'streaming-body') {
         return capability.kind;
+    }
     return `${capability.kind}:${capability.kind === 'auth' ? capability.scheme : capability.field}`;
 }
 function cloneBindings(bindings) {

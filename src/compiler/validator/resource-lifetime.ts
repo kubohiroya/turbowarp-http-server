@@ -19,6 +19,72 @@ export class BinaryBodyLifetimeTracker {
     this.scopes.push(new Map());
   }
 
+  public fork(): BinaryBodyLifetimeTracker {
+    const tracker = new BinaryBodyLifetimeTracker(this.routeId, this.diagnostics);
+    tracker.scopes.splice(
+      0,
+      tracker.scopes.length,
+      ...this.scopes.map(
+        (scope) =>
+          new Map(
+            [...scope].map(([id, state]) => [
+              id,
+              state.sourceRef === undefined
+                ? {consumed: state.consumed}
+                : {consumed: state.consumed, sourceRef: state.sourceRef}
+            ])
+          )
+      )
+    );
+    for (const id of this.retired) tracker.retired.add(id);
+    return tracker;
+  }
+
+  public mergeBranches(left: BinaryBodyLifetimeTracker, right: BinaryBodyLifetimeTracker): void {
+    for (let scopeIndex = 0; scopeIndex < this.scopes.length; scopeIndex += 1) {
+      const scope = this.scopes[scopeIndex]!;
+      const leftScope = left.scopes[scopeIndex]!;
+      const rightScope = right.scopes[scopeIndex]!;
+      for (const [id, state] of scope) {
+        state.consumed = leftScope.get(id)?.consumed === true || rightScope.get(id)?.consumed === true;
+      }
+      for (const [id, leftState] of leftScope) {
+        if (scope.has(id)) continue;
+        const rightState = rightScope.get(id);
+        if (rightState !== undefined) {
+          scope.set(id, {
+            consumed: leftState.consumed || rightState.consumed,
+            ...(leftState.sourceRef === undefined ? {} : {sourceRef: leftState.sourceRef})
+          });
+        }
+      }
+    }
+  }
+
+  public absorbPossibleExecution(
+    child: BinaryBodyLifetimeTracker,
+    maximumExecutions = 1,
+    sourceRef?: SourceRefV2
+  ): void {
+    if (maximumExecutions < 1) return;
+    for (let scopeIndex = 0; scopeIndex < this.scopes.length; scopeIndex += 1) {
+      for (const [id, state] of this.scopes[scopeIndex]!) {
+        if (child.scopes[scopeIndex]?.get(id)?.consumed === true) {
+          if (!state.consumed && maximumExecutions > 1) {
+            this.report(
+              'TW2_BINARY_BODY_CONSUMED',
+              `binary-body ${id} may be consumed more than once by a loop.`,
+              'An affine body declared outside a loop cannot be consumed by multiple iterations.',
+              'Acquire the body inside the loop or make the loop execute at most once.',
+              sourceRef
+            );
+          }
+          state.consumed = true;
+        }
+      }
+    }
+  }
+
   public leaveScope(): void {
     if (this.scopes.length === 1) throw new Error('Cannot leave the root binary-body scope.');
     const scope = this.scopes.pop()!;

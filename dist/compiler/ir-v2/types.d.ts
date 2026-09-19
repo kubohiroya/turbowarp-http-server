@@ -1,7 +1,7 @@
 export declare const DEPLOY_IR_V2_VERSION: 2;
 export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "binding", "json-text-coerce", "json-parse", "json-stringify", "json-is-valid", "json-get", "json-has", "json-set", "json-delete", "json-keys", "json-length", "iteration-key", "iteration-index", "iteration-value"];
-export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "record-create", "record-list", "record-get", "record-delete", "if", "bounded-loop", "json-for-each", "respond"];
-export type EffectKindV2 = 'response-write' | 'handler-state-write' | 'record-read' | 'record-write' | 'control';
+export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "record-create", "record-list", "record-get", "record-delete", "asset-resolve", "request-body-binary", "asset-object-get", "asset-object-put", "asset-object-delete", "if", "bounded-loop", "json-for-each", "respond-binary", "respond"];
+export type EffectKindV2 = 'response-write' | 'handler-state-write' | 'record-read' | 'record-write' | 'object-read' | 'object-write' | 'binary-consume' | 'control';
 export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'set-status': readonly ["response-write"];
     readonly 'set-header': readonly ["response-write"];
@@ -14,9 +14,15 @@ export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'record-list': readonly ["record-read"];
     readonly 'record-get': readonly ["record-read"];
     readonly 'record-delete': readonly ["record-write"];
+    readonly 'asset-resolve': readonly ["object-read"];
+    readonly 'request-body-binary': readonly ["control"];
+    readonly 'asset-object-get': readonly ["object-read"];
+    readonly 'asset-object-put': readonly ["object-write", "binary-consume"];
+    readonly 'asset-object-delete': readonly ["object-write"];
     readonly if: readonly ["control"];
     readonly 'bounded-loop': readonly ["control"];
     readonly 'json-for-each': readonly ["control"];
+    readonly 'respond-binary': readonly ["response-write", "binary-consume"];
     readonly respond: readonly ["response-write"];
 };
 export type JsonPrimitive = null | boolean | number | string;
@@ -26,10 +32,34 @@ export type JsonValue = JsonPrimitive | JsonValue[] | {
 export interface BinaryRefDescriptorV2 {
     namespace: string;
     key: string;
-    mediaType?: string;
-    byteLength?: number;
-    sha256?: string;
+    contentType?: string;
+    size?: number;
+    integrity?: `sha256:${string}`;
+    revision?: string;
 }
+export interface BinaryLocatorV2 {
+    namespace: string;
+    key: string;
+}
+export interface BinaryMetadataV2 {
+    contentType?: string;
+    size?: number;
+    integrity?: `sha256:${string}`;
+    revision?: string;
+}
+export type BinaryDeleteTargetV2 = {
+    kind: 'ref';
+    ref: ExpressionIrV2;
+} | {
+    kind: 'locator';
+    locator: BinaryLocatorV2;
+};
+export type BinaryContentDispositionV2 = {
+    kind: 'inline';
+} | {
+    kind: 'attachment';
+    filename: string;
+};
 export type AtomicValueTypeV2 = 'null' | 'boolean' | 'number' | 'string' | 'json-text' | 'json-array' | 'json-object' | 'binary-ref';
 export type ValueTypeV2 = AtomicValueTypeV2 | {
     kind: 'union';
@@ -230,6 +260,35 @@ export type StatementIrV2 = {
     result: BindingDeclarationV2;
     sourceRef?: SourceRefV2;
 } | {
+    kind: 'asset-resolve';
+    locator: BinaryLocatorV2;
+    result: BindingDeclarationV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'request-body-binary';
+    maxBytes: number;
+    result: BindingDeclarationV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'asset-object-get';
+    ref: ExpressionIrV2;
+    maxBytes: number;
+    result: BindingDeclarationV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'asset-object-put';
+    locator: BinaryLocatorV2;
+    body: string;
+    metadata: BinaryMetadataV2;
+    maxBytes: number;
+    result: BindingDeclarationV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'asset-object-delete';
+    target: BinaryDeleteTargetV2;
+    result: BindingDeclarationV2;
+    sourceRef?: SourceRefV2;
+} | {
     kind: 'if';
     condition: ExpressionIrV2;
     then: StatementIrV2[];
@@ -249,6 +308,11 @@ export type StatementIrV2 = {
     body: StatementIrV2[];
     sourceRef?: SourceRefV2;
 } | {
+    kind: 'respond-binary';
+    body: string;
+    disposition?: BinaryContentDispositionV2;
+    sourceRef?: SourceRefV2;
+} | {
     kind: 'respond';
     format: 'text' | 'html' | 'json';
     body: ExpressionIrV2;
@@ -256,6 +320,10 @@ export type StatementIrV2 = {
 };
 export type CapabilityRequirementV2 = {
     kind: 'record-store';
+} | {
+    kind: 'object-storage';
+} | {
+    kind: 'streaming-body';
 } | {
     kind: 'request-metadata';
     field: 'client-address';

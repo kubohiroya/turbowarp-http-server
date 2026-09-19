@@ -26,7 +26,8 @@ export type ServerSubsetDiagnosticCode =
   | 'TW2_ITERATION_CONTEXT_REQUIRED'
   | 'TW2_BINARY_BODY_CONSUMED'
   | 'TW2_BINARY_BODY_SCOPE'
-  | 'TW2_BINARY_BODY_UNDECLARED';
+  | 'TW2_BINARY_BODY_UNDECLARED'
+  | 'TW2_BINARY_LIMIT_INVALID';
 
 export interface TargetNeutralDiagnostic {
   severity: 'error';
@@ -55,10 +56,12 @@ export interface ServerSubsetPolicy {
   maxLoopIterations: number;
   maxLoopNesting: number;
   maxRouteWork: number;
+  maxBinaryBytes: number;
 }
 
 export const DEFAULT_SERVER_SUBSET_POLICY: Readonly<ServerSubsetPolicy> = {
   maxLoopIterations: 1000,
   maxLoopNesting: 8,
-  maxRouteWork: 10_000
+  maxRouteWork: 10_000,
+  maxBinaryBytes: 16 * 1024 * 1024
 };

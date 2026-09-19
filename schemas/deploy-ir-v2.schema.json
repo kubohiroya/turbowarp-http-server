@@ -71,12 +71,33 @@
       "required": ["namespace", "key"],
       "properties": {
         "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]*$"},
-        "key": {"type": "string", "minLength": 1},
-        "mediaType": {"type": "string", "minLength": 1},
-        "byteLength": {"type": "integer", "minimum": 0},
-        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"},
+        "contentType": {"type": "string", "minLength": 1, "maxLength": 255},
+        "size": {"type": "integer", "minimum": 0},
+        "integrity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 256}
       }
     },
+    "binaryLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "key"],
+      "properties": {
+        "namespace": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]*$", "maxLength": 64},
+        "key": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\).+$"}
+      }
+    },
+    "binaryMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contentType": {"type": "string", "minLength": 1, "maxLength": 255},
+        "size": {"type": "integer", "minimum": 0},
+        "integrity": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "binaryLimit": {"type": "integer", "minimum": 1, "maximum": 16777216},
     "pathSegment": {
       "oneOf": [
         {
@@ -150,6 +171,12 @@
           "additionalProperties": false,
           "required": ["kind"],
           "properties": {"kind": {"const": "record-store"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"enum": ["object-storage", "streaming-body"]}}
         },
         {
           "type": "object",
@@ -439,9 +466,15 @@
         {"$ref": "#/$defs/recordCreate"},
         {"$ref": "#/$defs/recordList"},
         {"$ref": "#/$defs/recordById"},
+        {"$ref": "#/$defs/assetResolve"},
+        {"$ref": "#/$defs/requestBodyBinary"},
+        {"$ref": "#/$defs/assetObjectGet"},
+        {"$ref": "#/$defs/assetObjectPut"},
+        {"$ref": "#/$defs/assetObjectDelete"},
         {"$ref": "#/$defs/ifStatement"},
         {"$ref": "#/$defs/boundedLoop"},
         {"$ref": "#/$defs/jsonForEach"},
+        {"$ref": "#/$defs/respondBinary"},
         {"$ref": "#/$defs/respond"}
       ]
     },
@@ -540,6 +573,80 @@
         "sourceRef": {"$ref": "#/$defs/sourceRef"}
       }
     },
+    "assetResolve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "locator", "result"],
+      "properties": {
+        "kind": {"const": "asset-resolve"},
+        "locator": {"$ref": "#/$defs/binaryLocator"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "requestBodyBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "maxBytes", "result"],
+      "properties": {
+        "kind": {"const": "request-body-binary"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "assetObjectGet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ref", "maxBytes", "result"],
+      "properties": {
+        "kind": {"const": "asset-object-get"},
+        "ref": {"$ref": "#/$defs/expression"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "assetObjectPut": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "locator", "body", "metadata", "maxBytes", "result"],
+      "properties": {
+        "kind": {"const": "asset-object-put"},
+        "locator": {"$ref": "#/$defs/binaryLocator"},
+        "body": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "metadata": {"$ref": "#/$defs/binaryMetadata"},
+        "maxBytes": {"$ref": "#/$defs/binaryLimit"},
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "assetObjectDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target", "result"],
+      "properties": {
+        "kind": {"const": "asset-object-delete"},
+        "target": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "ref"],
+              "properties": {"kind": {"const": "ref"}, "ref": {"$ref": "#/$defs/expression"}}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "locator"],
+              "properties": {"kind": {"const": "locator"}, "locator": {"$ref": "#/$defs/binaryLocator"}}
+            }
+          ]
+        },
+        "result": {"$ref": "#/$defs/binding"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
     "ifStatement": {
       "type": "object",
       "additionalProperties": false,
@@ -574,6 +681,35 @@
         "path": {"$ref": "#/$defs/path"},
         "maxIterations": {"type": "integer", "minimum": 1, "maximum": 1000},
         "body": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "respondBinary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "body"],
+      "properties": {
+        "kind": {"const": "respond-binary"},
+        "body": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "disposition": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {"kind": {"const": "inline"}}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "filename"],
+              "properties": {
+                "kind": {"const": "attachment"},
+                "filename": {"type": "string", "minLength": 1, "maxLength": 255}
+              }
+            }
+          ]
+        },
         "sourceRef": {"$ref": "#/$defs/sourceRef"}
       }
     },

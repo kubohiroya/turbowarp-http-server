@@ -99,7 +99,14 @@ describe('Deploy IR v2 schema foundation', () => {
     (fixture.routes[0]!.body[0] as {body: unknown}).body = {
       kind: 'literal',
       valueType: 'binary-ref',
-      value: {namespace: 'asset', key: 'hero-image', mediaType: 'image/png', byteLength: 42}
+      value: {
+        namespace: 'asset',
+        key: 'hero-image',
+        contentType: 'image/png',
+        size: 42,
+        integrity: `sha256:${'a'.repeat(64)}`,
+        revision: 'opaque-revision'
+      }
     };
     expect(parseDeployIrV2(fixture)).toEqual(fixture);
 
@@ -119,6 +126,7 @@ describe('Deploy IR v2 schema foundation', () => {
       required: ['namespace', 'key']
     });
     expect(schema.$defs.binaryRefDescriptor.properties).not.toHaveProperty('base64');
+    expect(schema.$defs.binaryRefDescriptor.properties).not.toHaveProperty('byteLength');
   });
 
   it('keeps the TypeScript and JSON Schema node discriminants aligned', async () => {

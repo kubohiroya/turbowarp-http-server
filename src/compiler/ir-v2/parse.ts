@@ -4,6 +4,10 @@ import {
   JSON_VALUE_TYPE_V2,
   type AtomicValueTypeV2,
   type AuthPolicyV2,
+  type BinaryContentDispositionV2,
+  type BinaryDeleteTargetV2,
+  type BinaryLocatorV2,
+  type BinaryMetadataV2,
   type BinaryRefDescriptorV2,
   type BindingDeclarationV2,
   type BindingTypeV2,
@@ -133,6 +137,10 @@ function parseCapability(value: unknown, location: string): CapabilityRequiremen
     exactKeys(capability, ['kind'], location);
     return {kind};
   }
+  if (kind === 'object-storage' || kind === 'streaming-body') {
+    exactKeys(capability, ['kind'], location);
+    return {kind};
+  }
   if (kind === 'request-metadata') {
     exactKeys(capability, ['kind', 'field'], location);
     if (capability.field !== 'client-address') throw new Error(`${location}.field is unsupported.`);
@@ -241,6 +249,70 @@ function parseStatement(value: unknown, location: string): StatementIrV2 {
       sourceRef
     );
   }
+  if (kind === 'asset-resolve') {
+    exactKeys(statement, ['kind', 'locator', 'result', 'sourceRef'], location);
+    return optional(
+      {
+        kind,
+        locator: parseBinaryLocator(statement.locator, `${location}.locator`),
+        result: parseBinding(statement.result, `${location}.result`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'request-body-binary') {
+    exactKeys(statement, ['kind', 'maxBytes', 'result', 'sourceRef'], location);
+    return optional(
+      {
+        kind,
+        maxBytes: binaryLimit(statement.maxBytes, `${location}.maxBytes`),
+        result: parseBinding(statement.result, `${location}.result`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'asset-object-get') {
+    exactKeys(statement, ['kind', 'ref', 'maxBytes', 'result', 'sourceRef'], location);
+    return optional(
+      {
+        kind,
+        ref: parseExpression(statement.ref, `${location}.ref`),
+        maxBytes: binaryLimit(statement.maxBytes, `${location}.maxBytes`),
+        result: parseBinding(statement.result, `${location}.result`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'asset-object-put') {
+    exactKeys(statement, ['kind', 'locator', 'body', 'metadata', 'maxBytes', 'result', 'sourceRef'], location);
+    return optional(
+      {
+        kind,
+        locator: parseBinaryLocator(statement.locator, `${location}.locator`),
+        body: bindingId(statement.body, `${location}.body`),
+        metadata: parseBinaryMetadata(statement.metadata, `${location}.metadata`),
+        maxBytes: binaryLimit(statement.maxBytes, `${location}.maxBytes`),
+        result: parseBinding(statement.result, `${location}.result`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'asset-object-delete') {
+    exactKeys(statement, ['kind', 'target', 'result', 'sourceRef'], location);
+    return optional(
+      {
+        kind,
+        target: parseBinaryDeleteTarget(statement.target, `${location}.target`),
+        result: parseBinding(statement.result, `${location}.result`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
   if (kind === 'if') {
     exactKeys(statement, ['kind', 'condition', 'then', 'else', 'sourceRef'], location);
     const condition = parseExpression(statement.condition, `${location}.condition`);
@@ -286,6 +358,18 @@ function parseStatement(value: unknown, location: string): StatementIrV2 {
       throw new Error(`${location}.format is invalid.`);
     }
     return optional({kind, format, body: parseExpression(statement.body, `${location}.body`)}, 'sourceRef', sourceRef);
+  }
+  if (kind === 'respond-binary') {
+    exactKeys(statement, ['kind', 'body', 'disposition', 'sourceRef'], location);
+    const disposition =
+      statement.disposition === undefined
+        ? undefined
+        : parseBinaryDisposition(statement.disposition, `${location}.disposition`);
+    return optional(
+      optional({kind, body: bindingId(statement.body, `${location}.body`)}, 'disposition', disposition),
+      'sourceRef',
+      sourceRef
+    );
   }
   throw new Error(`${location}.kind is unsupported: ${kind}`);
 }
@@ -583,25 +667,96 @@ function jsonValue(value: unknown, location: string): JsonValue {
 
 function parseBinaryRef(value: unknown, location: string): BinaryRefDescriptorV2 {
   const descriptor = object(value, location);
-  exactKeys(descriptor, ['namespace', 'key', 'mediaType', 'byteLength', 'sha256'], location);
-  const namespace = nonEmptyString(descriptor.namespace, `${location}.namespace`);
-  if (!/^[A-Za-z][A-Za-z0-9._-]*$/.test(namespace)) {
-    throw new Error(`${location}.namespace must be a logical namespace identifier.`);
-  }
-  const key = nonEmptyString(descriptor.key, `${location}.key`);
-  const mediaType = optionalString(descriptor.mediaType, `${location}.mediaType`);
-  const byteLength =
-    descriptor.byteLength === undefined ? undefined : integer(descriptor.byteLength, `${location}.byteLength`);
-  if (byteLength !== undefined && byteLength < 0) throw new Error(`${location}.byteLength must not be negative.`);
-  const sha256 = optionalString(descriptor.sha256, `${location}.sha256`);
-  if (sha256 !== undefined && !/^[0-9a-f]{64}$/.test(sha256)) {
-    throw new Error(`${location}.sha256 must be 64 lowercase hexadecimal characters.`);
-  }
-  return optional(
-    optional(optional({namespace, key}, 'mediaType', mediaType), 'byteLength', byteLength),
-    'sha256',
-    sha256
+  exactKeys(descriptor, ['namespace', 'key', 'contentType', 'size', 'integrity', 'revision'], location);
+  return {
+    ...parseBinaryLocator(descriptor, location, true),
+    ...parseBinaryMetadata(descriptor, location, true)
+  };
+}
+
+function parseBinaryLocator(value: unknown, location: string, includesMetadata = false): BinaryLocatorV2 {
+  const locator = object(value, location);
+  exactKeys(
+    locator,
+    includesMetadata
+      ? ['namespace', 'key', 'contentType', 'size', 'integrity', 'revision']
+      : ['namespace', 'key'],
+    location
   );
+  const namespace = nonEmptyString(locator.namespace, `${location}.namespace`);
+  if (namespace.length > 64 || !/^[A-Za-z][A-Za-z0-9._-]*$/.test(namespace)) {
+    throw new Error(`${location}.namespace must be a logical namespace identifier of at most 64 characters.`);
+  }
+  const key = nonEmptyString(locator.key, `${location}.key`);
+  if (key.length > 512 || key.includes('\0') || key.includes('\\') || key.startsWith('/')) {
+    throw new Error(`${location}.key is not a safe logical key.`);
+  }
+  const segments = key.split('/');
+  if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+    throw new Error(`${location}.key contains an unsafe path segment.`);
+  }
+  return {namespace, key};
+}
+
+function parseBinaryMetadata(value: unknown, location: string, includesLocator = false): BinaryMetadataV2 {
+  const metadata = object(value, location);
+  exactKeys(
+    metadata,
+    includesLocator
+      ? ['namespace', 'key', 'contentType', 'size', 'integrity', 'revision']
+      : ['contentType', 'size', 'integrity', 'revision'],
+    location
+  );
+  const contentType = optionalString(metadata.contentType, `${location}.contentType`);
+  if (contentType !== undefined && (contentType.length > 255 || !/^[^\s/;]+\/[^\s;]+(?:\s*;.*)?$/u.test(contentType) || /[\r\n]/u.test(contentType))) {
+    throw new Error(`${location}.contentType must be a safe media type.`);
+  }
+  const size = metadata.size === undefined ? undefined : integer(metadata.size, `${location}.size`);
+  if (size !== undefined && size < 0) throw new Error(`${location}.size must not be negative.`);
+  const integrityValue = optionalString(metadata.integrity, `${location}.integrity`);
+  if (integrityValue !== undefined && !/^sha256:[0-9a-f]{64}$/.test(integrityValue)) {
+    throw new Error(`${location}.integrity must use sha256:<64 lowercase hexadecimal characters>.`);
+  }
+  const integrity = integrityValue as `sha256:${string}` | undefined;
+  const revision = optionalString(metadata.revision, `${location}.revision`);
+  if (revision !== undefined && revision.length > 256) throw new Error(`${location}.revision is too long.`);
+  return optional(optional(optional(optional({}, 'contentType', contentType), 'size', size), 'integrity', integrity), 'revision', revision);
+}
+
+function parseBinaryDeleteTarget(value: unknown, location: string): BinaryDeleteTargetV2 {
+  const target = object(value, location);
+  const kind = nonEmptyString(target.kind, `${location}.kind`);
+  if (kind === 'ref') {
+    exactKeys(target, ['kind', 'ref'], location);
+    return {kind, ref: parseExpression(target.ref, `${location}.ref`)};
+  }
+  if (kind === 'locator') {
+    exactKeys(target, ['kind', 'locator'], location);
+    return {kind, locator: parseBinaryLocator(target.locator, `${location}.locator`)};
+  }
+  throw new Error(`${location}.kind is unsupported: ${kind}`);
+}
+
+function parseBinaryDisposition(value: unknown, location: string): BinaryContentDispositionV2 {
+  const disposition = object(value, location);
+  const kind = nonEmptyString(disposition.kind, `${location}.kind`);
+  if (kind === 'inline') {
+    exactKeys(disposition, ['kind'], location);
+    return {kind};
+  }
+  if (kind === 'attachment') {
+    exactKeys(disposition, ['kind', 'filename'], location);
+    const filename = nonEmptyString(disposition.filename, `${location}.filename`);
+    if (filename.length > 255 || /[\r\n\0]/u.test(filename)) throw new Error(`${location}.filename is unsafe.`);
+    return {kind, filename};
+  }
+  throw new Error(`${location}.kind is unsupported: ${kind}`);
+}
+
+function binaryLimit(value: unknown, location: string): number {
+  const limit = integer(value, location);
+  if (limit < 1 || limit > 16 * 1024 * 1024) throw new Error(`${location} must be from 1 to 16777216.`);
+  return limit;
 }
 
 function assertLiteralType(type: Exclude<AtomicValueTypeV2, 'binary-ref'>, value: JsonValue, location: string): void {

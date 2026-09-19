@@ -10,6 +10,8 @@ Deploy IR v2は、TurboWarpのHTTP handlerをplatform-neutralな型付き表現�
 
 Structured Data blockの変換規則は[Structured Data lowering](structured-data-lowering.ja.md)を参照してください。
 
+binary resourceの所有権、上限、storage contractは[Binary resource semantics](binary-resource-semantics.ja.md)を参照してください。
+
 ## Versionと有効化
 
 - rootの`version`は整数`2`です。
@@ -33,7 +35,7 @@ IR JSONへ格納できるatomic value typeは次のとおりです。
 
 `number`は有限IEEE-754 binary64とし、`NaN`と±`Infinity`を拒否します。`-0`は`0`へ正規化します。`json-text`は有効なapplication JSONを表すnominal string境界で、通常の`string`やparse済みJSON値とは暗黙に混同しません。`json-array`と`json-object`は再帰的なJSON値で、resourceを内包できません。
 
-`binary-ref`はbyte列ではなく、`namespace`と`key`、任意の`mediaType`、`byteLength`、SHA-256 digestを持つ論理descriptorです。`base64`、`bytes`、data URL等のinline payload fieldは許可しません。
+`binary-ref`はbyte列ではなく、`namespace`と`key`、任意の`contentType`、`size`、`sha256:<hex>`形式の`integrity`、opaque `revision`を持つ論理descriptorです。`base64`、`bytes`、data URL等のinline payload fieldは許可しません。
 
 `binary-body`はvalueではありません。stream本体をIR JSONへ格納せず、`resource` bindingのIDとしてだけ表現します。この区別により、後続validatorがclone、二重consume、scope外利用を検出できます。
 
@@ -47,7 +49,7 @@ union typeは次の形式です。
 
 すべてのexpressionは`valueType`を持ちます。v2で定義済みのexpressionはliteral、request、request-value、concat、handler-variable、handler-variable-exists、handler-variable-names、bindingに加え、明示的なJSON parse／serialize、path操作、iteration reporterです。
 
-statementはHTTP response操作、handler-variable操作、論理record store操作、typed `if`、bounded-loop、`json-for-each`、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
+statementはHTTP response操作、handler-variable操作、論理record／object storage操作、binary body producer／consumer、typed `if`、bounded-loop、`json-for-each`、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
 
 statementのeffectは入力側が自由に申告するfieldにはせず、statement kindから`IR_V2_STATEMENT_EFFECTS`で決定的に導出します。分類は`response-write`、`handler-state-write`、`record-read`、`record-write`、`control`です。これにより入力がeffectを過少申告してvalidatorを迂回することを防ぎます。
 
@@ -91,6 +93,8 @@ IR documentのhashとgolden比較にはRFC 8785（JCS）形式を使用します
 IR coreは製品名ではなく、次のような論理requirementを持ちます。
 
 - `record-store`
+- `object-storage`
+- `streaming-body`
 - `request-metadata: client-address`
 - `auth: external-jwt | trusted-access-jwt`
 

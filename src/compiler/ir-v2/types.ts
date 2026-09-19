@@ -36,9 +36,15 @@ export const IR_V2_STATEMENT_KINDS = [
   'record-list',
   'record-get',
   'record-delete',
+  'asset-resolve',
+  'request-body-binary',
+  'asset-object-get',
+  'asset-object-put',
+  'asset-object-delete',
   'if',
   'bounded-loop',
   'json-for-each',
+  'respond-binary',
   'respond'
 ] as const;
 
@@ -47,6 +53,9 @@ export type EffectKindV2 =
   | 'handler-state-write'
   | 'record-read'
   | 'record-write'
+  | 'object-read'
+  | 'object-write'
+  | 'binary-consume'
   | 'control';
 
 export const IR_V2_STATEMENT_EFFECTS = {
@@ -61,9 +70,15 @@ export const IR_V2_STATEMENT_EFFECTS = {
   'record-list': ['record-read'],
   'record-get': ['record-read'],
   'record-delete': ['record-write'],
+  'asset-resolve': ['object-read'],
+  'request-body-binary': ['control'],
+  'asset-object-get': ['object-read'],
+  'asset-object-put': ['object-write', 'binary-consume'],
+  'asset-object-delete': ['object-write'],
   if: ['control'],
   'bounded-loop': ['control'],
   'json-for-each': ['control'],
+  'respond-binary': ['response-write', 'binary-consume'],
   respond: ['response-write']
 } as const satisfies Record<(typeof IR_V2_STATEMENT_KINDS)[number], readonly EffectKindV2[]>;
 
@@ -73,10 +88,31 @@ export type JsonValue = JsonPrimitive | JsonValue[] | {[key: string]: JsonValue}
 export interface BinaryRefDescriptorV2 {
   namespace: string;
   key: string;
-  mediaType?: string;
-  byteLength?: number;
-  sha256?: string;
+  contentType?: string;
+  size?: number;
+  integrity?: `sha256:${string}`;
+  revision?: string;
 }
+
+export interface BinaryLocatorV2 {
+  namespace: string;
+  key: string;
+}
+
+export interface BinaryMetadataV2 {
+  contentType?: string;
+  size?: number;
+  integrity?: `sha256:${string}`;
+  revision?: string;
+}
+
+export type BinaryDeleteTargetV2 =
+  | {kind: 'ref'; ref: ExpressionIrV2}
+  | {kind: 'locator'; locator: BinaryLocatorV2};
+
+export type BinaryContentDispositionV2 =
+  | {kind: 'inline'}
+  | {kind: 'attachment'; filename: string};
 
 export type AtomicValueTypeV2 =
   | 'null'
@@ -255,6 +291,40 @@ export type StatementIrV2 =
       sourceRef?: SourceRefV2;
     }
   | {
+      kind: 'asset-resolve';
+      locator: BinaryLocatorV2;
+      result: BindingDeclarationV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'request-body-binary';
+      maxBytes: number;
+      result: BindingDeclarationV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'asset-object-get';
+      ref: ExpressionIrV2;
+      maxBytes: number;
+      result: BindingDeclarationV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'asset-object-put';
+      locator: BinaryLocatorV2;
+      body: string;
+      metadata: BinaryMetadataV2;
+      maxBytes: number;
+      result: BindingDeclarationV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'asset-object-delete';
+      target: BinaryDeleteTargetV2;
+      result: BindingDeclarationV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
       kind: 'if';
       condition: ExpressionIrV2;
       then: StatementIrV2[];
@@ -277,6 +347,12 @@ export type StatementIrV2 =
       sourceRef?: SourceRefV2;
     }
   | {
+      kind: 'respond-binary';
+      body: string;
+      disposition?: BinaryContentDispositionV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
       kind: 'respond';
       format: 'text' | 'html' | 'json';
       body: ExpressionIrV2;
@@ -285,6 +361,8 @@ export type StatementIrV2 =
 
 export type CapabilityRequirementV2 =
   | {kind: 'record-store'}
+  | {kind: 'object-storage'}
+  | {kind: 'streaming-body'}
   | {kind: 'request-metadata'; field: 'client-address'}
   | {kind: 'auth'; scheme: 'external-jwt' | 'trusted-access-jwt'};
 

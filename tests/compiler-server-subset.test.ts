@@ -280,6 +280,20 @@ describe('TurboWarp server subset frontend validation', () => {
     expect(codes(diagnostics)).toEqual(['TW2_UNSUPPORTED_OPERATION']);
     expect(diagnostics[0]?.sourceRef?.blockId).toBe('asset');
   });
+
+  it('rejects every locked Asset Manager format 1 browser opcode instead of guessing storage semantics', async () => {
+    const {registry} = await resolveCompilerManifestLock(
+      'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
+    );
+    const assetEntries = registry.entries.filter(({extensionId}) => extensionId === 'kubohiroyaassetmanager');
+    const project = projectWithChain(
+      assetEntries.map(({opcode, projectOpcode}) => [`asset-${opcode}`, projectOpcode])
+    );
+    const diagnostics = validateTurboWarpServerSubset(project, registry);
+    expect(assetEntries.length).toBeGreaterThan(0);
+    expect(diagnostics).toHaveLength(assetEntries.length);
+    expect(diagnostics.every(({code}) => code === 'TW2_UNSUPPORTED_OPERATION')).toBe(true);
+  });
 });
 
 function fixture(body: StatementIrV2[]): DeployIrV2 {

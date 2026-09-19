@@ -6,6 +6,7 @@ import {compileTurboWarpProject} from './turbowarp.js';
 import {parseDeployIr} from './validate.js';
 
 export * from './feature-flags.js';
+export * from './binary/index.js';
 export * from './ir-v2/index.js';
 export * from './manifest/index.js';
 export * from './runtime/index.js';
