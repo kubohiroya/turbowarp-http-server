@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import type { CommunityServerOptions } from './community.js';
 import type { BridgeRequestMessage } from './protocol.js';
+export { createNamedBodyResponse, DEFAULT_NAMED_RESPONSE_BODY_FEATURE_FLAGS, NAMED_DATA_ERROR_CODES, NamedBodyResolver } from './named-body.js';
+export type { NamedBodyErrorCode, NamedBodyHandle, NamedBodyMetadata, NamedBodyProvider, NamedBodyReleaseReason, NamedBodyRequest, NamedBodyResponseOptions, NamedBodyRepresentation, NamedDataKind, NamedDataErrorCode, NamedDataReference, NamedDataScope, NamedResponseBodyFeatureFlags } from './named-body.js';
 export interface ServerOptions {
     hostname: string;
     port: number;
