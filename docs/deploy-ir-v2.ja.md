@@ -4,6 +4,8 @@ Deploy IR v2は、TurboWarpのHTTP handlerをplatform-neutralな型付き表現�
 
 現段階では型、strict parser、JSON Schema、canonical serializer、v1 upgraderを提供します。v2 CLI pipelineとcode generatorへの接続は後続Issueで行います。
 
+外部extension manifestのlock／offline解決仕様は[Compiler extension manifest registry](compiler-manifest-registry.ja.md)を参照してください。
+
 ## Versionと有効化
 
 - rootの`version`は整数`2`です。

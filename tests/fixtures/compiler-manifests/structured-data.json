@@ -1,0 +1,37 @@
+{
+  "formatVersion": 2,
+  "id": "kubohiroyastructureddata",
+  "pathSegmentType": {
+    "kind": "discriminatedUnion",
+    "variants": [
+      {"kind": "key", "valueType": "string"},
+      {"kind": "index", "valueType": "nonNegativeInteger"}
+    ]
+  },
+  "blocks": [
+    {
+      "opcode": "forEachAtPath",
+      "blockType": "LOOP",
+      "arguments": [
+        {"id": "JSON", "type": "STRING"},
+        {"id": "MAX", "type": "NUMBER", "staticLiteral": true, "minimum": 1, "maximum": 1000},
+        {"id": "PATH", "type": "STRING", "normalizesTo": "pathSegments"}
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": true,
+      "errors": ["INVALID_JSON", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "ITERATION_LIMIT_EXCEEDED"],
+      "server": {"supported": true, "irOperation": "structuredData.forEach"}
+    },
+    {
+      "opcode": "normalizeJson",
+      "blockType": "REPORTER",
+      "arguments": [{"id": "JSON", "type": "STRING"}],
+      "resultType": "json",
+      "effect": "pure",
+      "immutable": true,
+      "errors": ["INVALID_JSON"],
+      "server": {"supported": true, "irOperation": "structuredData.normalizeJson"}
+    }
+  ]
+}

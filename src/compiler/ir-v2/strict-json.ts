@@ -1,5 +1,9 @@
-export function parseJsonWithoutDuplicateKeys(text: string): unknown {
-  const scanner = new JsonStructureScanner(text);
+export interface StrictJsonParseOptions {
+  maxDepth?: number;
+}
+
+export function parseJsonWithoutDuplicateKeys(text: string, options: StrictJsonParseOptions = {}): unknown {
+  const scanner = new JsonStructureScanner(text, options.maxDepth ?? Number.POSITIVE_INFINITY);
   scanner.scan();
   return JSON.parse(text) as unknown;
 }
@@ -7,20 +11,24 @@ export function parseJsonWithoutDuplicateKeys(text: string): unknown {
 class JsonStructureScanner {
   private index = 0;
 
-  public constructor(private readonly text: string) {}
+  public constructor(
+    private readonly text: string,
+    private readonly maxDepth: number
+  ) {}
 
   public scan(): void {
     this.skipWhitespace();
-    this.value();
+    this.value(0);
     this.skipWhitespace();
     if (this.index !== this.text.length) this.fail('Unexpected trailing content');
   }
 
-  private value(): void {
+  private value(depth: number): void {
+    if (depth > this.maxDepth) this.fail(`JSON nesting depth exceeds ${this.maxDepth}`);
     this.skipWhitespace();
     const token = this.text[this.index];
-    if (token === '{') return this.object();
-    if (token === '[') return this.array();
+    if (token === '{') return this.object(depth);
+    if (token === '[') return this.array(depth);
     if (token === '"') {
       this.string();
       return;
@@ -31,7 +39,7 @@ class JsonStructureScanner {
     this.number();
   }
 
-  private object(): void {
+  private object(depth: number): void {
     this.index += 1;
     this.skipWhitespace();
     const keys = new Set<string>();
@@ -44,19 +52,19 @@ class JsonStructureScanner {
       keys.add(key);
       this.skipWhitespace();
       this.expect(':');
-      this.value();
+      this.value(depth + 1);
       this.skipWhitespace();
       if (this.consume('}')) return;
       this.expect(',');
     }
   }
 
-  private array(): void {
+  private array(depth: number): void {
     this.index += 1;
     this.skipWhitespace();
     if (this.consume(']')) return;
     while (true) {
-      this.value();
+      this.value(depth + 1);
       this.skipWhitespace();
       if (this.consume(']')) return;
       this.expect(',');

@@ -1,27 +1,30 @@
-export function parseJsonWithoutDuplicateKeys(text) {
-    const scanner = new JsonStructureScanner(text);
+export function parseJsonWithoutDuplicateKeys(text, options = {}) {
+    const scanner = new JsonStructureScanner(text, options.maxDepth ?? Number.POSITIVE_INFINITY);
     scanner.scan();
     return JSON.parse(text);
 }
 class JsonStructureScanner {
-    constructor(text) {
+    constructor(text, maxDepth) {
         this.text = text;
+        this.maxDepth = maxDepth;
         this.index = 0;
     }
     scan() {
         this.skipWhitespace();
-        this.value();
+        this.value(0);
         this.skipWhitespace();
         if (this.index !== this.text.length)
             this.fail('Unexpected trailing content');
     }
-    value() {
+    value(depth) {
+        if (depth > this.maxDepth)
+            this.fail(`JSON nesting depth exceeds ${this.maxDepth}`);
         this.skipWhitespace();
         const token = this.text[this.index];
         if (token === '{')
-            return this.object();
+            return this.object(depth);
         if (token === '[')
-            return this.array();
+            return this.array(depth);
         if (token === '"') {
             this.string();
             return;
@@ -34,7 +37,7 @@ class JsonStructureScanner {
             return this.advance(4);
         this.number();
     }
-    object() {
+    object(depth) {
         this.index += 1;
         this.skipWhitespace();
         const keys = new Set();
@@ -50,20 +53,20 @@ class JsonStructureScanner {
             keys.add(key);
             this.skipWhitespace();
             this.expect(':');
-            this.value();
+            this.value(depth + 1);
             this.skipWhitespace();
             if (this.consume('}'))
                 return;
             this.expect(',');
         }
     }
-    array() {
+    array(depth) {
         this.index += 1;
         this.skipWhitespace();
         if (this.consume(']'))
             return;
         while (true) {
-            this.value();
+            this.value(depth + 1);
             this.skipWhitespace();
             if (this.consume(']'))
                 return;

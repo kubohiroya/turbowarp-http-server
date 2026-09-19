@@ -1,1 +1,4 @@
-export declare function parseJsonWithoutDuplicateKeys(text: string): unknown;
+export interface StrictJsonParseOptions {
+    maxDepth?: number;
+}
+export declare function parseJsonWithoutDuplicateKeys(text: string, options?: StrictJsonParseOptions): unknown;
