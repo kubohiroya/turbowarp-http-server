@@ -79,13 +79,16 @@ describe('IR v2 platform pipeline', () => {
     ['external-jwt', 'JWT_JWKS_URL'],
     ['trusted-access-jwt', 'CF_ACCESS_TEAM_DOMAIN']
   ] as const)('generates Cloudflare %s authentication at the adapter boundary', (scheme, environmentName) => {
-    const result = compileDeployIrV2(authApp(scheme), {target: 'cloudflare-workers'});
+    const ir = authApp(scheme);
+    if (scheme === 'trusted-access-jwt') ir.capabilities.push({kind: 'auth', scheme: 'external-jwt'});
+    const result = compileDeployIrV2(ir, {target: 'cloudflare-workers'});
     if (!result.ok) throw new Error(`Expected ${scheme} compilation to succeed.`);
 
     expect(result.manifest.requirements).toContain(`auth:${scheme}`);
     expect(result.files['src/core.generated.ts']).toContain("route.auth === 'required'");
     expect(result.files['src/index.ts']).toContain('authenticateRequest');
     expect(result.files['src/index.ts']).toContain(environmentName);
+    if (scheme === 'trusted-access-jwt') expect(result.files['src/index.ts']).not.toContain('JWT_JWKS_URL');
     expect(result.files['src/auth.ts']).toContain('jwtVerify');
     expect(JSON.parse(result.files['package.json']!)).toMatchObject({dependencies: {jose: '^6.1.0'}});
   });

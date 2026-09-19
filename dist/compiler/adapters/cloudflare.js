@@ -45,9 +45,9 @@ export const cloudflareWorkersAdapter = {
             ...core.files,
             'package.json': packageJson(ir),
             'tsconfig.json': tsconfig(),
-            'src/index.ts': indexSource(plan),
+            'src/index.ts': indexSource(ir, plan),
             'src/platform.ts': platformSource(),
-            ...(authRequirement(plan) === undefined ? {} : { 'src/auth.ts': authSource() }),
+            ...(authScheme(ir) === undefined ? {} : { 'src/auth.ts': authSource() }),
             'wrangler.jsonc': wrangler(ir, plan),
             ...(plan.bindings.recordDatabase === undefined ? {} : { 'migrations/0001_init.sql': migration(plan) }),
             'README.md': generatedReadme(ir, plan)
@@ -97,25 +97,25 @@ function configDiagnostic() {
         targetId: 'cloudflare-workers'
     };
 }
-function indexSource(plan) {
+function indexSource(ir, plan) {
     const recordBinding = plan.bindings.recordDatabase;
     const objectBinding = plan.bindings.objectBucket;
-    const authScheme = authRequirement(plan);
+    const selectedAuthScheme = authScheme(ir);
     const bindingMembers = [
         ...(recordBinding === undefined ? [] : [`${recordBinding}: D1Database`]),
         ...(objectBinding === undefined ? [] : [`${objectBinding}: R2Bucket`]),
-        ...(authScheme === 'trusted-access-jwt'
+        ...(selectedAuthScheme === 'trusted-access-jwt'
             ? ['CF_ACCESS_TEAM_DOMAIN: string', 'CF_ACCESS_AUD: string']
-            : authScheme === 'external-jwt'
+            : selectedAuthScheme === 'external-jwt'
                 ? ['JWT_ISSUER: string', 'JWT_AUDIENCE: string', 'JWT_JWKS_URL: string']
                 : [])
     ].join('; ');
     const services = [
-        ...(authScheme === undefined
+        ...(selectedAuthScheme === undefined
             ? []
             : [`authenticate: (context) => {
     const current = context as {req: {raw: Request}; env: Bindings};
-    return authenticateRequest(current.req.raw, current.env, '${authScheme}');
+    return authenticateRequest(current.req.raw, current.env, '${selectedAuthScheme}');
   }`]),
         ...(recordBinding === undefined || !plan.requirements.includes('record-store')
             ? []
@@ -131,7 +131,7 @@ function indexSource(plan) {
     return `import {Hono} from 'hono';
 import {registerCoreRoutes} from './core.generated.js';
 import {createKeyValueStore, createObjectStore, createRecordStore} from './platform.js';
-${authScheme === undefined ? '' : "import {authenticateRequest} from './auth.js';"}
+${selectedAuthScheme === undefined ? '' : "import {authenticateRequest} from './auth.js';"}
 
 type Bindings = {${bindingMembers}};
 const app = new Hono<{Bindings: Bindings}>();
@@ -141,12 +141,8 @@ registerCoreRoutes(app, {
 export default app;
 `;
 }
-function authRequirement(plan) {
-    if (plan.requirements.includes('auth:external-jwt'))
-        return 'external-jwt';
-    if (plan.requirements.includes('auth:trusted-access-jwt'))
-        return 'trusted-access-jwt';
-    return undefined;
+function authScheme(ir) {
+    return ir.auth.kind === 'jwt' ? ir.auth.scheme : undefined;
 }
 function authSource() {
     return `import {createRemoteJWKSet, jwtVerify} from 'jose';
@@ -462,9 +458,9 @@ function generatedReadme(ir, plan) {
     const migration = plan.requirements.includes('record-store') || plan.requirements.includes('key-value-store')
         ? ` Apply \`migrations/0001_init.sql\` with Wrangler before serving storage-backed routes.`
         : '';
-    const auth = authRequirement(plan) === 'trusted-access-jwt'
+    const auth = authScheme(ir) === 'trusted-access-jwt'
         ? ' Configure `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` as deployment variables or secrets.'
-        : authRequirement(plan) === 'external-jwt'
+        : authScheme(ir) === 'external-jwt'
             ? ' Configure `JWT_ISSUER`, `JWT_AUDIENCE`, and `JWT_JWKS_URL` as deployment variables or secrets.'
             : '';
     return `# Generated Cloudflare Workers application
