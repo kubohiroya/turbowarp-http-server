@@ -15,7 +15,7 @@ binary storageは[Binary resource semantics](binary-resource-semantics.ja.md)の
 | HTTP runtime | Hono Fetch handler | HTTPS `onRequest` + Hono Node listener |
 | `record-store` | D1 `records` table | Firestore root collection |
 | `object-storage` | R2 bucket | Cloud Storage bucket |
-| object revision | R2 ETag | Cloud Storage generation |
+| object revision | R2 upload version + ETag + upload時刻のopaque token | Cloud Storage generation |
 | binary integrity | 指定されたSHA-256をR2で検証しmetadataへ保持 | stream中にSHA-256を計算・検証してmetadataへ保持 |
 | local boundary | Wrangler local runtime | Firebase Emulator Suite |
 

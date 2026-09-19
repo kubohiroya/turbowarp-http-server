@@ -38,7 +38,7 @@ describe('IR v2 platform pipeline', () => {
     expect(first.manifest).toMatchObject({
       formatVersion: 1,
       irVersion: 2,
-      adapter: {id: 'cloudflare-workers', version: '1.3.0'},
+      adapter: {id: 'cloudflare-workers', version: '1.3.1'},
       requirements: ['record-store'],
       plan: {requirements: ['record-store'], bindings: {recordDatabase: 'DB'}}
     });
@@ -224,6 +224,61 @@ describe('IR v2 platform pipeline', () => {
         1024
       )
     ).rejects.toMatchObject({code, message: code});
+  });
+
+  it('buffers a bounded R2 upload into an accepted fixed-size body', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const uploaded = new Date('2026-09-19T00:00:00.000Z');
+    const put = vi.fn(async (_key: string, body: Uint8Array) => ({
+      etag: 'etag-1', version: 'version-1', uploaded, size: body.byteLength
+    }));
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      put(
+        locator: {namespace: string; key: string},
+        source: {chunks: AsyncIterable<Uint8Array>; size?: number},
+        metadata: {size?: number},
+        maxBytes: number
+      ): Promise<unknown>;
+    };
+    const chunks = (async function* (): AsyncIterable<Uint8Array> {
+      yield new Uint8Array([1, 2]);
+      yield new Uint8Array([3]);
+    })();
+
+    await createObjectStore({put}).put(
+      {namespace: 'asset', key: 'fixture.bin'},
+      {chunks},
+      {size: 3},
+      1024
+    );
+
+    expect(put).toHaveBeenCalledWith('v1/asset/fixture.bin', new Uint8Array([1, 2, 3]), {});
+  });
+
+  it('rejects an R2 upload whose declared size differs from the consumed bytes', async () => {
+    const result = compileDeployIrV2(messageApp(), {target: 'cloudflare-workers'});
+    if (!result.ok) throw new Error('Expected Cloudflare compilation to succeed.');
+    const platform = await loadModule(result.files['src/platform.ts']!);
+    const put = vi.fn();
+    const createObjectStore = platform.createObjectStore as (value: unknown) => {
+      put(
+        locator: {namespace: string; key: string},
+        source: {chunks: AsyncIterable<Uint8Array>},
+        metadata: {size: number},
+        maxBytes: number
+      ): Promise<unknown>;
+    };
+    const chunks = (async function* (): AsyncIterable<Uint8Array> {yield new Uint8Array([1]);})();
+
+    await expect(createObjectStore({put}).put(
+      {namespace: 'asset', key: 'fixture.bin'},
+      {chunks},
+      {size: 2},
+      1024
+    )).rejects.toMatchObject({code: 'BINARY_INTEGRITY_MISMATCH'});
+    expect(put).not.toHaveBeenCalled();
   });
 
   it('uses an atomic R2 conditional tombstone for revision-aware delete', async () => {

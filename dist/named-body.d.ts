@@ -1,9 +1,7 @@
 import { NAMED_DATA_ERROR_CODES, type NamedDataErrorCode, type NamedDataKind, type NamedDataMetadata, type NamedDataReference, type NamedDataRegistryService, type NamedDataReleaseReason, type NamedDataRepresentation, type NamedDataResolveContext, type NamedDataScope } from '@kubohiroya/turbowarp-named-data/composition';
 export { NAMED_DATA_ERROR_CODES };
 export type { NamedDataErrorCode, NamedDataKind, NamedDataReference, NamedDataScope };
-type LegacyNamedDataRegistryErrorCode = 'NAMED_DATA_INCOMPATIBLE_VERSION' | 'NAMED_DATA_NAMESPACE_CONFLICT';
-type NamedDataProviderErrorCode = NamedDataErrorCode | LegacyNamedDataRegistryErrorCode;
-export type NamedBodyErrorCode = NamedDataProviderErrorCode | 'NAMED_RESPONSE_BODY_DISABLED' | 'NAMED_RESPONSE_INVALID_METADATA';
+export type NamedBodyErrorCode = NamedDataErrorCode | 'NAMED_RESPONSE_BODY_DISABLED' | 'NAMED_RESPONSE_INVALID_METADATA';
 export type NamedBodyRepresentation = NamedDataRepresentation;
 export interface NamedBodyRequest {
     reference: NamedDataReference;

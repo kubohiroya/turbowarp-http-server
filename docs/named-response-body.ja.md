@@ -66,6 +66,8 @@ metadataの`mediaType`、`byteLength`、`etag`／`revision`を検証し、Conten
 | `NAMED_DATA_ABORTED` | 499 |
 | `NAMED_DATA_PROVIDER_RELEASED` | 503 |
 | `NAMED_DATA_INVALID_REGISTRY`／`NAMED_DATA_PROVIDER_CONFLICT` | 500 |
+HTTP ServerはNamed Data `0.2.x`契約を要求します。`0.1.x`のruntime versioning error codeは受理せず、consumerはNamed DataとHTTP Serverを同時に更新します。
+
 feature無効時は`NAMED_RESPONSE_BODY_DISABLED`、provider metadata contract違反は`NAMED_RESPONSE_INVALID_METADATA`です。
 
 ## 共通Named Data registry

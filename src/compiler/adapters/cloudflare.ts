@@ -8,7 +8,7 @@ import {findCapabilityOrigin} from '../pipeline/requirements.js';
 
 export const cloudflareWorkersAdapter: PlatformAdapter = {
   id: 'cloudflare-workers',
-  version: '1.3.0',
+  version: '1.3.1',
   capabilities: () => ({
     keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
     maxBinaryBytes: 16 * 1024 * 1024
@@ -191,8 +191,10 @@ export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
     async put(locator, source, metadata, maxBytes) {
       try {
         if (source.size !== undefined && source.size > maxBytes) throw binaryFault('BINARY_TOO_LARGE');
+        const body = await collectBytes(source.chunks, maxBytes);
+        if (metadata.size !== undefined && metadata.size !== body.byteLength) throw binaryFault('BINARY_INTEGRITY_MISMATCH');
         const integrity = metadata.integrity?.startsWith('sha256:') === true ? metadata.integrity.slice(7) : undefined;
-        const object = await bucket.put(storageKey(locator), binaryStream(limitedChunks(source.chunks, maxBytes)), {
+        const object = await bucket.put(storageKey(locator), body, {
           ...(metadata.contentType === undefined ? {} : {httpMetadata: {contentType: metadata.contentType}}),
           ...(metadata.integrity === undefined ? {} : {customMetadata: {twIntegrity: metadata.integrity}}),
           ...(integrity === undefined ? {} : {sha256: integrity})
@@ -274,25 +276,23 @@ async function putTombstone(bucket: R2Bucket, key: string, current: R2Object): P
   }) !== null;
 }
 function hasR2Body(object: R2Object): object is R2ObjectBody {return 'body' in object}
-function binaryStream(chunks: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
-  const iterator = chunks[Symbol.asyncIterator]();
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {const item = await iterator.next(); if (item.done) controller.close(); else controller.enqueue(item.value);},
-    cancel() {return iterator.return?.().then(() => undefined)}
-  });
-}
 async function* readableChunks(stream: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
   const reader = stream.getReader();
   try {while (true) {const item = await reader.read(); if (item.done) return; yield item.value;}}
   finally {reader.releaseLock()}
 }
-async function* limitedChunks(chunks: AsyncIterable<Uint8Array>, maximum: number): AsyncIterable<Uint8Array> {
+async function collectBytes(chunks: AsyncIterable<Uint8Array>, maximum: number): Promise<Uint8Array> {
+  const collected: Uint8Array[] = [];
   let size = 0;
   for await (const chunk of chunks) {
     size += chunk.byteLength;
     if (size > maximum) throw binaryFault('BINARY_TOO_LARGE');
-    yield chunk;
+    collected.push(chunk);
   }
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of collected) {result.set(chunk, offset); offset += chunk.byteLength}
+  return result;
 }
 function binaryFault(code: string): Error & {code: string} {return Object.assign(new Error(code), {code})}
 function isBinaryFault(error: unknown): error is Error & {code: string} {return error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('BINARY_')}

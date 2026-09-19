@@ -15,12 +15,8 @@ import {isNamedDataNamespace} from './named-data-namespace.js';
 
 export {NAMED_DATA_ERROR_CODES};
 export type {NamedDataErrorCode, NamedDataKind, NamedDataReference, NamedDataScope};
-type LegacyNamedDataRegistryErrorCode =
-  | 'NAMED_DATA_INCOMPATIBLE_VERSION'
-  | 'NAMED_DATA_NAMESPACE_CONFLICT';
-type NamedDataProviderErrorCode = NamedDataErrorCode | LegacyNamedDataRegistryErrorCode;
 export type NamedBodyErrorCode =
-  | NamedDataProviderErrorCode
+  | NamedDataErrorCode
   | 'NAMED_RESPONSE_BODY_DISABLED'
   | 'NAMED_RESPONSE_INVALID_METADATA';
 
@@ -77,10 +73,6 @@ const TARGET_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const REPRESENTATIONS: readonly NamedBodyRepresentation[] = ['json', 'yaml', 'html', 'markdown', 'raw'];
 const KINDS: readonly NamedDataKind[] = ['structured', 'document', 'binary', 'asset'];
 const SCOPES: readonly NamedDataScope[] = ['target', 'project'];
-const LEGACY_REGISTRY_ERROR_CODES = [
-  'NAMED_DATA_INCOMPATIBLE_VERSION',
-  'NAMED_DATA_NAMESPACE_CONFLICT'
-] as const;
 const MEDIA_TYPE_ESSENCE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u;
 
 export class NamedBodyResolver {
@@ -482,11 +474,8 @@ function namedBodyError(code: NamedBodyErrorCode): Error & {code: NamedBodyError
   return Object.assign(new Error(code), {code});
 }
 
-function isNamedDataErrorCode(value: string): value is NamedDataProviderErrorCode {
-  return (
-    (NAMED_DATA_ERROR_CODES as readonly string[]).includes(value) ||
-    (LEGACY_REGISTRY_ERROR_CODES as readonly string[]).includes(value)
-  );
+function isNamedDataErrorCode(value: string): value is NamedDataErrorCode {
+  return (NAMED_DATA_ERROR_CODES as readonly string[]).includes(value);
 }
 
 function statusForNamedDataError(code: NamedBodyErrorCode): number {
