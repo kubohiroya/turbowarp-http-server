@@ -88,6 +88,14 @@ function analyzeStatement(statement, bindings, context) {
     else if (statement.kind === 'delete-handler-variable') {
         requireScratchScalar(validateExpression(statement.name, bindings, context), context, statement.sourceRef, 'Handler variable names');
     }
+    else if (statement.kind === 'kvs-set-text' || statement.kind === 'kvs-delete') {
+        requireCapability({ kind: 'key-value-store' }, context, statement.sourceRef);
+        requireScratchScalar(validateExpression(statement.namespace, bindings, context), context, statement.sourceRef, 'KVS namespaces');
+        requireScratchScalar(validateExpression(statement.key, bindings, context), context, statement.sourceRef, 'KVS keys');
+        if (statement.kind === 'kvs-set-text') {
+            requireScratchScalar(validateExpression(statement.value, bindings, context), context, statement.sourceRef, 'KVS text values');
+        }
+    }
     else if (statement.kind === 'record-create') {
         requireCapability({ kind: 'record-store' }, context, statement.sourceRef);
         validateExpression(statement.data, bindings, context);
@@ -228,6 +236,13 @@ function validateExpression(expression, bindings, context) {
     if (expression.kind === 'handler-variable' || expression.kind === 'handler-variable-exists') {
         requireScratchScalar(validateExpression(expression.name, bindings, context), context, expression.sourceRef, 'Handler variable names');
     }
+    if (expression.kind === 'kvs-get-text' || expression.kind === 'kvs-has' || expression.kind === 'kvs-list-keys') {
+        requireCapability({ kind: 'key-value-store' }, context, expression.sourceRef);
+        requireScratchScalar(validateExpression(expression.namespace, bindings, context), context, expression.sourceRef, 'KVS namespaces');
+        if (expression.kind !== 'kvs-list-keys') {
+            requireScratchScalar(validateExpression(expression.key, bindings, context), context, expression.sourceRef, 'KVS keys');
+        }
+    }
     if (expression.kind === 'json-text-coerce') {
         requireValueType(validateExpression(expression.input, bindings, context), 'string', context, expression.sourceRef, 'json-text coercion input');
     }
@@ -348,6 +363,12 @@ function statementWork(statement, limit) {
     }
     if (statement.kind === 'delete-handler-variable')
         work = saturatedAdd(work, expressionWork(statement.name, limit), limit);
+    if (statement.kind === 'kvs-set-text' || statement.kind === 'kvs-delete') {
+        work = saturatedAdd(work, expressionWork(statement.namespace, limit), limit);
+        work = saturatedAdd(work, expressionWork(statement.key, limit), limit);
+        if (statement.kind === 'kvs-set-text')
+            work = saturatedAdd(work, expressionWork(statement.value, limit), limit);
+    }
     if (statement.kind === 'record-create')
         work = saturatedAdd(work, expressionWork(statement.data, limit), limit);
     if (statement.kind === 'record-get' || statement.kind === 'record-delete') {
@@ -363,6 +384,12 @@ function expressionWork(expression, limit) {
     }
     if (expression.kind === 'handler-variable' || expression.kind === 'handler-variable-exists') {
         return saturatedAdd(1, expressionWork(expression.name, limit), limit);
+    }
+    if (expression.kind === 'kvs-get-text' || expression.kind === 'kvs-has') {
+        return saturatedAdd(saturatedAdd(1, expressionWork(expression.namespace, limit), limit), expressionWork(expression.key, limit), limit);
+    }
+    if (expression.kind === 'kvs-list-keys') {
+        return saturatedAdd(1, expressionWork(expression.namespace, limit), limit);
     }
     if (expression.kind === 'json-text-coerce') {
         return saturatedAdd(1, expressionWork(expression.input, limit), limit);
@@ -395,6 +422,7 @@ function saturatedMultiply(left, right, limit) {
 }
 function capabilityKey(capability) {
     if (capability.kind === 'record-store' ||
+        capability.kind === 'key-value-store' ||
         capability.kind === 'object-storage' ||
         capability.kind === 'streaming-body' ||
         capability.kind === 'named-body-provider') {

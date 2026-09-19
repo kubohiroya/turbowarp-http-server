@@ -12,6 +12,11 @@
       "integrity": "sha256-FcgxT34QB/GxZtHbzBJPiyNhZ/yfeILDPLUh+c1czZU="
     },
     {
+      "packageName": "@kubohiroya/turbowarp-kvs",
+      "packageVersion": "0.1.0",
+      "integrity": "sha256-J5lrwrYlhftOXRE9bwaGvKzBtxYtRy5kYujV68tz39Q="
+    },
+    {
       "packageName": "@kubohiroya/turbowarp-structured-data",
       "packageVersion": "0.4.0",
       "integrity": "sha256-atsgtqeDE72WUR23msLnagXtyHYwN/8OfCSJH0BZw5M="

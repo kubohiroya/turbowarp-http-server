@@ -11,6 +11,7 @@ import {
   type StatementIrV2
 } from './ir-v2/types.js';
 import type {CompilerOpcodeRegistry, CompilerOpcodeRegistryEntry} from './manifest/types.js';
+import {isKvsEntry, KvsLoweringContext} from './kvs/lowering.js';
 import {lowerNamedBodyResponse, type NamedBodyArguments} from './named-body/lowering.js';
 import {StructuredDataLoweringContext} from './structured-data/lowering.js';
 import {validateTurboWarpServerSubset} from './validator/turbowarp-subset.js';
@@ -318,6 +319,13 @@ function compileStatement(
     const body = compileExpression(context, inputs.BODY, id, structured);
     return body === null ? null : {kind: 'respond', format, body, sourceRef: source};
   }
+  if (manifestEntry !== undefined && isKvsEntry(manifestEntry)) {
+    const args = compileManifestArguments(context, manifestEntry, inputs, id, structured);
+    if (args === null) return null;
+    const statement = new KvsLoweringContext(context.diagnostics).lowerStatement(manifestEntry, args, source);
+    if (statement !== undefined) addCapability(context, {kind: 'key-value-store'});
+    return statement ?? null;
+  }
   report(context, 'TW2_UNSUPPORTED_COMMAND', `Unsupported command block: ${opcode}`, source);
   return null;
 }
@@ -394,7 +402,13 @@ function compileExpression(
   const manifestEntry = context.registry?.byProjectOpcode.get(reporter.opcode);
   if (manifestEntry !== undefined) {
     const args = compileManifestArguments(context, manifestEntry, inputs, reporterId, structured);
-    return args === null ? null : (structured.lowerReporter(manifestEntry, args, source) ?? null);
+    if (args === null) return null;
+    if (isKvsEntry(manifestEntry)) {
+      const expression = new KvsLoweringContext(context.diagnostics).lowerReporter(manifestEntry, args, source);
+      if (expression !== undefined) addCapability(context, {kind: 'key-value-store'});
+      return expression ?? null;
+    }
+    return structured.lowerReporter(manifestEntry, args, source) ?? null;
   }
   report(context, 'TW2_UNSUPPORTED_REPORTER', `Unsupported reporter block: ${reporter.opcode}`, source);
   return null;

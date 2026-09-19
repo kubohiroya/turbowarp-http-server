@@ -53,11 +53,11 @@ union typeは次の形式です。
 
 ## Expressionとstatement
 
-すべてのexpressionは`valueType`を持ちます。v2で定義済みのexpressionはliteral、request、request-value、concat、handler-variable、handler-variable-exists、handler-variable-names、bindingに加え、明示的なJSON parse／serialize、path操作、iteration reporterです。
+すべてのexpressionは`valueType`を持ちます。v2で定義済みのexpressionはliteral、request、request-value、concat、handler-variable、handler-variable-exists、handler-variable-names、bindingに加え、KVS get／has／list、明示的なJSON parse／serialize、path操作、iteration reporterです。
 
-statementはHTTP response操作、handler-variable操作、論理record／object storage操作、binary body producer／consumer、typed `if`、bounded-loop、`json-for-each`、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
+statementはHTTP response操作、handler-variable操作、KVS set／delete、論理record／object storage操作、binary body producer／consumer、typed `if`、bounded-loop、`json-for-each`、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
 
-statementのeffectは入力側が自由に申告するfieldにはせず、statement kindから`IR_V2_STATEMENT_EFFECTS`で決定的に導出します。分類は`response-write`、`handler-state-write`、`record-read`、`record-write`、`control`です。これにより入力がeffectを過少申告してvalidatorを迂回することを防ぎます。
+statementのeffectは入力側が自由に申告するfieldにはせず、statement kindから`IR_V2_STATEMENT_EFFECTS`で決定的に導出します。分類は`response-write`、`handler-state-write`、`key-value-read`、`key-value-write`、`record-read`、`record-write`、`control`等です。これにより入力がeffectを過少申告してvalidatorを迂回することを防ぎます。
 
 JSON pathは`PathSegmentV2`とschemaの`pathSegment`で、string keyと非負整数indexを別のvariantとして定義します。`json-for-each`はlexical `loopId`を作り、そのbody内だけでiteration key／index／value reporterから参照できます。
 
@@ -99,13 +99,14 @@ IR documentのhashとgolden比較にはRFC 8785（JCS）形式を使用します
 IR coreは製品名ではなく、次のような論理requirementを持ちます。
 
 - `record-store`
+- `key-value-store`
 - `object-storage`
 - `streaming-body`
 - `named-body-provider`
 - `request-metadata: client-address`
 - `auth: external-jwt | trusted-access-jwt`
 
-D1、KV、R2、Firestore、Cloud Storage等の選択はIRへ書かず、後続のPlatformAdapterが行います。
+D1、Cloudflare KV、R2、Firestore、Cloud Storage等の選択はIRへ書かず、後続のPlatformAdapterが行います。現行`key-value-store`はread-after-writeを要求するため、Cloudflare adapterはD1へ写像します。
 
 capabilityとunion typeのmemberはsetとして扱い、parserが重複を拒否して決定的な順序へ正規化します。routeとstatementの配列順は実行順なので保持します。
 

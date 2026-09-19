@@ -10,6 +10,14 @@
       "source": {"kind": "local", "path": "asset-manager.json"}
     },
     {
+      "extensionId": "kubohiroyakvs",
+      "packageName": "@kubohiroya/turbowarp-kvs",
+      "packageVersion": "0.1.0",
+      "manifestFormatVersion": 2,
+      "integrity": "sha256-J5lrwrYlhftOXRE9bwaGvKzBtxYtRy5kYujV68tz39Q=",
+      "source": {"kind": "local", "path": "kvs.json"}
+    },
+    {
       "extensionId": "kubohiroyastructureddata",
       "packageName": "@kubohiroya/turbowarp-structured-data",
       "packageVersion": "0.4.0",

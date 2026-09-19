@@ -8,6 +8,9 @@ export const IR_V2_EXPRESSION_KINDS = [
   'handler-variable',
   'handler-variable-exists',
   'handler-variable-names',
+  'kvs-get-text',
+  'kvs-has',
+  'kvs-list-keys',
   'binding',
   'json-text-coerce',
   'json-parse',
@@ -32,6 +35,8 @@ export const IR_V2_STATEMENT_KINDS = [
   'change-handler-variable',
   'delete-handler-variable',
   'clear-handler-variables',
+  'kvs-set-text',
+  'kvs-delete',
   'record-create',
   'record-list',
   'record-get',
@@ -54,6 +59,8 @@ export type EffectKindV2 =
   | 'handler-state-write'
   | 'record-read'
   | 'record-write'
+  | 'key-value-read'
+  | 'key-value-write'
   | 'object-read'
   | 'object-write'
   | 'binary-consume'
@@ -67,6 +74,8 @@ export const IR_V2_STATEMENT_EFFECTS = {
   'change-handler-variable': ['handler-state-write'],
   'delete-handler-variable': ['handler-state-write'],
   'clear-handler-variables': ['handler-state-write'],
+  'kvs-set-text': ['key-value-write'],
+  'kvs-delete': ['key-value-write'],
   'record-create': ['record-write'],
   'record-list': ['record-read'],
   'record-get': ['record-read'],
@@ -216,6 +225,26 @@ export type ExpressionIrV2 =
     }
   | {kind: 'handler-variable-names'; valueType: 'string'; sourceRef?: SourceRefV2}
   | {
+      kind: 'kvs-get-text';
+      valueType: 'string';
+      namespace: ExpressionIrV2;
+      key: ExpressionIrV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'kvs-has';
+      valueType: 'boolean';
+      namespace: ExpressionIrV2;
+      key: ExpressionIrV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'kvs-list-keys';
+      valueType: 'json-text';
+      namespace: ExpressionIrV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
       kind: 'binding';
       valueType: ValueTypeV2;
       binding: string;
@@ -284,6 +313,19 @@ export type StatementIrV2 =
     }
   | {kind: 'delete-handler-variable'; name: ExpressionIrV2; sourceRef?: SourceRefV2}
   | {kind: 'clear-handler-variables'; sourceRef?: SourceRefV2}
+  | {
+      kind: 'kvs-set-text';
+      namespace: ExpressionIrV2;
+      key: ExpressionIrV2;
+      value: ExpressionIrV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {
+      kind: 'kvs-delete';
+      namespace: ExpressionIrV2;
+      key: ExpressionIrV2;
+      sourceRef?: SourceRefV2;
+    }
   | {
       kind: 'record-create';
       collection: string;
@@ -382,6 +424,7 @@ export type StatementIrV2 =
 
 export type CapabilityRequirementV2 =
   | {kind: 'record-store'}
+  | {kind: 'key-value-store'}
   | {kind: 'object-storage'}
   | {kind: 'streaming-body'}
   | {kind: 'named-body-provider'}

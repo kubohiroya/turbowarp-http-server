@@ -135,7 +135,7 @@ function parseAuth(value: unknown, location: string): AuthPolicyV2 {
 function parseCapability(value: unknown, location: string): CapabilityRequirementV2 {
   const capability = object(value, location);
   const kind = nonEmptyString(capability.kind, `${location}.kind`);
-  if (kind === 'record-store') {
+  if (kind === 'record-store' || kind === 'key-value-store') {
     exactKeys(capability, ['kind'], location);
     return {kind};
   }
@@ -217,6 +217,31 @@ function parseStatement(value: unknown, location: string): StatementIrV2 {
   if (kind === 'clear-handler-variables') {
     exactKeys(statement, ['kind', 'sourceRef'], location);
     return optional({kind}, 'sourceRef', sourceRef);
+  }
+  if (kind === 'kvs-set-text') {
+    exactKeys(statement, ['kind', 'namespace', 'key', 'value', 'sourceRef'], location);
+    return optional(
+      {
+        kind,
+        namespace: parseExpression(statement.namespace, `${location}.namespace`),
+        key: parseExpression(statement.key, `${location}.key`),
+        value: parseExpression(statement.value, `${location}.value`)
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'kvs-delete') {
+    exactKeys(statement, ['kind', 'namespace', 'key', 'sourceRef'], location);
+    return optional(
+      {
+        kind,
+        namespace: parseExpression(statement.namespace, `${location}.namespace`),
+        key: parseExpression(statement.key, `${location}.key`)
+      },
+      'sourceRef',
+      sourceRef
+    );
   }
   if (kind === 'record-create') {
     exactKeys(statement, ['kind', 'collection', 'data', 'result', 'sourceRef'], location);
@@ -506,6 +531,25 @@ function parseExpression(value: unknown, location: string): ExpressionIrV2 {
     exactKeys(expression, ['kind', 'valueType', 'sourceRef'], location);
     if (expression.valueType !== 'string') throw new Error(`${location}.valueType must be string.`);
     return optional({kind, valueType: 'string'}, 'sourceRef', sourceRef);
+  }
+  if (kind === 'kvs-get-text' || kind === 'kvs-has') {
+    exactKeys(expression, ['kind', 'valueType', 'namespace', 'key', 'sourceRef'], location);
+    const valueType = kind === 'kvs-get-text' ? 'string' : 'boolean';
+    requireValueType(expression.valueType, valueType, `${location}.valueType`);
+    const namespace = parseExpression(expression.namespace, `${location}.namespace`);
+    const key = parseExpression(expression.key, `${location}.key`);
+    return kind === 'kvs-get-text'
+      ? optional({kind, valueType: 'string', namespace, key}, 'sourceRef', sourceRef)
+      : optional({kind, valueType: 'boolean', namespace, key}, 'sourceRef', sourceRef);
+  }
+  if (kind === 'kvs-list-keys') {
+    exactKeys(expression, ['kind', 'valueType', 'namespace', 'sourceRef'], location);
+    requireValueType(expression.valueType, 'json-text', `${location}.valueType`);
+    return optional(
+      {kind, valueType: 'json-text', namespace: parseExpression(expression.namespace, `${location}.namespace`)},
+      'sourceRef',
+      sourceRef
+    );
   }
   if (kind === 'binding') {
     exactKeys(expression, ['kind', 'valueType', 'binding', 'sourceRef'], location);

@@ -170,7 +170,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["kind"],
-          "properties": {"kind": {"const": "record-store"}}
+          "properties": {"kind": {"enum": ["record-store", "key-value-store"]}}
         },
         {
           "type": "object",
@@ -200,6 +200,9 @@
     },
     "expression": {
       "oneOf": [
+        {"$ref": "#/$defs/kvsGetTextExpression"},
+        {"$ref": "#/$defs/kvsHasExpression"},
+        {"$ref": "#/$defs/kvsListKeysExpression"},
         {
           "type": "object",
           "additionalProperties": false,
@@ -455,6 +458,41 @@
         }
       ]
     },
+    "kvsGetTextExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "valueType", "namespace", "key"],
+      "properties": {
+        "kind": {"const": "kvs-get-text"},
+        "valueType": {"const": "string"},
+        "namespace": {"$ref": "#/$defs/expression"},
+        "key": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "kvsHasExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "valueType", "namespace", "key"],
+      "properties": {
+        "kind": {"const": "kvs-has"},
+        "valueType": {"const": "boolean"},
+        "namespace": {"$ref": "#/$defs/expression"},
+        "key": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "kvsListKeysExpression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "valueType", "namespace"],
+      "properties": {
+        "kind": {"const": "kvs-list-keys"},
+        "valueType": {"const": "json-text"},
+        "namespace": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
     "statement": {
       "oneOf": [
         {"$ref": "#/$defs/setStatus"},
@@ -463,6 +501,8 @@
         {"$ref": "#/$defs/handlerVariableMutation"},
         {"$ref": "#/$defs/deleteHandlerVariable"},
         {"$ref": "#/$defs/clearHandlerVariables"},
+        {"$ref": "#/$defs/kvsSetText"},
+        {"$ref": "#/$defs/kvsDelete"},
         {"$ref": "#/$defs/recordCreate"},
         {"$ref": "#/$defs/recordList"},
         {"$ref": "#/$defs/recordById"},
@@ -537,6 +577,29 @@
       "required": ["kind"],
       "properties": {
         "kind": {"const": "clear-handler-variables"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "kvsSetText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "namespace", "key", "value"],
+      "properties": {
+        "kind": {"const": "kvs-set-text"},
+        "namespace": {"$ref": "#/$defs/expression"},
+        "key": {"$ref": "#/$defs/expression"},
+        "value": {"$ref": "#/$defs/expression"},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "kvsDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "namespace", "key"],
+      "properties": {
+        "kind": {"const": "kvs-delete"},
+        "namespace": {"$ref": "#/$defs/expression"},
+        "key": {"$ref": "#/$defs/expression"},
         "sourceRef": {"$ref": "#/$defs/sourceRef"}
       }
     },

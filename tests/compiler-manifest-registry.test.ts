@@ -21,18 +21,24 @@ afterEach(async () => {
 });
 
 describe('compiler extension manifest registry', () => {
-  it('resolves locked Structured Data v2 and Asset Manager v1 fixtures offline', async () => {
+  it('resolves locked KVS, Structured Data, and legacy Asset Manager fixtures offline', async () => {
     const first = await resolveCompilerManifestLock(fixtureLock);
     const second = await resolveCompilerManifestLock(fixtureLock);
 
     expect(first.manifests.map(({manifest}) => [manifest.id, manifest.formatVersion])).toEqual([
       ['kubohiroyaassetmanager', 1],
+      ['kubohiroyakvs', 2],
       ['kubohiroyastructureddata', 2]
     ]);
     expect(first.registry.entries).toEqual(second.registry.entries);
     expect(first.registry.entries.map((entry) => entry.projectOpcode)).toEqual([
       'kubohiroyaassetmanager_isLoaded',
       'kubohiroyaassetmanager_registerAsset',
+      'kubohiroyakvs_deleteKey',
+      'kubohiroyakvs_getValue',
+      'kubohiroyakvs_hasKey',
+      'kubohiroyakvs_listKeys',
+      'kubohiroyakvs_setValue',
       'kubohiroyastructureddata_forEachAtPath',
       'kubohiroyastructureddata_normalizeJson'
     ]);
@@ -40,6 +46,13 @@ describe('compiler extension manifest registry', () => {
       extensionId: 'kubohiroyastructureddata',
       opcode: 'normalizeJson',
       block: {effect: 'pure', server: {irOperation: 'structuredData.normalizeJson'}}
+    });
+    expect(resolveCompilerProjectOpcode(first.registry, 'kubohiroyakvs_setValue')).toMatchObject({
+      extensionId: 'kubohiroyakvs',
+      opcode: 'setValue',
+      packageName: '@kubohiroya/turbowarp-kvs',
+      packageVersion: '0.1.0',
+      block: {effect: 'storage-write', immutable: false, server: {irOperation: 'kvs.setText'}}
     });
   });
 

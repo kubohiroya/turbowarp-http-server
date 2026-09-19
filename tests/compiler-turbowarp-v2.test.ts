@@ -237,6 +237,82 @@ describe('TurboWarp IR v2 frontend', () => {
     expect(await readFile(join(output, 'src/core.generated.ts'), 'utf8')).toContain('stringifyApplicationJson');
   });
 
+  it('lowers locked KVS commands and reporters to target-neutral IR', async () => {
+    const {registry} = await resolveCompilerManifestLock(
+      'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
+    );
+    const project = namedProject();
+    const blocks = targetBlocks(project);
+    blocks.hat!.next = 'set';
+    blocks.set = {
+      opcode: 'kubohiroyakvs_setValue',
+      next: 'response',
+      parent: 'hat',
+      inputs: {
+        NAMESPACE: [1, [10, 'sessions']],
+        KEY: [1, [10, 'greeting']],
+        VALUE: [1, [10, 'hello']]
+      }
+    };
+    blocks.response = {
+      opcode: `${prefix}respondWithText`,
+      next: null,
+      parent: 'set',
+      inputs: {BODY: [3, 'get']}
+    };
+    blocks.get = {
+      opcode: 'kubohiroyakvs_getValue',
+      next: null,
+      parent: 'response',
+      inputs: {
+        NAMESPACE: [1, [10, 'sessions']],
+        KEY: [1, [10, 'greeting']]
+      }
+    };
+    delete blocks.named;
+
+    const result = compileTurboWarpProjectV2(project, registry);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ir.capabilities).toEqual([{kind: 'key-value-store'}]);
+    expect(result.ir.routes[0]?.body).toMatchObject([
+      {
+        kind: 'kvs-set-text',
+        namespace: {kind: 'literal', value: 'sessions'},
+        key: {kind: 'literal', value: 'greeting'},
+        value: {kind: 'literal', value: 'hello'}
+      },
+      {
+        kind: 'respond',
+        format: 'text',
+        body: {
+          kind: 'kvs-get-text',
+          namespace: {kind: 'literal', value: 'sessions'},
+          key: {kind: 'literal', value: 'greeting'}
+        }
+      }
+    ]);
+
+    const directory = await mkdtemp(join(tmpdir(), 'tw-v2-kvs-'));
+    temporaryDirectories.push(directory);
+    const input = join(directory, 'project.json');
+    const output = join(directory, 'worker');
+    await writeFile(input, JSON.stringify(project));
+    const compiled = await compileToDirectory({
+      input,
+      output,
+      format: 'turbowarp-json',
+      irVersion: 2,
+      target: 'cloudflare-workers',
+      manifestLock: 'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
+    });
+    expect(compiled.diagnostics).toEqual([]);
+    expect(await readFile(join(output, 'src/index.ts'), 'utf8')).toContain('keyValues:');
+    expect(await readFile(join(output, 'migrations/0001_init.sql'), 'utf8')).toContain(
+      'CREATE TABLE IF NOT EXISTS kvs'
+    );
+  });
+
   it('keeps source locations unambiguous when targets have the same display name', () => {
     const project = namedProject();
     const duplicate = structuredClone((project.targets as unknown[])[0]) as {

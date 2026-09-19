@@ -35,8 +35,16 @@ export interface RecordStore {
   get(id: string): Promise<StoredRecord | null>;
   delete(id: string): Promise<boolean>;
 }
+export interface KeyValueStore {
+  set(namespace: string, key: string, value: string): Promise<void>;
+  get(namespace: string, key: string): Promise<string | null>;
+  has(namespace: string, key: string): Promise<boolean>;
+  delete(namespace: string, key: string): Promise<boolean>;
+  list(namespace: string): Promise<string[]>;
+}
 export interface CoreServices {
   records?: (context: unknown) => RecordStore;
+  keyValues?: (context: unknown) => KeyValueStore;
   objects?: (context: unknown) => BinaryObjectStore;
   namedBodies?: (context: unknown) => NamedBodyService;
   clientAddress?: (context: unknown) => string;
@@ -80,7 +88,11 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
       } else if (statement.kind === 'delete-handler-variable') {
         handlerVariables.delete(asText(await expression(statement.name)));
       } else if (statement.kind === 'clear-handler-variables') handlerVariables.clear();
-      else if (statement.kind === 'record-create') {
+      else if (statement.kind === 'kvs-set-text') {
+        await requiredKeyValues().set(asText(await expression(statement.namespace)), asText(await expression(statement.key)), asText(await expression(statement.value)));
+      } else if (statement.kind === 'kvs-delete') {
+        await requiredKeyValues().delete(asText(await expression(statement.namespace)), asText(await expression(statement.key)));
+      } else if (statement.kind === 'record-create') {
         bindings.set(statement.result.id, await requiredRecords().create(statement.collection, await expression(statement.data)));
       } else if (statement.kind === 'record-list') {
         bindings.set(statement.result.id, await requiredRecords().list(statement.collection));
@@ -156,6 +168,9 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
     if (value.kind === 'handler-variable') return handlerVariables.get(asText(await expression(value.name))) ?? '';
     if (value.kind === 'handler-variable-exists') return handlerVariables.has(asText(await expression(value.name)));
     if (value.kind === 'handler-variable-names') return [...handlerVariables.keys()].join(',');
+    if (value.kind === 'kvs-get-text') return await requiredKeyValues().get(asText(await expression(value.namespace)), asText(await expression(value.key))) ?? '';
+    if (value.kind === 'kvs-has') return requiredKeyValues().has(asText(await expression(value.namespace)), asText(await expression(value.key)));
+    if (value.kind === 'kvs-list-keys') return JSON.stringify(await requiredKeyValues().list(asText(await expression(value.namespace))));
     if (value.kind === 'request-value') {
       if (value.source === 'query') return c.req.query(value.name) ?? '';
       if (value.source === 'path-param') return c.req.param(value.name) ?? '';
@@ -189,6 +204,10 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
   function requiredRecords(): RecordStore {
     if (!services.records) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
     return services.records(c);
+  }
+  function requiredKeyValues(): KeyValueStore {
+    if (!services.keyValues) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
+    return services.keyValues(c);
   }
   function requiredObjects(): BinaryObjectStore {
     if (!services.objects) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
@@ -284,6 +303,9 @@ const KNOWN_RUNTIME_STATUS: Readonly<Record<string, number>> = {
   INDEX_OUT_OF_RANGE: 422,
   ITERATION_LIMIT_EXCEEDED: 422,
   ITERATION_CONTEXT_REQUIRED: 422,
+  KVS_NAMESPACE_INVALID: 422,
+  KVS_KEY_INVALID: 422,
+  KVS_STORAGE_FAILURE: 502,
   BINARY_INVALID_REF: 422,
   BINARY_NOT_FOUND: 404,
   BINARY_TOO_LARGE: 413,
