@@ -46,6 +46,8 @@ function findInStatements(statements, key) {
 function statementRequires(statement, key) {
     if (key === 'record-store')
         return statement.kind.startsWith('record-');
+    if (key === 'key-value-store')
+        return statement.kind.startsWith('kvs-');
     if (key === 'object-storage')
         return statement.kind.startsWith('asset-');
     if (key === 'named-body-provider')
@@ -65,6 +67,10 @@ function statementExpressions(statement) {
     }
     if (statement.kind === 'delete-handler-variable')
         return [statement.name];
+    if (statement.kind === 'kvs-set-text')
+        return [statement.namespace, statement.key, statement.value];
+    if (statement.kind === 'kvs-delete')
+        return [statement.namespace, statement.key];
     if (statement.kind === 'record-create')
         return [statement.data];
     if (statement.kind === 'record-get' || statement.kind === 'record-delete')
@@ -85,6 +91,10 @@ function findInExpression(expression, key) {
     if (key === 'request-metadata:client-address' &&
         expression.kind === 'request' &&
         expression.source === 'client-address') {
+        return expression.sourceRef === undefined ? {} : { sourceRef: expression.sourceRef };
+    }
+    if (key === 'key-value-store' &&
+        (expression.kind === 'kvs-get-text' || expression.kind === 'kvs-has' || expression.kind === 'kvs-list-keys')) {
         return expression.sourceRef === undefined ? {} : { sourceRef: expression.sourceRef };
     }
     for (const child of childExpressions(expression)) {
@@ -115,6 +125,11 @@ function childExpressions(expression) {
     }
     if (expression.kind === 'json-set')
         return [expression.root, expression.value];
+    if (expression.kind === 'kvs-get-text' || expression.kind === 'kvs-has') {
+        return [expression.namespace, expression.key];
+    }
+    if (expression.kind === 'kvs-list-keys')
+        return [expression.namespace];
     return [];
 }
 //# sourceMappingURL=requirements.js.map

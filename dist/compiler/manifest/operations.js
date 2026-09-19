@@ -2,6 +2,11 @@ import { CompilerManifestError } from './error.js';
 const STRING = 'STRING';
 const NUMBER = 'NUMBER';
 export const KNOWN_SERVER_OPERATIONS = {
+    'kvs.delete': signature('deleteKey', 'COMMAND', [{ id: 'KEY', type: STRING }, { id: 'NAMESPACE', type: STRING }], 'void', 'storage-write', false),
+    'kvs.getText': signature('getValue', 'REPORTER', [{ id: 'KEY', type: STRING }, { id: 'NAMESPACE', type: STRING }], 'string', 'storage-read'),
+    'kvs.has': signature('hasKey', 'BOOLEAN', [{ id: 'KEY', type: STRING }, { id: 'NAMESPACE', type: STRING }], 'boolean', 'storage-read'),
+    'kvs.listKeys': signature('listKeys', 'REPORTER', [{ id: 'NAMESPACE', type: STRING }], 'json', 'storage-read'),
+    'kvs.setText': signature('setValue', 'COMMAND', [{ id: 'KEY', type: STRING }, { id: 'NAMESPACE', type: STRING }, { id: 'VALUE', type: STRING }], 'void', 'storage-write', false),
     'structuredData.currentIndex': signature('currentIndex', 'REPORTER', [], 'number', 'control'),
     'structuredData.currentKey': signature('currentKey', 'REPORTER', [], 'string', 'control'),
     'structuredData.currentValue': signature('currentValueJson', 'REPORTER', [], 'json', 'control'),
@@ -43,8 +48,8 @@ export function validateServerOperationHint(block) {
         operationMismatch(block, operation, 'block signature does not match the compiler allowlist');
     }
 }
-function signature(opcode, blockType, argumentsValue, resultType, effect) {
-    return { opcode, blockType, arguments: argumentsValue, resultType, effect, immutable: true };
+function signature(opcode, blockType, argumentsValue, resultType, effect, immutable = true) {
+    return { opcode, blockType, arguments: argumentsValue, resultType, effect, immutable };
 }
 function pathArgument() {
     return { id: 'PATH', type: STRING, normalizesTo: 'pathSegments' };

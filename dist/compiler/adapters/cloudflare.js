@@ -1,9 +1,9 @@
 import { findCapabilityOrigin } from '../pipeline/requirements.js';
 export const cloudflareWorkersAdapter = {
     id: 'cloudflare-workers',
-    version: '1.3.1',
+    version: '1.4.0',
     capabilities: () => ({
-        keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
+        keys: ['key-value-store', 'object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
         maxBinaryBytes: 16 * 1024 * 1024
     }),
     plan({ ir, requirements, config }) {
@@ -24,7 +24,9 @@ export const cloudflareWorkersAdapter = {
                 adapterVersion: cloudflareWorkersAdapter.version,
                 requirements: requirements.keys,
                 bindings: {
-                    ...(requirements.keys.includes('record-store') ? { recordDatabase: parsed.recordDatabaseBinding } : {}),
+                    ...(requirements.keys.includes('record-store') || requirements.keys.includes('key-value-store')
+                        ? { recordDatabase: parsed.recordDatabaseBinding }
+                        : {}),
                     ...(requirements.keys.includes('object-storage') ? { objectBucket: parsed.objectBucketBinding } : {})
                 }
             }
@@ -38,7 +40,7 @@ export const cloudflareWorkersAdapter = {
             'src/index.ts': indexSource(plan),
             'src/platform.ts': platformSource(),
             'wrangler.jsonc': wrangler(ir, plan),
-            ...(plan.requirements.includes('record-store') ? { 'migrations/0001_init.sql': migration() } : {}),
+            ...(plan.bindings.recordDatabase === undefined ? {} : { 'migrations/0001_init.sql': migration(plan) }),
             'README.md': generatedReadme(ir, plan)
         };
     }
@@ -94,9 +96,12 @@ function indexSource(plan) {
         ...(objectBinding === undefined ? [] : [`${objectBinding}: R2Bucket`])
     ].join('; ');
     const services = [
-        ...(recordBinding === undefined
+        ...(recordBinding === undefined || !plan.requirements.includes('record-store')
             ? []
             : [`records: (context) => createRecordStore((context as {env: Bindings}).env.${recordBinding})`]),
+        ...(recordBinding === undefined || !plan.requirements.includes('key-value-store')
+            ? []
+            : [`keyValues: (context) => createKeyValueStore((context as {env: Bindings}).env.${recordBinding})`]),
         ...(objectBinding === undefined
             ? []
             : [`objects: (context) => createObjectStore((context as {env: Bindings}).env.${objectBinding})`]),
@@ -104,7 +109,7 @@ function indexSource(plan) {
     ].join(',\n  ');
     return `import {Hono} from 'hono';
 import {registerCoreRoutes} from './core.generated.js';
-import {createObjectStore, createRecordStore} from './platform.js';
+import {createKeyValueStore, createObjectStore, createRecordStore} from './platform.js';
 
 type Bindings = {${bindingMembers}};
 const app = new Hono<{Bindings: Bindings}>();
@@ -115,7 +120,7 @@ export default app;
 `;
 }
 function platformSource() {
-    return `import type {BinaryBodySource, BinaryLocator, BinaryMetadata, BinaryObjectStore, BinaryRef, RecordStore} from './core.generated.js';
+    return `import type {BinaryBodySource, BinaryLocator, BinaryMetadata, BinaryObjectStore, BinaryRef, KeyValueStore, RecordStore} from './core.generated.js';
 
 type RecordRow = {id: string; collection: string; data_json: string; created_at: string; updated_at: string};
 export function createRecordStore(database: D1Database): RecordStore {
@@ -143,6 +148,46 @@ export function createRecordStore(database: D1Database): RecordStore {
 function fromRow(row: RecordRow): Record<string, unknown> {
   return {id: row.id, collection: row.collection, data: JSON.parse(row.data_json), createdAt: row.created_at, updatedAt: row.updated_at};
 }
+
+export function createKeyValueStore(database: D1Database): KeyValueStore {
+  return {
+    async set(namespace, key, value) {
+      const locator = kvsLocator(namespace, key);
+      await kvsStorage(() => database.prepare('INSERT INTO kvs (namespace, key, value_text, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(namespace, key) DO UPDATE SET value_text = excluded.value_text, updated_at = excluded.updated_at').bind(locator.namespace, locator.key, value, new Date().toISOString()).run());
+    },
+    async get(namespace, key) {
+      const locator = kvsLocator(namespace, key);
+      const row = await kvsStorage(() => database.prepare('SELECT value_text FROM kvs WHERE namespace = ? AND key = ?').bind(locator.namespace, locator.key).first<{value_text: string}>());
+      return row?.value_text ?? null;
+    },
+    async has(namespace, key) {
+      const locator = kvsLocator(namespace, key);
+      return await kvsStorage(() => database.prepare('SELECT 1 AS present FROM kvs WHERE namespace = ? AND key = ?').bind(locator.namespace, locator.key).first()) !== null;
+    },
+    async delete(namespace, key) {
+      const locator = kvsLocator(namespace, key);
+      const result = await kvsStorage(() => database.prepare('DELETE FROM kvs WHERE namespace = ? AND key = ?').bind(locator.namespace, locator.key).run());
+      return result.meta.changes > 0;
+    },
+    async list(namespace) {
+      const locator = kvsLocator(namespace, 'placeholder');
+      const result = await kvsStorage(() => database.prepare('SELECT key FROM kvs WHERE namespace = ? ORDER BY key ASC').bind(locator.namespace).all<{key: string}>());
+      return result.results.map((row) => row.key);
+    }
+  };
+}
+function kvsLocator(namespaceValue: string, keyValue: string): {namespace: string; key: string} {
+  const namespace = namespaceValue.normalize('NFC');
+  const key = keyValue.normalize('NFC');
+  if (!/^[a-z][a-z0-9.-]{0,63}$/u.test(namespace)) throw Object.assign(new Error('KVS_NAMESPACE_INVALID'), {code: 'KVS_NAMESPACE_INVALID'});
+  if (key.length === 0 || key.length > 512 || key.includes('\\0') || key.split('/').some((part) => part === '.' || part === '..')) throw Object.assign(new Error('KVS_KEY_INVALID'), {code: 'KVS_KEY_INVALID'});
+  return {namespace, key};
+}
+async function kvsStorage<T>(operation: () => Promise<T>): Promise<T> {
+  try {return await operation();}
+  catch (error) {if (isKvsFault(error)) throw error; throw Object.assign(new Error('KVS_STORAGE_FAILURE'), {code: 'KVS_STORAGE_FAILURE'});}
+}
+function isKvsFault(error: unknown): error is Error & {code: string} {return error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('KVS_')}
 
 export function createObjectStore(bucket: R2Bucket): BinaryObjectStore {
   return {
@@ -315,25 +360,34 @@ function wrangler(ir, plan) {
     };
     return `// Generated by turbowarp-http-server.\n${JSON.stringify(config, null, 2)}\n`;
 }
-function migration() {
-    return `CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, collection TEXT NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);\n`;
+function migration(plan) {
+    return [
+        ...(plan.requirements.includes('record-store')
+            ? ['CREATE TABLE IF NOT EXISTS records (id TEXT PRIMARY KEY, collection TEXT NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);']
+            : []),
+        ...(plan.requirements.includes('key-value-store')
+            ? ['CREATE TABLE IF NOT EXISTS kvs (namespace TEXT NOT NULL, key TEXT NOT NULL, value_text TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (namespace, key));']
+            : [])
+    ].join('\n') + '\n';
 }
 function generatedReadme(ir, plan) {
     const resources = [
-        ...(plan.requirements.includes('record-store') ? [`the D1 database \`${ir.name}-db\``] : []),
+        ...(plan.requirements.includes('record-store') || plan.requirements.includes('key-value-store')
+            ? [`the D1 database \`${ir.name}-db\``]
+            : []),
         ...(plan.requirements.includes('object-storage') ? [`the R2 bucket \`${ir.name}-objects\``] : [])
     ];
     const setup = resources.length === 0
         ? 'review the generated `wrangler.jsonc`'
         : `create ${resources.join(' and ')} named in \`wrangler.jsonc\``;
-    const migration = plan.requirements.includes('record-store')
-        ? ` Apply \`migrations/0001_init.sql\` with Wrangler before serving record routes.`
+    const migration = plan.requirements.includes('record-store') || plan.requirements.includes('key-value-store')
+        ? ` Apply \`migrations/0001_init.sql\` with Wrangler before serving storage-backed routes.`
         : '';
     return `# Generated Cloudflare Workers application
 
 Run \`npm install\`, ${setup}, replace only placeholder resource IDs, then run \`npm run dev\` or \`npm run deploy\`.${migration}
 
-R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. Revisions combine R2's unique upload version, ETag, and upload timestamp. Deletes use ETag-and-time-conditional zero-byte \`twDeleted\` tombstones that resolve/get treat as absent; locator deletes retry when a concurrent write wins, and a later put replaces the tombstone. D1 stores queryable records. Do not substitute KV for read-after-write object or record operations.
+R2 stores binary bytes under the versioned \`v1/<namespace>/<key>\` prefix. Revisions combine R2's unique upload version, ETag, and upload timestamp. Deletes use ETag-and-time-conditional zero-byte \`twDeleted\` tombstones that resolve/get treat as absent; locator deletes retry when a concurrent write wins, and a later put replaces the tombstone. D1 stores queryable records and KVS text entries; KVS key listing is lexicographically ordered. Cloudflare KV is deliberately not used because this contract requires read-after-write consistency.
 
 ## Rollback and cleanup
 

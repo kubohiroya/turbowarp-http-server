@@ -58,6 +58,7 @@ function findInStatements(statements: readonly StatementIrV2[], key: string): Lo
 
 function statementRequires(statement: StatementIrV2, key: string): boolean {
   if (key === 'record-store') return statement.kind.startsWith('record-');
+  if (key === 'key-value-store') return statement.kind.startsWith('kvs-');
   if (key === 'object-storage') return statement.kind.startsWith('asset-');
   if (key === 'named-body-provider') return statement.kind === 'respond-named-body';
   if (key === 'streaming-body') {
@@ -76,6 +77,8 @@ function statementExpressions(statement: StatementIrV2): ExpressionIrV2[] {
     return [statement.name, statement.value];
   }
   if (statement.kind === 'delete-handler-variable') return [statement.name];
+  if (statement.kind === 'kvs-set-text') return [statement.namespace, statement.key, statement.value];
+  if (statement.kind === 'kvs-delete') return [statement.namespace, statement.key];
   if (statement.kind === 'record-create') return [statement.data];
   if (statement.kind === 'record-get' || statement.kind === 'record-delete') return [statement.id];
   if (statement.kind === 'asset-object-get') return [statement.ref];
@@ -91,6 +94,12 @@ function findInExpression(expression: ExpressionIrV2, key: string): LocatedNode 
     key === 'request-metadata:client-address' &&
     expression.kind === 'request' &&
     expression.source === 'client-address'
+  ) {
+    return expression.sourceRef === undefined ? {} : {sourceRef: expression.sourceRef};
+  }
+  if (
+    key === 'key-value-store' &&
+    (expression.kind === 'kvs-get-text' || expression.kind === 'kvs-has' || expression.kind === 'kvs-list-keys')
   ) {
     return expression.sourceRef === undefined ? {} : {sourceRef: expression.sourceRef};
   }
@@ -122,5 +131,9 @@ function childExpressions(expression: ExpressionIrV2): ExpressionIrV2[] {
     return [expression.root];
   }
   if (expression.kind === 'json-set') return [expression.root, expression.value];
+  if (expression.kind === 'kvs-get-text' || expression.kind === 'kvs-has') {
+    return [expression.namespace, expression.key];
+  }
+  if (expression.kind === 'kvs-list-keys') return [expression.namespace];
   return [];
 }

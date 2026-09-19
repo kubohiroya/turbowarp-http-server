@@ -1,7 +1,7 @@
 export declare const DEPLOY_IR_V2_VERSION: 2;
-export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "binding", "json-text-coerce", "json-parse", "json-stringify", "json-is-valid", "json-get", "json-has", "json-set", "json-delete", "json-keys", "json-length", "iteration-key", "iteration-index", "iteration-value"];
-export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "record-create", "record-list", "record-get", "record-delete", "asset-resolve", "request-body-binary", "asset-object-get", "asset-object-put", "asset-object-delete", "if", "bounded-loop", "json-for-each", "respond-binary", "respond-named-body", "respond"];
-export type EffectKindV2 = 'response-write' | 'handler-state-write' | 'record-read' | 'record-write' | 'object-read' | 'object-write' | 'binary-consume' | 'control';
+export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "kvs-get-text", "kvs-has", "kvs-list-keys", "binding", "json-text-coerce", "json-parse", "json-stringify", "json-is-valid", "json-get", "json-has", "json-set", "json-delete", "json-keys", "json-length", "iteration-key", "iteration-index", "iteration-value"];
+export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "kvs-set-text", "kvs-delete", "record-create", "record-list", "record-get", "record-delete", "asset-resolve", "request-body-binary", "asset-object-get", "asset-object-put", "asset-object-delete", "if", "bounded-loop", "json-for-each", "respond-binary", "respond-named-body", "respond"];
+export type EffectKindV2 = 'response-write' | 'handler-state-write' | 'record-read' | 'record-write' | 'key-value-read' | 'key-value-write' | 'object-read' | 'object-write' | 'binary-consume' | 'control';
 export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'set-status': readonly ["response-write"];
     readonly 'set-header': readonly ["response-write"];
@@ -10,6 +10,8 @@ export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'change-handler-variable': readonly ["handler-state-write"];
     readonly 'delete-handler-variable': readonly ["handler-state-write"];
     readonly 'clear-handler-variables': readonly ["handler-state-write"];
+    readonly 'kvs-set-text': readonly ["key-value-write"];
+    readonly 'kvs-delete': readonly ["key-value-write"];
     readonly 'record-create': readonly ["record-write"];
     readonly 'record-list': readonly ["record-read"];
     readonly 'record-get': readonly ["record-read"];
@@ -151,6 +153,23 @@ export type ExpressionIrV2 = {
     valueType: 'string';
     sourceRef?: SourceRefV2;
 } | {
+    kind: 'kvs-get-text';
+    valueType: 'string';
+    namespace: ExpressionIrV2;
+    key: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'kvs-has';
+    valueType: 'boolean';
+    namespace: ExpressionIrV2;
+    key: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'kvs-list-keys';
+    valueType: 'json-text';
+    namespace: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
     kind: 'binding';
     valueType: ValueTypeV2;
     binding: string;
@@ -254,6 +273,17 @@ export type StatementIrV2 = {
     kind: 'clear-handler-variables';
     sourceRef?: SourceRefV2;
 } | {
+    kind: 'kvs-set-text';
+    namespace: ExpressionIrV2;
+    key: ExpressionIrV2;
+    value: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'kvs-delete';
+    namespace: ExpressionIrV2;
+    key: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
     kind: 'record-create';
     collection: string;
     data: ExpressionIrV2;
@@ -337,6 +367,8 @@ export type StatementIrV2 = {
 };
 export type CapabilityRequirementV2 = {
     kind: 'record-store';
+} | {
+    kind: 'key-value-store';
 } | {
     kind: 'object-storage';
 } | {

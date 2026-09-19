@@ -20,6 +20,43 @@ const STRING = 'STRING' as const;
 const NUMBER = 'NUMBER' as const;
 
 export const KNOWN_SERVER_OPERATIONS: Readonly<Record<string, ServerOperationSignature>> = {
+  'kvs.delete': signature(
+    'deleteKey',
+    'COMMAND',
+    [{id: 'KEY', type: STRING}, {id: 'NAMESPACE', type: STRING}],
+    'void',
+    'storage-write',
+    false
+  ),
+  'kvs.getText': signature(
+    'getValue',
+    'REPORTER',
+    [{id: 'KEY', type: STRING}, {id: 'NAMESPACE', type: STRING}],
+    'string',
+    'storage-read'
+  ),
+  'kvs.has': signature(
+    'hasKey',
+    'BOOLEAN',
+    [{id: 'KEY', type: STRING}, {id: 'NAMESPACE', type: STRING}],
+    'boolean',
+    'storage-read'
+  ),
+  'kvs.listKeys': signature(
+    'listKeys',
+    'REPORTER',
+    [{id: 'NAMESPACE', type: STRING}],
+    'json',
+    'storage-read'
+  ),
+  'kvs.setText': signature(
+    'setValue',
+    'COMMAND',
+    [{id: 'KEY', type: STRING}, {id: 'NAMESPACE', type: STRING}, {id: 'VALUE', type: STRING}],
+    'void',
+    'storage-write',
+    false
+  ),
   'structuredData.currentIndex': signature('currentIndex', 'REPORTER', [], 'number', 'control'),
   'structuredData.currentKey': signature('currentKey', 'REPORTER', [], 'string', 'control'),
   'structuredData.currentValue': signature('currentValueJson', 'REPORTER', [], 'json', 'control'),
@@ -120,9 +157,10 @@ function signature(
   blockType: ManifestBlockType,
   argumentsValue: readonly CompilerManifestArgument[],
   resultType: ManifestResultType,
-  effect: ManifestEffect
+  effect: ManifestEffect,
+  immutable = true
 ): ServerOperationSignature {
-  return {opcode, blockType, arguments: argumentsValue, resultType, effect, immutable: true};
+  return {opcode, blockType, arguments: argumentsValue, resultType, effect, immutable};
 }
 
 function pathArgument(): CompilerManifestArgument {

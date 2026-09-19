@@ -38,7 +38,7 @@ describe('IR v2 platform pipeline', () => {
     expect(first.manifest).toMatchObject({
       formatVersion: 1,
       irVersion: 2,
-      adapter: {id: 'cloudflare-workers', version: '1.3.1'},
+      adapter: {id: 'cloudflare-workers', version: '1.4.0'},
       requirements: ['record-store'],
       plan: {requirements: ['record-store'], bindings: {recordDatabase: 'DB'}}
     });
@@ -137,6 +137,93 @@ describe('IR v2 platform pipeline', () => {
     const after = generateHonoCore(messageApp());
     expect(before).toEqual(after);
     expect(before.entryModule).toBe('./core.generated.js');
+  });
+
+  it('maps the KVS capability to D1 or Firestore without coupling IR to either target', () => {
+    const cloudflare = compileDeployIrV2(kvsApp(), {target: 'cloudflare-workers'});
+    const firebase = compileDeployIrV2(kvsApp(), {target: 'firebase-functions'});
+    if (!cloudflare.ok || !firebase.ok) throw new Error('Expected both KVS targets to compile.');
+
+    expect(cloudflare.manifest).toMatchObject({
+      adapter: {id: 'cloudflare-workers', version: '1.4.0'},
+      requirements: ['key-value-store'],
+      plan: {bindings: {recordDatabase: 'DB'}}
+    });
+    expect(cloudflare.files['migrations/0001_init.sql']).toContain('CREATE TABLE IF NOT EXISTS kvs');
+    expect(cloudflare.files['migrations/0001_init.sql']).not.toContain('CREATE TABLE IF NOT EXISTS records');
+    expect(cloudflare.files['src/index.ts']).toContain('keyValues:');
+    expect(cloudflare.files['src/index.ts']).not.toContain('records:');
+    expect(cloudflare.files['src/platform.ts']).not.toContain('ORDER BY key ASC LIMIT');
+
+    expect(firebase.manifest).toMatchObject({
+      adapter: {id: 'firebase-functions', version: '1.3.0'},
+      requirements: ['key-value-store'],
+      plan: {bindings: {functionName: 'api', keyValueCollection: 'key_values'}}
+    });
+    expect(firebase.files['functions/src/platform.ts']).toContain("createHash('sha256')");
+    expect(firebase.files['functions/src/platform.ts']).not.toContain("orderBy('key', 'asc').limit");
+    expect(JSON.parse(firebase.files['firestore.indexes.json']!)).toMatchObject({
+      indexes: [
+        {
+          collectionGroup: 'key_values',
+          fields: [
+            {fieldPath: 'namespace', order: 'ASCENDING'},
+            {fieldPath: 'key', order: 'ASCENDING'}
+          ]
+        }
+      ]
+    });
+  });
+
+  it.each([
+    ['cloudflare-workers', 'src/platform.ts'],
+    ['firebase-functions', 'functions/src/platform.ts']
+  ])('validates KVS locators before accessing the %s SDK', async (target, path) => {
+    const result = compileDeployIrV2(kvsApp(), {target});
+    if (!result.ok) throw new Error(`Expected ${target} compilation to succeed.`);
+    const platform = await loadModule(result.files[path]!);
+    const access = vi.fn();
+    const sdk = target === 'cloudflare-workers'
+      ? {prepare: access}
+      : {collection: () => ({doc: access}), runTransaction: vi.fn()};
+    const createKeyValueStore = platform.createKeyValueStore as (value: unknown, root?: string) => {
+      get(namespace: string, key: string): Promise<string | null>;
+    };
+    const store = target === 'cloudflare-workers'
+      ? createKeyValueStore(sdk)
+      : createKeyValueStore(sdk, 'key_values');
+
+    await expect(store.get('INVALID', 'key')).rejects.toMatchObject({code: 'KVS_NAMESPACE_INVALID'});
+    expect(access).not.toHaveBeenCalled();
+  });
+
+  it('executes all KVS operations through injected services', async () => {
+    const coreModule = await loadModule(generateHonoCore(kvsApp()).files['src/core.generated.ts']!);
+    const values = new Map<string, string>();
+    const key = (namespace: string, name: string): string => `${namespace}\u0000${name}`;
+    const app = new Hono();
+    coreModule.registerCoreRoutes!(app, {
+      keyValues: () => ({
+        set: async (namespace: string, name: string, value: string) => {values.set(key(namespace, name), value);},
+        get: async (namespace: string, name: string) => values.get(key(namespace, name)) ?? null,
+        has: async (namespace: string, name: string) => values.has(key(namespace, name)),
+        delete: async (namespace: string, name: string) => values.delete(key(namespace, name)),
+        list: async (namespace: string) => [...values.keys()]
+          .filter((entry) => entry.startsWith(`${namespace}\u0000`))
+          .map((entry) => entry.slice(namespace.length + 1))
+          .sort()
+      })
+    });
+
+    const response = await app.request('http://local.test/kvs');
+    const listResponse = await app.request('http://local.test/kvs/keys');
+    const deleteResponse = await app.request('http://local.test/kvs', {method: 'DELETE'});
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('hello');
+    expect(await listResponse.json()).toEqual(['greeting']);
+    expect(await deleteResponse.json()).toBe(false);
+    expect(values.has(key('sessions', 'greeting'))).toBe(false);
   });
 
   it.each([
@@ -604,6 +691,9 @@ describe('IR v2 platform pipeline', () => {
   it.each([
     ['INVALID_JSON', 422],
     ['PATH_NOT_FOUND', 422],
+    ['KVS_NAMESPACE_INVALID', 422],
+    ['KVS_KEY_INVALID', 422],
+    ['KVS_STORAGE_FAILURE', 502],
     ['BINARY_NOT_FOUND', 404],
     ['BINARY_TOO_LARGE', 413],
     ['BINARY_INTEGRITY_MISMATCH', 502],
@@ -676,6 +766,65 @@ function messageApp(): DeployIrV2 {
             kind: 'respond',
             format: 'json',
             body: {kind: 'binding', valueType: 'json-object', binding: 'created'}
+          }
+        ]
+      }
+    ]
+  };
+}
+
+function kvsApp(): DeployIrV2 {
+  const namespace = {kind: 'literal', valueType: 'string', value: 'sessions'} as const;
+  const key = {kind: 'literal', valueType: 'string', value: 'greeting'} as const;
+  return {
+    version: 2,
+    name: 'kvs-app',
+    auth: {kind: 'none'},
+    capabilities: [{kind: 'key-value-store'}],
+    routes: [
+      {
+        id: 'kvs',
+        method: 'GET',
+        path: '/kvs',
+        auth: 'public',
+        body: [
+          {
+            kind: 'kvs-set-text',
+            namespace,
+            key,
+            value: {kind: 'literal', valueType: 'string', value: 'hello'}
+          },
+          {
+            kind: 'respond',
+            format: 'text',
+            body: {kind: 'kvs-get-text', valueType: 'string', namespace, key}
+          }
+        ]
+      },
+      {
+        id: 'kvs-keys',
+        method: 'GET',
+        path: '/kvs/keys',
+        auth: 'public',
+        body: [
+          {
+            kind: 'respond',
+            format: 'json',
+            body: {kind: 'kvs-list-keys', valueType: 'json-text', namespace}
+          }
+        ]
+      },
+      {
+        id: 'kvs-delete',
+        method: 'DELETE',
+        path: '/kvs',
+        auth: 'public',
+        body: [
+          {kind: 'kvs-delete', namespace, key},
+          {
+            kind: 'respond',
+            format: 'json',
+            body: {kind: 'kvs-has', valueType: 'boolean', namespace, key}
           }
         ]
       }

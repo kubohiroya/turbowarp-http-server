@@ -1,9 +1,9 @@
 import { findCapabilityOrigin } from '../pipeline/requirements.js';
 export const firebaseFunctionsAdapter = {
     id: 'firebase-functions',
-    version: '1.2.0',
+    version: '1.3.0',
     capabilities: () => ({
-        keys: ['object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
+        keys: ['key-value-store', 'object-storage', 'record-store', 'request-metadata:client-address', 'streaming-body'],
         maxBinaryBytes: 10000000
     }),
     plan({ ir, requirements, config }) {
@@ -25,6 +25,9 @@ export const firebaseFunctionsAdapter = {
                 requirements: requirements.keys,
                 bindings: {
                     ...(requirements.keys.includes('record-store') ? { recordCollection: parsed.recordCollection } : {}),
+                    ...(requirements.keys.includes('key-value-store')
+                        ? { keyValueCollection: parsed.keyValueCollection }
+                        : {}),
                     ...(requirements.keys.includes('object-storage') ? { objectBucketEnv: parsed.objectBucketEnv } : {}),
                     functionName: parsed.functionName
                 }
@@ -50,6 +53,7 @@ export const firebaseFunctionsAdapter = {
 function parseConfig(config) {
     const defaults = {
         functionName: 'api',
+        keyValueCollection: 'key_values',
         objectBucketEnv: 'ASSET_BUCKET',
         recordCollection: 'records'
     };
@@ -58,21 +62,27 @@ function parseConfig(config) {
     if (typeof config !== 'object' || Array.isArray(config))
         return { diagnostic: configDiagnostic() };
     const value = config;
-    if (Object.keys(value).some((key) => key !== 'functionName' && key !== 'objectBucketEnv' && key !== 'recordCollection')) {
+    if (Object.keys(value).some((key) => key !== 'functionName' &&
+        key !== 'keyValueCollection' &&
+        key !== 'objectBucketEnv' &&
+        key !== 'recordCollection')) {
         return { diagnostic: configDiagnostic() };
     }
     const functionName = value.functionName ?? defaults.functionName;
+    const keyValueCollection = value.keyValueCollection ?? defaults.keyValueCollection;
     const objectBucketEnv = value.objectBucketEnv ?? defaults.objectBucketEnv;
     const recordCollection = value.recordCollection ?? defaults.recordCollection;
     if (typeof functionName !== 'string' ||
+        typeof keyValueCollection !== 'string' ||
         typeof objectBucketEnv !== 'string' ||
         typeof recordCollection !== 'string' ||
         !/^[A-Za-z][A-Za-z0-9_]{0,62}$/u.test(functionName) ||
+        !/^[A-Za-z][A-Za-z0-9_-]{0,127}$/u.test(keyValueCollection) ||
         !/^[A-Z][A-Z0-9_]{0,63}$/u.test(objectBucketEnv) ||
         !/^[A-Za-z][A-Za-z0-9_-]{0,127}$/u.test(recordCollection)) {
         return { diagnostic: configDiagnostic() };
     }
-    return { functionName, objectBucketEnv, recordCollection };
+    return { functionName, keyValueCollection, objectBucketEnv, recordCollection };
 }
 function capabilityDiagnostic(requirement, ir) {
     const origin = findCapabilityOrigin(ir, requirement);
@@ -92,8 +102,8 @@ function configDiagnostic() {
         severity: 'error',
         code: 'TW2_TARGET_CONFIG_INVALID',
         message: 'Firebase target config is invalid.',
-        reason: 'Only functionName, objectBucketEnv, and recordCollection identifiers are accepted; secret or project values are not.',
-        suggestion: 'Use {"functionName":"api","objectBucketEnv":"ASSET_BUCKET","recordCollection":"records"}.',
+        reason: 'Only functionName, keyValueCollection, objectBucketEnv, and recordCollection identifiers are accepted; secret or project values are not.',
+        suggestion: 'Use {"functionName":"api","keyValueCollection":"key_values","objectBucketEnv":"ASSET_BUCKET","recordCollection":"records"}.',
         targetId: 'firebase-functions'
     };
 }
@@ -105,12 +115,16 @@ function relocateCore(core) {
 }
 function indexSource(plan) {
     const functionName = plan.bindings.functionName ?? 'api';
+    const keyValueCollection = plan.bindings.keyValueCollection;
     const recordCollection = plan.bindings.recordCollection;
     const bucketEnvironment = plan.bindings.objectBucketEnv;
     const services = [
         ...(recordCollection === undefined
             ? []
             : [`records: () => createRecordStore(firestore, ${JSON.stringify(recordCollection)})`]),
+        ...(keyValueCollection === undefined
+            ? []
+            : [`keyValues: () => createKeyValueStore(firestore, ${JSON.stringify(keyValueCollection)})`]),
         ...(bucketEnvironment === undefined
             ? []
             : [
@@ -125,7 +139,7 @@ import {getStorage} from 'firebase-admin/storage';
 import {onRequest} from 'firebase-functions/v2/https';
 import {Hono} from 'hono';
 import {registerCoreRoutes} from './core.generated.js';
-import {createObjectStore, createRecordStore} from './platform.js';
+import {createKeyValueStore, createObjectStore, createRecordStore} from './platform.js';
 
 initializeApp();
 const firestore = getFirestore();
@@ -142,19 +156,20 @@ function platformSource() {
     return `import {createHash} from 'node:crypto';
 import {once} from 'node:events';
 import type {Storage} from 'firebase-admin/storage';
-import type {BinaryBodySource, BinaryLocator, BinaryMetadata, BinaryObjectStore, BinaryRef, RecordStore} from './core.generated.js';
+import type {BinaryBodySource, BinaryLocator, BinaryMetadata, BinaryObjectStore, BinaryRef, KeyValueStore, RecordStore} from './core.generated.js';
 
 interface DocumentSnapshot {exists: boolean; id: string; data(): Record<string, unknown> | undefined}
 interface DocumentReference {id: string; set(value: unknown): Promise<unknown>; get(): Promise<DocumentSnapshot>; delete(): Promise<unknown>}
 interface QuerySnapshot {readonly docs: readonly DocumentSnapshot[]}
+interface TransactionLike {get(document: DocumentReference): Promise<DocumentSnapshot>; delete(document: DocumentReference): TransactionLike}
 interface QueryLike {
   where(field: string, operator: '==', value: unknown): QueryLike;
-  orderBy(field: string, direction: 'desc'): QueryLike;
+  orderBy(field: string, direction: 'asc' | 'desc'): QueryLike;
   limit(value: number): QueryLike;
   get(): Promise<QuerySnapshot>;
 }
 interface CollectionReference extends QueryLike {doc(id?: string): DocumentReference}
-export interface FirestoreLike {collection(name: string): CollectionReference}
+export interface FirestoreLike {collection(name: string): CollectionReference; runTransaction<T>(update: (transaction: TransactionLike) => Promise<T>): Promise<T>}
 export type BucketLike = ReturnType<Storage['bucket']>;
 type StorageMetadataValue = string | boolean | number | null;
 interface StorageMetadata {size?: string | number; contentType?: string; generation?: string | number; metadata?: Record<string, StorageMetadataValue>}
@@ -186,6 +201,67 @@ export function createRecordStore(database: FirestoreLike, root: string): Record
     }
   };
 }
+
+export function createKeyValueStore(database: FirestoreLike, root: string): KeyValueStore {
+  const entries = database.collection(root);
+  return {
+    async set(namespaceValue, keyValue, value) {
+      const locator = kvsLocator(namespaceValue, keyValue);
+      await kvsStorage(() => entries.doc(kvsDocumentId(locator.namespace, locator.key)).set({
+        namespace: locator.namespace,
+        key: locator.key,
+        value,
+        updatedAt: new Date().toISOString()
+      }));
+    },
+    async get(namespaceValue, keyValue) {
+      const locator = kvsLocator(namespaceValue, keyValue);
+      const snapshot = await kvsStorage(() => entries.doc(kvsDocumentId(locator.namespace, locator.key)).get());
+      if (!snapshot.exists) return null;
+      const value = snapshot.data()?.value;
+      if (typeof value !== 'string') throw Object.assign(new Error('KVS_STORAGE_FAILURE'), {code: 'KVS_STORAGE_FAILURE'});
+      return value;
+    },
+    async has(namespaceValue, keyValue) {
+      const locator = kvsLocator(namespaceValue, keyValue);
+      return (await kvsStorage(() => entries.doc(kvsDocumentId(locator.namespace, locator.key)).get())).exists;
+    },
+    async delete(namespaceValue, keyValue) {
+      const locator = kvsLocator(namespaceValue, keyValue);
+      const document = entries.doc(kvsDocumentId(locator.namespace, locator.key));
+      return kvsStorage(() => database.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(document);
+        if (!snapshot.exists) return false;
+        transaction.delete(document);
+        return true;
+      }));
+    },
+    async list(namespaceValue) {
+      const namespace = kvsLocator(namespaceValue, 'placeholder').namespace;
+      const snapshot = await kvsStorage(() => entries.where('namespace', '==', namespace).orderBy('key', 'asc').get());
+      return snapshot.docs.map((document) => {
+        const key = document.data()?.key;
+        if (typeof key !== 'string') throw Object.assign(new Error('KVS_STORAGE_FAILURE'), {code: 'KVS_STORAGE_FAILURE'});
+        return key;
+      });
+    }
+  };
+}
+function kvsDocumentId(namespace: string, key: string): string {
+  return createHash('sha256').update(JSON.stringify([namespace, key])).digest('hex');
+}
+function kvsLocator(namespaceValue: string, keyValue: string): {namespace: string; key: string} {
+  const namespace = namespaceValue.normalize('NFC');
+  const key = keyValue.normalize('NFC');
+  if (!/^[a-z][a-z0-9.-]{0,63}$/u.test(namespace)) throw Object.assign(new Error('KVS_NAMESPACE_INVALID'), {code: 'KVS_NAMESPACE_INVALID'});
+  if (key.length === 0 || key.length > 512 || key.includes('\\0') || key.split('/').some((part) => part === '.' || part === '..')) throw Object.assign(new Error('KVS_KEY_INVALID'), {code: 'KVS_KEY_INVALID'});
+  return {namespace, key};
+}
+async function kvsStorage<T>(operation: () => Promise<T>): Promise<T> {
+  try {return await operation();}
+  catch (error) {if (isKvsFault(error)) throw error; throw Object.assign(new Error('KVS_STORAGE_FAILURE'), {code: 'KVS_STORAGE_FAILURE'});}
+}
+function isKvsFault(error: unknown): error is Error & {code: string} {return error instanceof Error && 'code' in error && typeof error.code === 'string' && error.code.startsWith('KVS_')}
 
 export function createObjectStore(bucket: BucketLike): BinaryObjectStore {
   return {
@@ -362,18 +438,33 @@ function firebaserc() {
 }
 function firestoreIndexes(plan) {
     const collection = plan.bindings.recordCollection;
-    const indexes = collection === undefined
-        ? []
-        : [
-            {
-                collectionGroup: collection,
-                queryScope: 'COLLECTION',
-                fields: [
-                    { fieldPath: 'collection', order: 'ASCENDING' },
-                    { fieldPath: 'createdAt', order: 'DESCENDING' }
-                ]
-            }
-        ];
+    const keyValueCollection = plan.bindings.keyValueCollection;
+    const indexes = [
+        ...(collection === undefined
+            ? []
+            : [
+                {
+                    collectionGroup: collection,
+                    queryScope: 'COLLECTION',
+                    fields: [
+                        { fieldPath: 'collection', order: 'ASCENDING' },
+                        { fieldPath: 'createdAt', order: 'DESCENDING' }
+                    ]
+                }
+            ]),
+        ...(keyValueCollection === undefined
+            ? []
+            : [
+                {
+                    collectionGroup: keyValueCollection,
+                    queryScope: 'COLLECTION',
+                    fields: [
+                        { fieldPath: 'namespace', order: 'ASCENDING' },
+                        { fieldPath: 'key', order: 'ASCENDING' }
+                    ]
+                }
+            ])
+    ];
     return `${JSON.stringify({ indexes, fieldOverrides: [] }, null, 2)}\n`;
 }
 function denyAllRules(service) {
@@ -388,7 +479,7 @@ function generatedReadme(plan) {
 
 Run \`npm --prefix functions install\`, copy \`.firebaserc.example\` to \`.firebaserc\`, and replace \`replace-me\` with the Firebase project alias. When using a non-default Storage bucket, configure the bucket name through the \`${bucketEnvironment ?? 'ASSET_BUCKET'}\` environment variable; never commit credentials.
 
-The generated HTTP function uses the Admin SDK and IAM. Firestore and Storage client Rules deny all access by default and do not authorize the Admin SDK. Binary uploads are validated under \`v1/.staging/\` before being copied to their destination; cleanup is best effort, so configure a lifecycle rule for abandoned staging objects. Use \`npm --prefix functions run serve\` for the Emulator Suite boundary and \`npm --prefix functions run deploy\` only after reviewing billing and IAM.
+The generated HTTP function uses the Admin SDK and IAM. Firestore and Storage client Rules deny all access by default and do not authorize the Admin SDK. Firestore stores KVS text entries with hashed document IDs; key listing is lexicographically ordered. Binary uploads are validated under \`v1/.staging/\` before being copied to their destination; cleanup is best effort, so configure a lifecycle rule for abandoned staging objects. Use \`npm --prefix functions run serve\` for the Emulator Suite boundary and \`npm --prefix functions run deploy\` only after reviewing billing and IAM.
 
 ## Rollback and cleanup
 

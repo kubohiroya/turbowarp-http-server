@@ -43,7 +43,7 @@ turbowarp-http-server compile \
 - v2 CLI入力はcanonical `--format ir`に加え、既存built-in HTTP block subsetの`--format turbowarp-json`を受理します。
 - `--target-config <file>`はadapter設定です。IRへmergeせず、secret値を受け取りません。
 - `--enable-named-response-body`は実験的な`respond-named-body`だけを有効化し、既定OFFです。選択targetに`named-body-provider`がなければ生成しません。
-- `--format turbowarp-json --ir-version 2`はbuilt-in HTTP block、literal bounded repeat、named responseを直接IR v2へloweringします。`--manifest-lock`指定時はlock済みStructured Data reporter／loopも同じfrontendでloweringします。lockにないextension opcodeを推測しません。
+- `--format turbowarp-json --ir-version 2`はbuilt-in HTTP block、literal bounded repeat、named responseを直接IR v2へloweringします。`--manifest-lock`指定時はlock済みStructured Data reporter／loopとKVS 0.1.0の5操作も同じfrontendでloweringします。lockにないextension opcodeや旧Asset Manager操作を推測しません。
 - Cloudflare adapterはD1／R2 binding名、Firebase adapterはfunction名／bucket環境変数名／Firestore collection名だけを受け取ります。secretやproject IDは受け取りません。詳細は[IR v2 platform storage adapter](platform-storage-adapters.ja.md)を参照してください。
 - v1は引き続き既存Cloudflare generatorを使用し、`--ir-version`省略時の動作もv1のままです。
 
@@ -60,7 +60,7 @@ turbowarp-http-server compile \
 
 `PlatformAdapter.plan`と`generate`はnetwork、deploy、cloud resource作成を行わないpure filesystem artifact operationです。新しいadapterはregistryへ追加でき、frontendやopcode loweringを変更する必要はありません。
 
-共有coreはCloudflare、Firebase、D1、R2等の製品型を参照しません。たとえばclient addressは`CoreServices.clientAddress`、record永続化は`CoreServices.records`、binary objectは`CoreServices.objects`を介し、選択adapterがplatform APIへ結び付けます。
+共有coreはCloudflare、Firebase、D1、R2等の製品型を参照しません。たとえばclient addressは`CoreServices.clientAddress`、KVSは`CoreServices.keyValues`、record永続化は`CoreServices.records`、binary objectは`CoreServices.objects`を介し、選択adapterがplatform APIへ結び付けます。
 
 ## diagnostic
 
@@ -78,7 +78,7 @@ terminal response開始前の既知runtime faultは次のenvelopeへ変換しま
 {"error":{"code":"STABLE_CODE"}}
 ```
 
-Structured Dataのstatus mappingは[Structured Data lowering](structured-data-lowering.ja.md)、binaryは[Binary resource semantics](binary-resource-semantics.ja.md)を正本とします。未知の例外または未知codeは500 `IR_RUNTIME_ERROR`です。message、stack、request body、binary、locator、secret、platform SDK errorはresponseへ含めません。
+Structured Dataのstatus mappingは[Structured Data lowering](structured-data-lowering.ja.md)、binaryは[Binary resource semantics](binary-resource-semantics.ja.md)を正本とします。KVSの不正namespace/keyは422、storage failureは502です。未知の例外または未知codeは500 `IR_RUNTIME_ERROR`です。message、stack、request body、binary、locator、secret、platform SDK errorはresponseへ含めません。
 
 ## deterministic output manifest
 
