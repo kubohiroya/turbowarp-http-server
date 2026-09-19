@@ -1,0 +1,14 @@
+{
+  "fixtureVersion": 1,
+  "id": "binary-put-get-delete",
+  "layer": "core",
+  "kind": "binary-vector",
+  "bodyFile": "payload.bin",
+  "bodySha256": "8188eb5d64ad04786d64adc5f820afce166d14e3a563beebb35220b768182914",
+  "maxBytes": 25,
+  "expectedEffects": [
+    {"capability": "object-storage", "operation": "put", "subject": "asset/fixture.bin", "metadata": {"contentType": "application/octet-stream"}},
+    {"capability": "object-storage", "operation": "get", "subject": "asset/fixture.bin"},
+    {"capability": "object-storage", "operation": "delete", "subject": "asset/fixture.bin"}
+  ]
+}

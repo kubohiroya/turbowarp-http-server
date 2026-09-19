@@ -10,6 +10,16 @@ function coreSource(ir) {
 import type {Hono} from 'hono';
 
 type StoredRecord = Record<string, unknown>;
+type BinaryLocator = {namespace: string; key: string};
+type BinaryRef = BinaryLocator & {contentType?: string; size?: number; integrity?: string; revision?: string};
+type BinaryMetadata = {contentType?: string; size?: number; integrity?: string; revision?: string};
+interface BinaryBodySource {chunks: AsyncIterable<Uint8Array>; contentType?: string; size?: number}
+interface BinaryObjectStore {
+  resolve(locator: BinaryLocator): Promise<BinaryRef | null>;
+  get(ref: BinaryRef): Promise<BinaryBodySource | null>;
+  put(locator: BinaryLocator, source: BinaryBodySource, metadata: BinaryMetadata, maxBytes: number): Promise<BinaryRef>;
+  delete(target: BinaryLocator | BinaryRef): Promise<boolean>;
+}
 export interface RecordStore {
   create(collection: string, data: unknown): Promise<StoredRecord>;
   list(collection: string): Promise<StoredRecord[]>;
@@ -18,6 +28,7 @@ export interface RecordStore {
 }
 export interface CoreServices {
   records?: (context: unknown) => RecordStore;
+  objects?: (context: unknown) => BinaryObjectStore;
   clientAddress?: (context: unknown) => string;
 }
 type App = Hono<any>;
@@ -35,9 +46,19 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
   const headers = new Headers();
   const bindings = new Map<string, unknown>();
   const handlerVariables = new Map<string, string>();
+  const iterations = new Map<string, {key: string; index: number; value: unknown}>();
   let bodyText: string | undefined;
   try {
-    for (const statement of route.body) {
+    const terminal = await statements(route.body);
+    if (terminal !== undefined) return terminal;
+    throw runtimeError('IR_MISSING_RESPONSE');
+  } catch (error) {
+    const fault = runtimeFault(error);
+    return new Response(JSON.stringify({error: {code: fault.code}}), {status: fault.status, headers: {'content-type': 'application/json; charset=utf-8'}});
+  }
+
+  async function statements(items: readonly any[]): Promise<Response | undefined> {
+    for (const statement of items) {
       if (statement.kind === 'set-status') status = statement.status;
       else if (statement.kind === 'set-header') setResponseHeader(headers, statement.name, asText(await expression(statement.value)));
       else if (statement.kind === 'remove-header') headers.delete(statement.name);
@@ -57,14 +78,50 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
         bindings.set(statement.result.id, await requiredRecords().get(asText(await expression(statement.id))));
       } else if (statement.kind === 'record-delete') {
         bindings.set(statement.result.id, await requiredRecords().delete(asText(await expression(statement.id))));
+      } else if (statement.kind === 'asset-resolve') {
+        bindings.set(statement.result.id, await requiredObjects().resolve(statement.locator));
+      } else if (statement.kind === 'request-body-binary') {
+        bindings.set(statement.result.id, new BinaryBodyHandle(limitedBinarySource(requestBinary(c), statement.maxBytes)));
+      } else if (statement.kind === 'asset-object-get') {
+        const source = await requiredObjects().get(requiredBinaryRef(await expression(statement.ref)));
+        if (source === null) throw runtimeError('BINARY_NOT_FOUND', 404);
+        bindings.set(statement.result.id, new BinaryBodyHandle(limitedBinarySource(source, statement.maxBytes)));
+      } else if (statement.kind === 'asset-object-put') {
+        const handle = requiredBinaryBody(statement.body);
+        bindings.set(statement.result.id, await requiredObjects().put(statement.locator, handle.take(), statement.metadata, statement.maxBytes));
+      } else if (statement.kind === 'asset-object-delete') {
+        const target = statement.target.kind === 'ref' ? requiredBinaryRef(await expression(statement.target.ref)) : statement.target.locator;
+        bindings.set(statement.result.id, await requiredObjects().delete(target));
+      } else if (statement.kind === 'if') {
+        const branch = (await expression(statement.condition)) === true ? statement.then : (statement.else ?? []);
+        const terminal = await statements(branch);
+        if (terminal !== undefined) return terminal;
+      } else if (statement.kind === 'bounded-loop') {
+        for (let index = 0; index < statement.maxIterations; index += 1) {
+          const terminal = await statements(statement.body);
+          if (terminal !== undefined) return terminal;
+        }
+      } else if (statement.kind === 'json-for-each') {
+        const entries = structuredIterationEntries(await expression(statement.root), statement.path, statement.maxIterations);
+        for (const entry of entries) {
+          iterations.set(statement.loopId, entry);
+          try {
+            const terminal = await statements(statement.body);
+            if (terminal !== undefined) return terminal;
+          } finally {
+            iterations.delete(statement.loopId);
+          }
+        }
+      } else if (statement.kind === 'respond-binary') {
+        const source = requiredBinaryBody(statement.body).take();
+        if (source.contentType !== undefined && !headers.has('content-type')) headers.set('content-type', source.contentType);
+        if (statement.disposition !== undefined) headers.set('content-disposition', contentDisposition(statement.disposition));
+        return new Response(binaryReadableStream(source.chunks), {status, headers});
       } else if (statement.kind === 'respond') {
-        return response(statement.format, await expression(statement.body), status, headers);
+        return response(statement.format, statement.body.valueType, await expression(statement.body), status, headers);
       } else throw runtimeError('IR_OPERATION_UNSUPPORTED');
     }
-    throw runtimeError('IR_MISSING_RESPONSE');
-  } catch (error) {
-    const fault = runtimeFault(error);
-    return new Response(JSON.stringify({error: {code: fault.code}}), {status: fault.status, headers: {'content-type': 'application/json; charset=utf-8'}});
+    return undefined;
   }
 
   async function expression(value: any): Promise<unknown> {
@@ -87,12 +144,95 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
       if (value.source === 'content-type') return c.req.header('content-type') ?? '';
       return services.clientAddress?.(c) ?? '';
     }
+    if (value.kind === 'json-text-coerce') return asText(await expression(value.input));
+    if (value.kind === 'json-parse') return parseApplicationJson(await expression(value.text));
+    if (value.kind === 'json-stringify') return stringifyApplicationJson(await expression(value.value));
+    if (value.kind === 'json-is-valid') {
+      try {parseApplicationJson(await expression(value.text)); return true;} catch {return false;}
+    }
+    if (value.kind === 'json-get') return getJsonAtPath(await expression(value.root), value.path);
+    if (value.kind === 'json-has') return hasJsonAtPath(await expression(value.root), value.path);
+    if (value.kind === 'json-set') return setJsonAtPath(await expression(value.root), value.path, await expression(value.value));
+    if (value.kind === 'json-delete') return deleteJsonAtPath(await expression(value.root), value.path);
+    if (value.kind === 'json-keys') return jsonKeysAtPath(await expression(value.root), value.path);
+    if (value.kind === 'json-length') return jsonLengthAtPath(await expression(value.root), value.path);
+    if (value.kind === 'iteration-key') return requiredIteration(value.loopId).key;
+    if (value.kind === 'iteration-index') return requiredIteration(value.loopId).index;
+    if (value.kind === 'iteration-value') return requiredIteration(value.loopId).value;
     throw runtimeError('IR_EXPRESSION_UNSUPPORTED');
   }
   function requiredRecords(): RecordStore {
     if (!services.records) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
     return services.records(c);
   }
+  function requiredObjects(): BinaryObjectStore {
+    if (!services.objects) throw runtimeError('IR_CAPABILITY_UNAVAILABLE');
+    return services.objects(c);
+  }
+  function requiredBinaryBody(id: string): BinaryBodyHandle {
+    const value = bindings.get(id);
+    if (!(value instanceof BinaryBodyHandle)) throw runtimeError('BINARY_INVALID_REF', 422);
+    return value;
+  }
+  function requiredIteration(id: string): {key: string; index: number; value: unknown} {
+    const value = iterations.get(id);
+    if (value === undefined) throw runtimeError('ITERATION_CONTEXT_REQUIRED', 422);
+    return value;
+  }
+}
+
+class BinaryBodyHandle {
+  private consumed = false;
+  constructor(private readonly source: BinaryBodySource) {}
+  take(): BinaryBodySource {
+    if (this.consumed) throw runtimeError('BINARY_BODY_CONSUMED');
+    this.consumed = true;
+    return this.source;
+  }
+}
+function requiredBinaryRef(value: unknown): BinaryRef {
+  if (typeof value !== 'object' || value === null || !('namespace' in value) || !('key' in value)) {
+    throw runtimeError('BINARY_INVALID_REF', 422);
+  }
+  return value as BinaryRef;
+}
+function requestBinary(c: any): BinaryBodySource {
+  const stream = c.req.raw.body as ReadableStream<Uint8Array> | null;
+  const chunks = stream === null ? emptyBinaryChunks() : readableChunks(stream);
+  const sizeText = c.req.header('content-length');
+  const size = sizeText === undefined ? undefined : Number(sizeText);
+  const contentType = c.req.header('content-type');
+  return {...(typeof size === 'number' && Number.isSafeInteger(size) && size >= 0 ? {size} : {}), ...(contentType === undefined ? {} : {contentType}), chunks};
+}
+function limitedBinarySource(source: BinaryBodySource, maximum: number): BinaryBodySource {
+  if (source.size !== undefined && source.size > maximum) throw runtimeError('BINARY_TOO_LARGE', 413);
+  return {...source, chunks: limitedChunks(source.chunks, maximum)};
+}
+async function* limitedChunks(chunks: AsyncIterable<Uint8Array>, maximum: number): AsyncIterable<Uint8Array> {
+  let size = 0;
+  for await (const chunk of chunks) {
+    size += chunk.byteLength;
+    if (size > maximum) throw runtimeError('BINARY_TOO_LARGE', 413);
+    yield chunk;
+  }
+}
+async function* readableChunks(stream: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
+  const reader = stream.getReader();
+  try {while (true) {const item = await reader.read(); if (item.done) return; yield item.value;}}
+  finally {reader.releaseLock();}
+}
+async function* emptyBinaryChunks(): AsyncIterable<Uint8Array> {}
+function binaryReadableStream(chunks: AsyncIterable<Uint8Array>): ReadableStream<Uint8Array> {
+  const iterator = chunks[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {const item = await iterator.next(); if (item.done) controller.close(); else controller.enqueue(item.value);},
+    cancel() {return iterator.return?.().then(() => undefined)}
+  });
+}
+function contentDisposition(value: {kind: 'inline'} | {kind: 'attachment'; filename: string}): string {
+  if (value.kind === 'inline') return 'inline';
+  if (/[\\r\\n\\0]/u.test(value.filename)) throw runtimeError('BINARY_INVALID_REF', 422);
+  return "attachment; filename*=UTF-8''" + encodeURIComponent(value.filename).replace(/['()*]/gu, (item) => '%' + item.codePointAt(0)!.toString(16).toUpperCase());
 }
 
 class IrRuntimeError extends Error {
@@ -130,9 +270,152 @@ function scratchNumber(value: unknown): number {
 function setResponseHeader(headers: Headers, name: string, value: string): void {
   if (!/[\\r\\n]/u.test(value)) headers.set(name, value);
 }
-function response(format: 'text' | 'html' | 'json', value: unknown, status: number, headers: Headers): Response {
+type JsonValue = null | boolean | number | string | JsonValue[] | {[key: string]: JsonValue};
+type PathSegment = {kind: 'key'; value: string} | {kind: 'index'; value: number};
+function parseApplicationJson(text: unknown): JsonValue {
+  try {
+    const value: unknown = JSON.parse(String(text));
+    assertJsonValue(value);
+    return value;
+  } catch (error) {
+    if (error instanceof IrRuntimeError) throw error;
+    throw runtimeError('INVALID_JSON', 422);
+  }
+}
+function stringifyApplicationJson(value: unknown): string {
+  assertJsonValue(value);
+  if (Array.isArray(value)) return '[' + value.map(stringifyApplicationJson).join(',') + ']';
+  if (isJsonObject(value)) {
+    return '{' + Object.keys(value).sort(compareCodePoints).map((key) => JSON.stringify(key) + ':' + stringifyApplicationJson(value[key])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+function getJsonAtPath(root: unknown, path: readonly PathSegment[]): JsonValue {
+  assertJsonValue(root);
+  let current = root;
+  for (const segment of path) current = readSegment(current, segment);
+  return current;
+}
+function hasJsonAtPath(root: unknown, path: readonly PathSegment[]): boolean {
+  try {getJsonAtPath(root, path); return true;}
+  catch (error) {
+    if (error instanceof IrRuntimeError && (error.code === 'PATH_NOT_FOUND' || error.code === 'INDEX_OUT_OF_RANGE')) return false;
+    throw error;
+  }
+}
+function setJsonAtPath(root: unknown, path: readonly PathSegment[], replacement: unknown): JsonValue {
+  assertJsonValue(root);
+  assertJsonValue(replacement);
+  if (path.length === 0) return cloneJson(replacement);
+  return updateParent(root, path, (parent, segment) => {
+    if (segment.kind === 'key') {
+      if (!isJsonObject(parent)) throw runtimeError('TYPE_MISMATCH', 422);
+      return {...parent, [segment.value]: cloneJson(replacement)};
+    }
+    if (!Array.isArray(parent)) throw runtimeError('TYPE_MISMATCH', 422);
+    if (segment.value >= parent.length) throw runtimeError('INDEX_OUT_OF_RANGE', 422);
+    const result = parent.slice();
+    result[segment.value] = cloneJson(replacement);
+    return result;
+  });
+}
+function deleteJsonAtPath(root: unknown, path: readonly PathSegment[]): JsonValue {
+  assertJsonValue(root);
+  if (path.length === 0) throw runtimeError('INVALID_PATH', 422);
+  return updateParent(root, path, (parent, segment) => {
+    if (segment.kind === 'key') {
+      if (!isJsonObject(parent)) throw runtimeError('TYPE_MISMATCH', 422);
+      if (!hasOwn(parent, segment.value)) throw runtimeError('PATH_NOT_FOUND', 422);
+      const result = {...parent};
+      delete result[segment.value];
+      return result;
+    }
+    if (!Array.isArray(parent)) throw runtimeError('TYPE_MISMATCH', 422);
+    if (segment.value >= parent.length) throw runtimeError('INDEX_OUT_OF_RANGE', 422);
+    const result = parent.slice();
+    result.splice(segment.value, 1);
+    return result;
+  });
+}
+function jsonKeysAtPath(root: unknown, path: readonly PathSegment[]): string[] {
+  const value = getJsonAtPath(root, path);
+  if (!isJsonObject(value)) throw runtimeError('TYPE_MISMATCH', 422);
+  return Object.keys(value).sort(compareCodePoints);
+}
+function jsonLengthAtPath(root: unknown, path: readonly PathSegment[]): number {
+  const value = getJsonAtPath(root, path);
+  if (!Array.isArray(value)) throw runtimeError('TYPE_MISMATCH', 422);
+  return value.length;
+}
+function structuredIterationEntries(root: unknown, path: readonly PathSegment[], maximum: number): Array<{key: string; index: number; value: JsonValue}> {
+  const value = getJsonAtPath(root, path);
+  const entries = Array.isArray(value)
+    ? value.map((item, index) => ({key: String(index), index, value: item}))
+    : isJsonObject(value)
+      ? Object.keys(value).sort(compareCodePoints).map((key, index) => ({key, index, value: value[key]}))
+      : (() => {throw runtimeError('TYPE_MISMATCH', 422)})();
+  if (entries.length > maximum) throw runtimeError('ITERATION_LIMIT_EXCEEDED', 422);
+  return entries;
+}
+function updateParent(root: JsonValue, path: readonly PathSegment[], update: (parent: JsonValue, segment: PathSegment) => JsonValue): JsonValue {
+  const [segment, ...remaining] = path;
+  if (segment === undefined) return root;
+  if (remaining.length === 0) return update(root, segment);
+  const next = updateParent(readSegment(root, segment), remaining, update);
+  if (segment.kind === 'key') {
+    if (!isJsonObject(root)) throw runtimeError('TYPE_MISMATCH', 422);
+    return {...root, [segment.value]: next};
+  }
+  if (!Array.isArray(root)) throw runtimeError('TYPE_MISMATCH', 422);
+  const result = root.slice();
+  result[segment.value] = next;
+  return result;
+}
+function readSegment(value: JsonValue, segment: PathSegment): JsonValue {
+  if (segment.kind === 'key') {
+    if (!isJsonObject(value)) throw runtimeError('TYPE_MISMATCH', 422);
+    if (!hasOwn(value, segment.value)) throw runtimeError('PATH_NOT_FOUND', 422);
+    return value[segment.value];
+  }
+  if (!Array.isArray(value)) throw runtimeError('TYPE_MISMATCH', 422);
+  if (segment.value >= value.length) throw runtimeError('INDEX_OUT_OF_RANGE', 422);
+  return value[segment.value];
+}
+function cloneJson(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) return value.map(cloneJson);
+  if (isJsonObject(value)) return Object.fromEntries(Object.keys(value).map((key) => [key, cloneJson(value[key])]));
+  return value;
+}
+function assertJsonValue(value: unknown): asserts value is JsonValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
+  if (typeof value === 'number' && Number.isFinite(value)) return;
+  if (Array.isArray(value)) {for (const item of value) assertJsonValue(item); return;}
+  if (typeof value === 'object') {for (const item of Object.values(value)) assertJsonValue(item); return;}
+  throw runtimeError('INVALID_JSON', 422);
+}
+function isJsonObject(value: JsonValue): value is {[key: string]: JsonValue} {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+function hasOwn(value: object, key: PropertyKey): boolean {return Object.prototype.hasOwnProperty.call(value, key)}
+function compareCodePoints(left: string, right: string): number {
+  const leftPoints = Array.from(left, (item) => item.codePointAt(0)!);
+  const rightPoints = Array.from(right, (item) => item.codePointAt(0)!);
+  for (let index = 0; index < Math.min(leftPoints.length, rightPoints.length); index += 1) {
+    const difference = leftPoints[index]! - rightPoints[index]!;
+    if (difference !== 0) return difference;
+  }
+  return leftPoints.length - rightPoints.length;
+}
+function response(format: 'text' | 'html' | 'json', valueType: unknown, value: unknown, status: number, headers: Headers): Response {
   if (!headers.has('content-type')) headers.set('content-type', format === 'json' ? 'application/json; charset=utf-8' : format === 'html' ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8');
-  const body = format === 'json' ? JSON.stringify(value) : asText(value);
+  let body = asText(value);
+  if (format === 'json') {
+    if (valueType === 'json-text') body = asText(value);
+    else if (valueType === 'string') {
+      try {body = stringifyApplicationJson(JSON.parse(asText(value)));}
+      catch {throw runtimeError('IR_INVALID_JSON_RESPONSE');}
+    } else body = stringifyApplicationJson(value);
+  }
   return new Response(body, {status, headers});
 }
 `;

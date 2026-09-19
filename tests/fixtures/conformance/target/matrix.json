@@ -1,0 +1,20 @@
+{
+  "fixtureVersion": 1,
+  "targets": [
+    {
+      "id": "cloudflare-workers",
+      "adapterVersion": "1.0.0",
+      "expectedFiles": [
+        "migrations/0001_init.sql",
+        "package.json",
+        "src/cloudflare.generated.d.ts",
+        "src/core.generated.ts",
+        "src/index.ts",
+        "src/platform.ts",
+        "tsconfig.json",
+        "turbowarp-server.generated.json",
+        "wrangler.jsonc"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "fixtureVersion": 1,
+  "id": "structured-error",
+  "layer": "core",
+  "ir": {
+    "version": 2,
+    "name": "structured-error",
+    "auth": {"kind": "none"},
+    "capabilities": [],
+    "routes": [{
+      "id": "missing",
+      "method": "GET",
+      "path": "/missing",
+      "auth": "public",
+      "body": [{
+        "kind": "respond",
+        "format": "json",
+        "body": {
+          "kind": "json-get",
+          "valueType": {"kind": "union", "members": ["null", "boolean", "number", "string", "json-array", "json-object"]},
+          "root": {"kind": "literal", "valueType": "json-object", "value": {}},
+          "path": [{"kind": "key", "value": "secret"}]
+        }
+      }]
+    }]
+  },
+  "request": {"method": "GET", "url": "http://conformance.test/missing"},
+  "expected": {
+    "response": {
+      "status": 422,
+      "headers": [["content-type", "application/json; charset=utf-8"]],
+      "bodyText": "{\"error\":{\"code\":\"PATH_NOT_FOUND\"}}",
+      "bodySha256": "9f3228f83cfc47c5ec1ae945e9f1b62057489ce91c4bcc7f3e73dddcdeaca791"
+    },
+    "effects": []
+  }
+}

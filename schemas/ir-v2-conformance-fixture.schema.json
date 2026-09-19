@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kubohiroya/turbowarp-http-server/schemas/ir-v2-conformance-fixture.schema.json",
+  "title": "TurboWarp HTTP Server IR v2 conformance fixture",
+  "type": "object",
+  "required": ["fixtureVersion", "id", "layer"],
+  "properties": {
+    "fixtureVersion": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "layer": {"enum": ["frontend", "frontend-diagnostic", "core", "target"]},
+    "projectFile": {"type": "string"},
+    "manifestLockFile": {"type": "string"},
+    "expectedIrFile": {"type": "string"},
+    "externalVectors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["packageName", "packageVersion", "integrity"],
+        "properties": {
+          "packageName": {"type": "string"},
+          "packageVersion": {"type": "string"},
+          "integrity": {"type": "string", "pattern": "^sha256-"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "ir": {"type": "object"},
+    "request": {
+      "type": "object",
+      "required": ["method", "url"],
+      "properties": {
+        "method": {"type": "string"},
+        "url": {"type": "string", "format": "uri"},
+        "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+        "bodyText": {"type": "string"},
+        "bodyFile": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "expected": {"type": "object"},
+    "expectedDiagnosticCodes": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}

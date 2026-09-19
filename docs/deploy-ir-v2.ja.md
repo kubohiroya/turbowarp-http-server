@@ -12,6 +12,8 @@ Structured Data blockの変換規則は[Structured Data lowering](structured-dat
 
 binary resourceの所有権、上限、storage contractは[Binary resource semantics](binary-resource-semantics.ja.md)を参照してください。
 
+layer横断のgolden／trace検証は[IR v2 semantic conformance harness](ir-v2-conformance.ja.md)を参照してください。
+
 ## Versionと有効化
 
 - rootの`version`は整数`2`です。

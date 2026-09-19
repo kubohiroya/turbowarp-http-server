@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "name": "turbowarp-worker",
+  "auth": {"kind": "none"},
+  "capabilities": [],
+  "routes": [{
+    "id": "stage-get-1",
+    "method": "GET",
+    "path": "/",
+    "auth": "public",
+    "body": [{"kind": "respond", "format": "text", "body": {"kind": "literal", "valueType": "string", "value": "Hello"}}]
+  }]
+}
