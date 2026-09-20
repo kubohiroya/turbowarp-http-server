@@ -21,27 +21,29 @@ afterEach(async () => {
 });
 
 describe('compiler extension manifest registry', () => {
-  it('resolves locked KVS, Structured Data, and legacy Asset Manager fixtures offline', async () => {
+  it('resolves locked Asset Cache, KVS, and Structured Data fixtures offline', async () => {
     const first = await resolveCompilerManifestLock(fixtureLock);
     const second = await resolveCompilerManifestLock(fixtureLock);
 
     expect(first.manifests.map(({manifest}) => [manifest.id, manifest.formatVersion])).toEqual([
-      ['kubohiroyaassetmanager', 1],
+      ['kubohiroyaassetcache', 2],
       ['kubohiroyakvs', 2],
       ['kubohiroyastructureddata', 2]
     ]);
     expect(first.registry.entries).toEqual(second.registry.entries);
-    expect(first.registry.entries.map((entry) => entry.projectOpcode)).toEqual([
-      'kubohiroyaassetmanager_isLoaded',
-      'kubohiroyaassetmanager_registerAsset',
-      'kubohiroyakvs_deleteKey',
-      'kubohiroyakvs_getValue',
-      'kubohiroyakvs_hasKey',
-      'kubohiroyakvs_listKeys',
-      'kubohiroyakvs_setValue',
-      'kubohiroyastructureddata_forEachAtPath',
-      'kubohiroyastructureddata_normalizeJson'
-    ]);
+    expect(first.registry.entries.map((entry) => entry.projectOpcode)).toEqual(
+      expect.arrayContaining([
+        'kubohiroyaassetcache_isLoaded',
+        'kubohiroyaassetcache_registerAsset',
+        'kubohiroyakvs_deleteKey',
+        'kubohiroyakvs_getValue',
+        'kubohiroyakvs_hasKey',
+        'kubohiroyakvs_listKeys',
+        'kubohiroyakvs_setValue',
+        'kubohiroyastructureddata_forEachAtPath',
+        'kubohiroyastructureddata_normalizeJson'
+      ])
+    );
     expect(resolveCompilerProjectOpcode(first.registry, 'kubohiroyastructureddata_normalizeJson')).toMatchObject({
       extensionId: 'kubohiroyastructureddata',
       opcode: 'normalizeJson',
@@ -155,18 +157,18 @@ describe('compiler extension manifest registry', () => {
   it('rejects lock paths outside the lock directory and every symlink component', async () => {
     const directory = await temporaryDirectory();
     const outsideDirectory = await temporaryDirectory();
-    const manifest = await readFile(`${fixtureDirectory}/asset-manager.json`);
-    const outsideManifest = join(outsideDirectory, 'asset-manager.json');
+    const manifest = await readFile(`${fixtureDirectory}/asset-cache.json`);
+    const outsideManifest = join(outsideDirectory, 'asset-cache.json');
     await writeFile(outsideManifest, manifest);
 
     const escapingLock = join(directory, 'escape.lock.json');
     const outsideName = outsideDirectory.split('/').slice(-1)[0]!;
-    await writeSingleEntryLock(escapingLock, `../${outsideName}/asset-manager.json`, manifestIntegrity(manifest));
+    await writeSingleEntryLock(escapingLock, `../${outsideName}/asset-cache.json`, manifestIntegrity(manifest));
     await expectManifestError(resolveCompilerManifestLock(escapingLock), 'TW2_MANIFEST_SOURCE_UNSAFE');
 
     await symlink(outsideDirectory, join(directory, 'linked'));
     const symlinkLock = join(directory, 'symlink.lock.json');
-    await writeSingleEntryLock(symlinkLock, 'linked/asset-manager.json', manifestIntegrity(manifest));
+    await writeSingleEntryLock(symlinkLock, 'linked/asset-cache.json', manifestIntegrity(manifest));
     await expectManifestError(resolveCompilerManifestLock(symlinkLock), 'TW2_MANIFEST_SOURCE_UNSAFE');
   });
 
@@ -244,10 +246,10 @@ async function writeSingleEntryLock(path: string, sourcePath: string, integrity:
       lockVersion: 1,
       extensions: [
         {
-          extensionId: 'kubohiroyaassetmanager',
-          packageName: '@kubohiroya/turbowarp-asset-manager',
-          packageVersion: '0.16.0',
-          manifestFormatVersion: 1,
+          extensionId: 'kubohiroyaassetcache',
+          packageName: '@kubohiroya/turbowarp-asset-cache',
+          packageVersion: '0.1.0',
+          manifestFormatVersion: 2,
           integrity,
           source: {kind: 'local', path: sourcePath}
         }

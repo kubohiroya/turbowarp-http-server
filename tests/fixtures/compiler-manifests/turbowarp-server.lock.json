@@ -2,12 +2,12 @@
   "lockVersion": 1,
   "extensions": [
     {
-      "extensionId": "kubohiroyaassetmanager",
-      "packageName": "@kubohiroya/turbowarp-asset-manager",
-      "packageVersion": "0.16.0",
-      "manifestFormatVersion": 1,
-      "integrity": "sha256-FcgxT34QB/GxZtHbzBJPiyNhZ/yfeILDPLUh+c1czZU=",
-      "source": {"kind": "local", "path": "asset-manager.json"}
+      "extensionId": "kubohiroyaassetcache",
+      "packageName": "@kubohiroya/turbowarp-asset-cache",
+      "packageVersion": "0.1.0",
+      "manifestFormatVersion": 2,
+      "integrity": "sha256-StI16Se8kQtTj3Ev7uIDedIupGLWDQhhrBIzCmCEOQM=",
+      "source": {"kind": "local", "path": "asset-cache.json"}
     },
     {
       "extensionId": "kubohiroyakvs",

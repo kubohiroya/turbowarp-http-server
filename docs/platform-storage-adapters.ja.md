@@ -6,7 +6,7 @@ Deploy IR v2のstorageは製品名ではなく、`key-value-store`、`record-sto
 
 `@kubohiroya/turbowarp-kvs` 0.1.0のmanifest format 2でserver対応と宣言された`setValue`、`getValue`、`hasKey`、`deleteKey`、`listKeys`だけを`kvs-*` IRへloweringします。lockされたpackage名、version、opcode、引数順、型、effect、immutable属性がcompiler allowlistと完全一致しない場合はcompileを停止します。
 
-旧`@kubohiroya/turbowarp-asset-manager` 0.16.0はbrowser内のasset registry／cacheとして扱い、`registerAsset`、`isLoaded`、renderer、audio、IndexedDB cache操作をKVSへ推測変換しません。binary storageは[Binary resource semantics](binary-resource-semantics.ja.md)のdirect IRから利用できます。Structured DataのJSON値は[Structured Data lowering](structured-data-lowering.ja.md)を経てroute内で処理します。
+`@kubohiroya/turbowarp-asset-cache` 0.1.0はbrowser内のasset registry／cacheとして扱い、`registerAsset`、`isLoaded`、renderer、audio、IndexedDB cache操作をKVSへ推測変換しません。binary storageは[Binary resource semantics](binary-resource-semantics.ja.md)のdirect IRから利用できます。Structured DataのJSON値は[Structured Data lowering](structured-data-lowering.ja.md)を経てroute内で処理します。
 
 ## 論理操作と実装
 

@@ -71,14 +71,14 @@ turbowarp-http-server \
 |---|---|
 | `GET /health` | ヘルスチェック |
 | `GET /ws` | TurboWarp extension が接続する WebSocket endpoint |
-| `GET /@assets/<name>` | resource capability が接続されている場合、Asset Manager の named resource を配信 |
+| `GET /@assets/<name>` | resource capability が接続されている場合、Asset Cache の named resource を配信 |
 | `HEAD /@assets/<name>` | body なしで同じ resource metadata を返却 |
 | `PUT /@assets/<name>` | 対応 capability で named resource を作成または atomic replace |
 | `DELETE /@assets/<name>` | 対応 capability で named resource を削除 |
 | `GET /@assets/` | binary payload を含めず metadata/listing を返却 |
 | その他の HTTP route | HTTP forwarding 実装前の一時的な `503 not_connected` 応答 |
 
-Sprite route はこれとは別の TurboWarp-facing layer です。`camera` という名前の Sprite は `/camera` を公開でき、Sprite を「隠す」とその route を無効化できます。Sprite handler は HTML、JSON、redirect、`/camera/image.jpg` のような friendly alias を返せますが、`@assets` を Sprite の子 namespace にするのではなく Asset Manager capability を参照します。
+Sprite route はこれとは別の TurboWarp-facing layer です。`camera` という名前の Sprite は `/camera` を公開でき、Sprite を「隠す」とその route を無効化できます。Sprite handler は HTML、JSON、redirect、`/camera/image.jpg` のような friendly alias を返せますが、`@assets` を Sprite の子 namespace にするのではなく Asset Cache capability を参照します。
 
 ### 学習用コミュニティサーバ
 
@@ -121,11 +121,11 @@ COMMUNITY_OAUTH_DEMO_SCOPE=profile
 
 この community server は local educational implementation であり、公開運用向けではありません。internet に公開する前に、in-memory storage を durable storage に置き換え、rate limit と abuse moderation、HTTPS と secure cookie、完全な OAuth token/userinfo exchange、必要な email または external identity verification、upload scan、audit log、backup、retention、takedown、incident-response 手順を追加してください。
 
-## Asset Manager Resource Serving
+## Asset Cache Resource Serving
 
-HTTP server は camera-agnostic です。`turbowarp-asset-manager` のような外部 capability が提供する generic named resource を配信し、private field を読んだり Asset Manager の storage を複製したりしません。
+HTTP server は camera-agnostic です。`turbowarp-asset-cache` のような外部 capability が提供する generic named resource を配信し、private field を読んだり Asset Cache の storage を複製したりしません。
 
-generic Asset Manager namespace は `/@assets/` を root にします。これは Sprite route の管理下ではなく、background/server-side resource capability が管理します。Sprite route は friendly alias を提供できますが、generic resource route は global に保ちます。
+generic Asset Cache namespace は `/@assets/` を root にします。これは Sprite route の管理下ではなく、background/server-side resource capability が管理します。Sprite route は friendly alias を提供できますが、generic resource route は global に保ちます。
 
 | Resource | HTTP route |
 |---|---|
@@ -138,7 +138,7 @@ resource response は `Content-Type`、`Content-Length`、可能な場合は `ET
 
 `PUT` は request body bytes と `Content-Type` を使い、capability 経由で resource を作成または置換します。server は configurable body-size limit を適用し、capability が拒否する MIME type を `415` にし、置換は後続 request へ atomic に見えるようにします。進行中の `GET` は開始時点の snapshot を受け取ります。
 
-`/_tw-http/` は management namespace として予約し、asset route として扱いません。`/camera/@assets/live-camera` のような path は generic Asset Manager route ではありません。必要なら Scratch/TurboWarp handler で friendly Sprite URL を `/@assets/<name>` へ alias します。authorization hook が設定されている場合は `GET`、`HEAD`、`PUT`、`DELETE`、listing に一貫して適用します。structured log には route、resource name、MIME type、byte count、status などの metadata だけを含め、binary request/response body は含めません。
+`/_tw-http/` は management namespace として予約し、asset route として扱いません。`/camera/@assets/live-camera` のような path は generic Asset Cache route ではありません。必要なら Scratch/TurboWarp handler で friendly Sprite URL を `/@assets/<name>` へ alias します。authorization hook が設定されている場合は `GET`、`HEAD`、`PUT`、`DELETE`、listing に一貫して適用します。structured log には route、resource name、MIME type、byte count、status などの metadata だけを含め、binary request/response body は含めません。
 
 ## Sprite Route Model
 
@@ -150,7 +150,7 @@ TurboWarp-facing route は project object と自然に対応させます。
 | Sprite `camera` が表示中 | `/camera` |
 | Sprite `camera` が非表示 | route disabled |
 
-これにより Scratch 上の操作が HTTP 公開状態と直感的につながります。Sprite を「表示する」と route が公開され、「隠す」と route が取り下げられます。Asset Manager resource は `/@assets/<name>` に global に置くため、同じ resource を複数の Sprite route から storage duplication なしに再利用できます。
+これにより Scratch 上の操作が HTTP 公開状態と直感的につながります。Sprite を「表示する」と route が公開され、「隠す」と route が取り下げられます。Asset Cache resource は `/@assets/<name>` に global に置くため、同じ resource を複数の Sprite route から storage duplication なしに再利用できます。
 
 live camera page は次のように扱えます。
 
@@ -166,7 +166,7 @@ GET /camera/image.jpg
     -> /@assets/live-camera を返す friendly handler/alias
 ```
 
-つまり `/camera/image.jpg` は Sprite route の判断で、`/@assets/live-camera` は generic Asset Manager resource endpoint です。
+つまり `/camera/image.jpg` は Sprite route の判断で、`/@assets/live-camera` は generic Asset Cache resource endpoint です。
 
 ## デプロイターゲット検討
 
@@ -274,12 +274,12 @@ bridge が未接続の場合、通常 route は `503` を返します。connecte
 ```text
 TurboWarp Camera Source
     -> 10 秒ごとに current frame を capture
-    -> Asset Manager resource "live-camera" を replace
+    -> Asset Cache resource "live-camera" を replace
     -> HTTP Server が /@assets/live-camera を配信
     -> browser が stable URL を読み込む
 ```
 
-HTTP server は `turbowarp-camera-source` や `turbowarp-html` に依存しません。Camera Source は snapshot を作り、Asset Manager が named resource を所有し、HTTP Server は generic resource URL を配信します。
+HTTP server は `turbowarp-camera-source` や `turbowarp-html` に依存しません。Camera Source は snapshot を作り、Asset Cache が named resource を所有し、HTTP Server は generic resource URL を配信します。
 
 ブロックレベルの例:
 
@@ -303,7 +303,7 @@ end
 /camera/image.jpg -> /@assets/live-camera
 ```
 
-`turbowarp-html` で生成した HTML page が `<img>` を 10 秒ごとに refresh する構成でも、cache correctness は timestamp query string ではなく HTTP validation headers で担保します。Asset Manager から replacement identity が得られる場合、client は stable URL を ETag で revalidate し、古い browser cache に固定されず最新 snapshot を受け取れます。
+`turbowarp-html` で生成した HTML page が `<img>` を 10 秒ごとに refresh する構成でも、cache correctness は timestamp query string ではなく HTTP validation headers で担保します。Asset Cache から replacement identity が得られる場合、client は stable URL を ETag で revalidate し、古い browser cache に固定されず最新 snapshot を受け取れます。
 
 ### TurboWarp extension bundle
 
