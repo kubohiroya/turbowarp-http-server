@@ -1,0 +1,420 @@
+{
+  "formatVersion": 2,
+  "id": "kubohiroyaassetcache",
+  "blocks": [
+    {
+      "opcode": "assetErrorLabel",
+      "blockType": "REPORTER",
+      "arguments": [],
+      "resultType": "string",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "assetErrorType",
+      "blockType": "REPORTER",
+      "arguments": [],
+      "resultType": "string",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "deleteAllCachedAssets",
+      "blockType": "COMMAND",
+      "arguments": [],
+      "resultType": "void",
+      "effect": "storage-write",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "deleteAllMemoryAssets",
+      "blockType": "COMMAND",
+      "arguments": [],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "deleteCachedAsset",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "storage-write",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "deleteMemoryAsset",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "finishAllActorSequences",
+      "blockType": "COMMAND",
+      "arguments": [],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "getAssetMimeType",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "string",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "getVersion",
+      "blockType": "REPORTER",
+      "arguments": [],
+      "resultType": "string",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "isLoaded",
+      "blockType": "BOOLEAN",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "boolean",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "loadAsset",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "URL",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "playSound",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "playSoundUntilDone",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "registerAsset",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "RESOURCE_ID",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "setSpriteSkin",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "SPRITE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "setStageSkin",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "setTextStyle",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PROPERTY",
+          "type": "STRING"
+        },
+        {
+          "id": "VALUE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "setTextValue",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "VALUE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "setThisSpriteSkin",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "startActorLoop",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "ACTOR",
+          "type": "STRING"
+        },
+        {
+          "id": "ASSETS",
+          "type": "STRING"
+        },
+        {
+          "id": "DURATIONS",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "startActorSequence",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "ACTOR",
+          "type": "STRING"
+        },
+        {
+          "id": "ASSETS",
+          "type": "STRING"
+        },
+        {
+          "id": "DURATIONS",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "stopActorAnimation",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "ACTOR",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "stopAllSounds",
+      "blockType": "COMMAND",
+      "arguments": [],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "stopSound",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "control",
+      "immutable": false,
+      "errors": [],
+      "server": {
+        "supported": false
+      }
+    }
+  ],
+  "menus": []
+}

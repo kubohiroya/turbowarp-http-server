@@ -67,11 +67,11 @@ min(operation maxBytes, compiler maxBinaryBytes, target maxBinaryBytes)
 
 HTTP JSON envelope化とstream開始後のabort処理はcompiler pipeline／adapter error boundaryの責務です。
 
-## Asset Manager manifest境界
+## Asset Cache manifest境界
 
-対応syntaxの正本は`@kubohiroya/turbowarp-asset-manager` 0.16.0のmanifest format 1です。このmanifestはopcode／argument構文だけを提供し、server operation hintを持ちません。`registerAsset`はURL、costume、sound、runtime text等をまとめるbrowser registry操作であり、object storage putへ近似しません。`isLoaded`、renderer、audio、IndexedDB cache blockも同様にbrowser-onlyとして`TW2_UNSUPPORTED_OPERATION`になります。
+対応syntaxの正本は`@kubohiroya/turbowarp-asset-cache` 0.1.0のmanifest format 2です。このmanifestは全blockを明示的にbrowser-onlyと宣言し、server operation hintを持ちません。`registerAsset`はURL、costume、sound、runtime text等をまとめるbrowser registry操作であり、object storage putへ近似しません。`isLoaded`、renderer、audio、IndexedDB cache blockも同様にbrowser-onlyとして`TW2_UNSUPPORTED_OPERATION`になります。
 
-したがって現時点のAsset Manager manifestからbinary IR actionへloweringされるopcodeはありません。将来manifestにcompiler allowlistと一致するserver hint／専用blockが追加された場合だけ対応します。request uploadは対応source opcodeがないためdirect IRからのみ生成できます。この境界により、browser意味論を推測してcloud storageへ誤変換しません。
+したがって現時点のAsset Cache manifestからbinary IR actionへloweringされるopcodeはありません。将来manifestにcompiler allowlistと一致するserver hint／専用blockが追加された場合だけ対応します。request uploadは対応source opcodeがないためdirect IRからのみ生成できます。この境界により、browser意味論を推測してcloud storageへ誤変換しません。
 
 ## Adapter contract
 

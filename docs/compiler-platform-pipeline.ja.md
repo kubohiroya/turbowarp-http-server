@@ -41,7 +41,7 @@ turbowarp-http-server compile \
 - CLI入力はcanonical `--format ir`に加え、built-in HTTP block subsetの`--format turbowarp-json`を受理します。
 - `--target-config <file>`はadapter設定です。IRへmergeせず、secret値を受け取りません。
 - `--enable-named-response-body`は実験的な`respond-named-body`だけを有効化し、既定OFFです。選択targetに`named-body-provider`がなければ生成しません。
-- `--format turbowarp-json`はbuilt-in HTTP block、literal bounded repeat、named responseを直接IR v2へloweringします。`--manifest-lock`指定時はlock済みStructured Data reporter／loopとKVS 0.1.0の5操作も同じfrontendでloweringします。lockにないextension opcodeや旧Asset Manager操作を推測しません。
+- `--format turbowarp-json`はbuilt-in HTTP block、literal bounded repeat、named responseを直接IR v2へloweringします。`--manifest-lock`指定時はlock済みStructured Data reporter／loopとKVS 0.1.0の5操作も同じfrontendでloweringします。lockにないextension opcodeやAsset Cacheのbrowser-only操作を推測しません。
 - Cloudflare adapterはD1／R2 binding名、Firebase adapterはfunction名／bucket環境変数名／Firestore collection名だけを受け取ります。secretやproject IDは受け取りません。詳細は[IR v2 platform storage adapter](platform-storage-adapters.ja.md)を参照してください。
 
 ## module責務

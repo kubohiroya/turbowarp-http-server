@@ -274,18 +274,18 @@ describe('TurboWarp server subset frontend validation', () => {
     );
     const project = projectWithChain([
       ['structured', 'kubohiroyastructureddata_normalizeJson'],
-      ['asset', 'kubohiroyaassetmanager_isLoaded']
+      ['asset', 'kubohiroyaassetcache_isLoaded']
     ]);
     const diagnostics = validateTurboWarpServerSubset(project, registry);
     expect(codes(diagnostics)).toEqual(['TW2_UNSUPPORTED_OPERATION']);
     expect(diagnostics[0]?.sourceRef?.blockId).toBe('asset');
   });
 
-  it('rejects every locked Asset Manager format 1 browser opcode instead of guessing storage semantics', async () => {
+  it('rejects every locked Asset Cache browser opcode instead of guessing storage semantics', async () => {
     const {registry} = await resolveCompilerManifestLock(
       'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
     );
-    const assetEntries = registry.entries.filter(({extensionId}) => extensionId === 'kubohiroyaassetmanager');
+    const assetEntries = registry.entries.filter(({extensionId}) => extensionId === 'kubohiroyaassetcache');
     const project = projectWithChain(
       assetEntries.map(({opcode, projectOpcode}) => [`asset-${opcode}`, projectOpcode])
     );

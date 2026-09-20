@@ -42,14 +42,14 @@ The server exposes:
 |---|---|
 | `GET /health` | Health check |
 | `GET /ws` | WebSocket endpoint used by the TurboWarp extension |
-| `GET /@assets/<name>` | Serve a named Asset Manager resource when a resource capability is attached |
+| `GET /@assets/<name>` | Serve a named Asset Cache resource when a resource capability is attached |
 | `HEAD /@assets/<name>` | Return the same resource metadata without a body |
 | `PUT /@assets/<name>` | Create or atomically replace a named resource when supported |
 | `DELETE /@assets/<name>` | Remove a named resource when supported |
 | `GET /@assets/` | Return resource metadata without embedding binary payloads when supported |
 | Any other HTTP route | Temporary `503 not_connected` placeholder until HTTP forwarding is implemented |
 
-Sprite routes are a separate TurboWarp-facing layer. A Sprite named `camera` can publish `/camera`, and hiding that Sprite can disable the route. Those Sprite handlers may serve HTML, JSON, redirects, or friendly aliases such as `/camera/image.jpg`; they should call into the Asset Manager capability instead of making `@assets` a child namespace of the Sprite.
+Sprite routes are a separate TurboWarp-facing layer. A Sprite named `camera` can publish `/camera`, and hiding that Sprite can disable the route. Those Sprite handlers may serve HTML, JSON, redirects, or friendly aliases such as `/camera/image.jpg`; they should call into the Asset Cache capability instead of making `@assets` a child namespace of the Sprite.
 
 ### Learning-only community server
 
@@ -133,11 +133,11 @@ send [{"type":"ping"}] to HTTP bridge
 last HTTP bridge message
 ```
 
-## Asset Manager Resource Serving
+## Asset Cache Resource Serving
 
-The HTTP server is camera-agnostic. It serves generic named resources supplied by an external capability, such as `turbowarp-asset-manager`, without reading private extension fields or duplicating Asset Manager storage.
+The HTTP server is camera-agnostic. It serves generic named resources supplied by an external capability, such as `turbowarp-asset-cache`, without reading private extension fields or duplicating Asset Cache storage.
 
-The generic Asset Manager namespace is rooted at `/@assets/`. It is not owned by a Sprite route; it is managed by the background/server-side resource capability. Sprite routes can still expose friendly aliases, but the generic resource route stays global.
+The generic Asset Cache namespace is rooted at `/@assets/`. It is not owned by a Sprite route; it is managed by the background/server-side resource capability. Sprite routes can still expose friendly aliases, but the generic resource route stays global.
 
 | Resource | HTTP route |
 |---|---|
@@ -158,7 +158,7 @@ Resource responses include `Content-Type`, `Content-Length`, `ETag` when identit
 
 `PUT` uses the request body bytes and `Content-Type` to create or replace a resource through the capability. The server enforces a configurable body-size limit before handing bytes to the capability, rejects unsupported MIME types when the capability reports them, and makes replacements visible atomically to subsequent requests. A `GET` already in progress receives the snapshot it started with.
 
-The management namespace `/_tw-http/` is reserved and is not treated as an asset route. Paths such as `/camera/@assets/live-camera` are not generic Asset Manager routes; use a Scratch/TurboWarp handler to alias friendly Sprite URLs to `/@assets/<name>` when needed. Resource authorization hooks, when configured, are applied to `GET`, `HEAD`, `PUT`, `DELETE`, and listing requests. Structured resource logs include metadata such as route, resource name, MIME type, byte count, and status; they do not include binary request or response bodies.
+The management namespace `/_tw-http/` is reserved and is not treated as an asset route. Paths such as `/camera/@assets/live-camera` are not generic Asset Cache routes; use a Scratch/TurboWarp handler to alias friendly Sprite URLs to `/@assets/<name>` when needed. Resource authorization hooks, when configured, are applied to `GET`, `HEAD`, `PUT`, `DELETE`, and listing requests. Structured resource logs include metadata such as route, resource name, MIME type, byte count, and status; they do not include binary request or response bodies.
 
 ## Sprite Route Model
 
@@ -170,7 +170,7 @@ TurboWarp-facing routes should map naturally to visible project objects:
 | Sprite `camera` while visible | `/camera` |
 | Sprite `camera` while hidden | route disabled |
 
-This keeps Scratch interaction tangible: showing a Sprite publishes its route, and hiding it withdraws that route. Asset Manager resources remain global at `/@assets/<name>` so the same resource can be reused by multiple Sprite routes without duplicating storage.
+This keeps Scratch interaction tangible: showing a Sprite publishes its route, and hiding it withdraws that route. Asset Cache resources remain global at `/@assets/<name>` so the same resource can be reused by multiple Sprite routes without duplicating storage.
 
 A live camera page can therefore be modeled as:
 
@@ -186,7 +186,7 @@ GET /camera/image.jpg
     -> friendly handler/alias that serves /@assets/live-camera
 ```
 
-In other words, `/camera/image.jpg` is a Sprite route decision, while `/@assets/live-camera` is the generic Asset Manager resource endpoint.
+In other words, `/camera/image.jpg` is a Sprite route decision, while `/@assets/live-camera` is the generic Asset Cache resource endpoint.
 
 ## Response Content Builders
 
@@ -276,12 +276,12 @@ For low-frequency camera publishing, compose three independent pieces:
 ```text
 TurboWarp Camera Source
     -> capture current frame every 10 seconds
-    -> replace Asset Manager resource "live-camera"
+    -> replace Asset Cache resource "live-camera"
     -> HTTP Server serves /@assets/live-camera
     -> browser loads the stable URL
 ```
 
-The HTTP server does not depend on `turbowarp-camera-source` or `turbowarp-html`. Camera Source only produces snapshots; Asset Manager owns the named resource; HTTP Server serves the generic resource URL.
+The HTTP server does not depend on `turbowarp-camera-source` or `turbowarp-html`. Camera Source only produces snapshots; Asset Cache owns the named resource; HTTP Server serves the generic resource URL.
 
 Example block-level flow:
 
@@ -305,7 +305,7 @@ If a friendlier URL is desired, a Scratch/TurboWarp route handler can alias:
 /camera/image.jpg -> /@assets/live-camera
 ```
 
-An HTML page generated by `turbowarp-html` can refresh an `<img>` every 10 seconds, but cache correctness should come from HTTP validation headers, not timestamp query strings. With replacement identities from Asset Manager, clients can revalidate the stable URL using ETag and receive the newest snapshot without stale browser cache behavior.
+An HTML page generated by `turbowarp-html` can refresh an `<img>` every 10 seconds, but cache correctness should come from HTTP validation headers, not timestamp query strings. With replacement identities from Asset Cache, clients can revalidate the stable URL using ETag and receive the newest snapshot without stale browser cache behavior.
 
 ## Block reference
 

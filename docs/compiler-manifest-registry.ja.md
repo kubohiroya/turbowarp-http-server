@@ -6,8 +6,8 @@ manifest registryはTurboWarp projectをIR v2へ変換する唯一の外部exten
 
 ## 対応形式
 
-- compiler manifest format 1: extension ID、block type、argument ID/typeを提供するblock API manifest。Asset Manager 0.16.0 fixtureとの互換性を確認します。
-- compiler manifest format 2: format 1にresult type、effect、immutable、runtime error、server-operation hintを加えた形式。package固有の型宣言としてtyped path segmentも任意で保持できます。Structured Data 0.4.0およびKVS 0.1.0 fixtureとの互換性を確認します。
+- compiler manifest format 1: extension ID、block type、argument ID/typeだけを提供するlegacy block API manifest。
+- compiler manifest format 2: format 1にresult type、effect、immutable、runtime error、server-operation hintを加えた形式。Asset Cache 0.1.0のbrowser-only宣言、Structured Data 0.4.0、KVS 0.1.0のfixtureとの互換性を確認します。
 - lock format 1: extension ID、exact package version、manifest format version、exact-byte SHA-256、sourceを固定します。
 
 machine-readable schemaは次のとおりです。
@@ -15,7 +15,7 @@ machine-readable schemaは次のとおりです。
 - [`schemas/compiler-extension-manifest.schema.json`](../schemas/compiler-extension-manifest.schema.json)
 - [`schemas/compiler-manifest-lock-v1.schema.json`](../schemas/compiler-manifest-lock-v1.schema.json)
 
-format 1 manifestはregistryへ読めますが、server-operation hintがないblockを自動的にserver対応とは判断しません。Asset Manager blockをKVSやobject storageへ推測変換しません。KVSはformat 2の明示的な`kvs.*` operationだけをloweringします。
+format 1 manifestはregistryへ読めますが、server-operation hintがないblockを自動的にserver対応とは判断しません。Asset Cache blockをKVSやobject storageへ推測変換しません。KVSはformat 2の明示的な`kvs.*` operationだけをloweringします。
 
 ## Lock
 
