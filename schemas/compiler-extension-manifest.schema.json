@@ -9,6 +9,7 @@
     "formatVersion": {"enum": [1, 2]},
     "id": {"type": "string", "pattern": "^[a-z0-9]+$"},
     "pathSegmentType": {"$ref": "#/$defs/pathSegmentType"},
+    "dataReferenceType": {"$ref": "#/$defs/dataReferenceType"},
     "blocks": {
       "type": "array",
       "minItems": 1,
@@ -26,6 +27,17 @@
     }
   ],
   "$defs": {
+    "dataReferenceType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "scope", "lifetime", "valueType"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "scope": {"type": "string", "minLength": 1},
+        "lifetime": {"type": "string", "minLength": 1},
+        "valueType": {"type": "string", "minLength": 1}
+      }
+    },
     "pathSegmentType": {
       "type": "object",
       "additionalProperties": false,
@@ -91,9 +103,9 @@
         "opcode": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
         "blockType": {"enum": ["COMMAND", "REPORTER", "BOOLEAN", "HAT", "LOOP"]},
         "arguments": {"type": "array", "items": {"$ref": "#/$defs/argument"}},
-        "resultType": {"enum": ["json", "boolean", "number", "string", "void"]},
+        "resultType": {"enum": ["json", "boolean", "number", "string", "void", "jsonText", "yamlText"]},
         "effect": {
-          "enum": ["pure", "immutable", "control", "request-read", "response-write", "storage-read", "storage-write", "binary-read", "binary-write"]
+          "enum": ["pure", "immutable", "control", "request-read", "response-write", "storage-read", "storage-write", "binary-read", "binary-write", "state"]
         },
         "immutable": {"type": "boolean"},
         "errors": {

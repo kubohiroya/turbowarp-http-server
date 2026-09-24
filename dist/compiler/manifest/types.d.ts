@@ -3,8 +3,12 @@ export declare const COMPILER_MANIFEST_LOCK_VERSION: 1;
 export type CompilerManifestFormatVersion = (typeof COMPILER_MANIFEST_FORMAT_VERSIONS)[number];
 export type ManifestBlockType = 'COMMAND' | 'REPORTER' | 'BOOLEAN' | 'HAT' | 'LOOP';
 export type ManifestArgumentType = 'STRING' | 'NUMBER' | 'BOOLEAN';
-export type ManifestResultType = 'json' | 'boolean' | 'number' | 'string' | 'void';
-export type ManifestEffect = 'pure' | 'immutable' | 'control' | 'request-read' | 'response-write' | 'storage-read' | 'storage-write' | 'binary-read' | 'binary-write';
+export type ManifestResultType = 'json' | 'boolean' | 'number' | 'string' | 'void'
+/** A string whose content is serialized JSON or YAML, which 'string' alone would not record. */
+ | 'jsonText' | 'yamlText';
+export type ManifestEffect = 'pure' | 'immutable' | 'control' | 'request-read' | 'response-write' | 'storage-read' | 'storage-write' | 'binary-read' | 'binary-write'
+/** Mutates extension-held data scoped to a target; storage-* means persistent storage instead. */
+ | 'state';
 export interface CompilerManifestArgument {
     id: string;
     type: ManifestArgumentType;
@@ -44,6 +48,12 @@ export interface CompilerExtensionManifest {
                 valueType: 'nonNegativeInteger';
             }
         ];
+    };
+    dataReferenceType?: {
+        kind: string;
+        scope: string;
+        lifetime: string;
+        valueType: string;
     };
     menus?: unknown[];
 }

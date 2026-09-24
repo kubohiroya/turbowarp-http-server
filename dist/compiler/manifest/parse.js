@@ -8,7 +8,7 @@ export const DEFAULT_COMPILER_MANIFEST_LIMITS = {
 };
 const BLOCK_TYPES = new Set(['COMMAND', 'REPORTER', 'BOOLEAN', 'HAT', 'LOOP']);
 const ARGUMENT_TYPES = new Set(['STRING', 'NUMBER', 'BOOLEAN']);
-const RESULT_TYPES = new Set(['json', 'boolean', 'number', 'string', 'void']);
+const RESULT_TYPES = new Set(['json', 'boolean', 'number', 'string', 'void', 'jsonText', 'yamlText']);
 const EFFECTS = new Set([
     'pure',
     'immutable',
@@ -18,7 +18,8 @@ const EFFECTS = new Set([
     'storage-read',
     'storage-write',
     'binary-read',
-    'binary-write'
+    'binary-write',
+    'state'
 ]);
 const EXTENSION_ID = /^[a-z0-9]+$/;
 const OPCODE = /^[A-Za-z][A-Za-z0-9_]*$/;
@@ -28,7 +29,7 @@ export function parseCompilerExtensionManifestJson(text, limits = DEFAULT_COMPIL
     assertByteLimit(text, limits.maxBytes, 'manifest');
     const value = parseStrictJson(text, limits.maxDepth);
     const root = object(value, 'manifest');
-    exactKeys(root, ['formatVersion', 'id', 'pathSegmentType', 'blocks', 'menus'], 'manifest');
+    exactKeys(root, ['formatVersion', 'id', 'pathSegmentType', 'dataReferenceType', 'blocks', 'menus'], 'manifest');
     const formatVersion = manifestFormatVersion(root.formatVersion, 'manifest.formatVersion');
     const id = extensionId(root.id, 'manifest.id');
     const rawBlocks = array(root.blocks, 'manifest.blocks');
@@ -42,8 +43,22 @@ export function parseCompilerExtensionManifestJson(text, limits = DEFAULT_COMPIL
     const pathSegmentType = root.pathSegmentType === undefined
         ? undefined
         : parsePathSegmentType(root.pathSegmentType, 'manifest.pathSegmentType');
+    const dataReferenceType = root.dataReferenceType === undefined
+        ? undefined
+        : parseDataReferenceType(root.dataReferenceType, 'manifest.dataReferenceType');
     const menus = root.menus === undefined ? undefined : array(root.menus, 'manifest.menus');
-    return optional(optional({ formatVersion, id, blocks }, 'pathSegmentType', pathSegmentType), 'menus', menus);
+    return optional(optional(optional({ formatVersion, id, blocks }, 'pathSegmentType', pathSegmentType), 'dataReferenceType', dataReferenceType), 'menus', menus);
+}
+/** The counterpart of pathSegmentType: what the values an extension hands out refer to. */
+function parseDataReferenceType(value, location) {
+    const reference = object(value, location);
+    exactKeys(reference, ['kind', 'scope', 'lifetime', 'valueType'], location);
+    return {
+        kind: nonEmptyString(reference.kind, `${location}.kind`),
+        scope: nonEmptyString(reference.scope, `${location}.scope`),
+        lifetime: nonEmptyString(reference.lifetime, `${location}.lifetime`),
+        valueType: nonEmptyString(reference.valueType, `${location}.valueType`)
+    };
 }
 export function parseCompilerManifestLockJson(text, limits = DEFAULT_COMPILER_MANIFEST_LIMITS) {
     assertByteLimit(text, limits.maxBytes, 'manifest lock');

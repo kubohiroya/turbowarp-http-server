@@ -5,7 +5,15 @@ export type CompilerManifestFormatVersion = (typeof COMPILER_MANIFEST_FORMAT_VER
 
 export type ManifestBlockType = 'COMMAND' | 'REPORTER' | 'BOOLEAN' | 'HAT' | 'LOOP';
 export type ManifestArgumentType = 'STRING' | 'NUMBER' | 'BOOLEAN';
-export type ManifestResultType = 'json' | 'boolean' | 'number' | 'string' | 'void';
+export type ManifestResultType =
+  | 'json'
+  | 'boolean'
+  | 'number'
+  | 'string'
+  | 'void'
+  /** A string whose content is serialized JSON or YAML, which 'string' alone would not record. */
+  | 'jsonText'
+  | 'yamlText';
 export type ManifestEffect =
   | 'pure'
   | 'immutable'
@@ -15,7 +23,9 @@ export type ManifestEffect =
   | 'storage-read'
   | 'storage-write'
   | 'binary-read'
-  | 'binary-write';
+  | 'binary-write'
+  /** Mutates extension-held data scoped to a target; storage-* means persistent storage instead. */
+  | 'state';
 
 export interface CompilerManifestArgument {
   id: string;
@@ -53,6 +63,12 @@ export interface CompilerExtensionManifest {
       {kind: 'key'; valueType: 'string'},
       {kind: 'index'; valueType: 'nonNegativeInteger'}
     ];
+  };
+  dataReferenceType?: {
+    kind: string;
+    scope: string;
+    lifetime: string;
+    valueType: string;
   };
   menus?: unknown[];
 }
