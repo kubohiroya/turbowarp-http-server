@@ -28,8 +28,8 @@ importers:
         specifier: 0.2.0
         version: 0.2.0
       '@kubohiroya/turbowarp-named-data':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: ^0.3.0
+        version: 0.3.0
       '@kubohiroya/vite-plugin-turbowarp-extension':
         specifier: 0.4.0
         version: 0.4.0(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
@@ -968,8 +968,8 @@ packages:
     resolution: {integrity: sha512-FI2Ei2dSZjIGJWJTXZYnpIwzqVtlg8KRNcRZLdydDdV53I2Yri8Mz6susCuNjSm4awbRPBgNx4ALDawr8M90cw==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-named-data@0.2.0':
-    resolution: {integrity: sha512-bbYd3/rhpnvOuWy8e7yK6C848LFH6nKWegPsXOWPx75pK06A3VrFA9neVspfvEd/JoTI/y6EsC7xyJVjGIVTig==}
+  '@kubohiroya/turbowarp-named-data@0.3.0':
+    resolution: {integrity: sha512-+l/6kMrKijaeWyPbN1Bh1UlF3fM043862aANkLu4jXEFzsX6uHLYUu5Y1ZIb+koI27tFxxIwmY4EIxwmaiqf3w==}
     engines: {node: '>=22.18.0'}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.4.0':
@@ -4741,7 +4741,7 @@ snapshots:
 
   '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
 
-  '@kubohiroya/turbowarp-named-data@0.2.0': {}
+  '@kubohiroya/turbowarp-named-data@0.3.0': {}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.4.0(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))':
     dependencies:

@@ -9,5 +9,7 @@ minimumReleaseAgeExclude:
   - '@kubohiroya/turbowarp-named-data@0.1.0'
   - '@cloudflare/workers-types@5.20260919.1'
   - '@kubohiroya/turbowarp-named-data@0.2.0'
+  - '@kubohiroya/turbowarp-extension-manifest@0.3.0'
+  - '@kubohiroya/turbowarp-named-data@0.3.0'
   - miniflare@5.20260918.0-alpha
   - wrangler@4.135.0
