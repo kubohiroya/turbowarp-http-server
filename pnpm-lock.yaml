@@ -24,6 +24,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@kubohiroya/turbowarp-extension-manifest':
+        specifier: 0.2.0
+        version: 0.2.0
       '@kubohiroya/turbowarp-named-data':
         specifier: 0.2.0
         version: 0.2.0
@@ -960,6 +963,10 @@ packages:
 
   '@jsdevtools/ono@7.1.3':
     resolution: {integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg==}
+
+  '@kubohiroya/turbowarp-extension-manifest@0.2.0':
+    resolution: {integrity: sha512-FI2Ei2dSZjIGJWJTXZYnpIwzqVtlg8KRNcRZLdydDdV53I2Yri8Mz6susCuNjSm4awbRPBgNx4ALDawr8M90cw==}
+    engines: {node: '>=22'}
 
   '@kubohiroya/turbowarp-named-data@0.2.0':
     resolution: {integrity: sha512-bbYd3/rhpnvOuWy8e7yK6C848LFH6nKWegPsXOWPx75pK06A3VrFA9neVspfvEd/JoTI/y6EsC7xyJVjGIVTig==}
@@ -4731,6 +4738,8 @@ snapshots:
   '@js-sdsl/ordered-map@4.4.2': {}
 
   '@jsdevtools/ono@7.1.3': {}
+
+  '@kubohiroya/turbowarp-extension-manifest@0.2.0': {}
 
   '@kubohiroya/turbowarp-named-data@0.2.0': {}
 
