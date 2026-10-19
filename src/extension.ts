@@ -1,3 +1,4 @@
+import {fixedInputRegistration} from './fixed-input-editors.js';
 import {extensionConfig} from './config';
 import definitions from './block-definitions.json';
 import {
@@ -107,6 +108,8 @@ interface RequestContext {
 }
 
 export class TurboWarpHttpServerExtension implements TurboWarpExtension {
+  private readonly fixedInputs = fixedInputRegistration(typeof Scratch === 'undefined' ? undefined : Scratch);
+
   private serverUrl = DEFAULT_SERVER_URL;
   private socket: WebSocket | null = null;
   private lastReceivedMessage = '';
@@ -117,7 +120,10 @@ export class TurboWarpHttpServerExtension implements TurboWarpExtension {
   private readonly requestContexts = new Map<string, RequestContext>();
   private currentRequestContextId = '';
 
+  public dispose(): void {this.fixedInputs.dispose();}
+
   public getInfo(): Record<string, unknown> {
+    this.fixedInputs.ensure(blockDefinitions.map(block => `${extensionConfig.id}_${block.opcode}`));
     return {
       id: extensionConfig.id,
       name: Scratch.translate(definitions.extensionName),

@@ -1,4 +1,5 @@
 allowBuilds:
+  "@kubohiroya/turbowarp-extension-data-editor@https://codeload.github.com/kubohiroya/turbowarp-extension-data-editor/tar.gz/485f0e550e622235624b5e9176820161aeeba252": true
   '@firebase/util': false
   esbuild: false
   protobufjs: false

@@ -19,6 +19,333 @@
   	docsURI: "https://kubohiroya.github.io/turbowarp-http-server/",
   	blockIconURI: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgNDggNDgiPjxyZWN0IHg9IjYiIHk9IjEwIiB3aWR0aD0iMzYiIGhlaWdodD0iMjgiIHJ4PSI0IiBmaWxsPSIjMjU2M0VCIi8+PHBhdGggZD0iTTEyIDE4aDI0TTExIDI0aDE0TTExIDMwaDIwIiBzdHJva2U9IiNGRkYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iMzQiIGN5PSIzMCIgcj0iMyIgZmlsbD0iIzIyQzU1RSIvPjwvc3ZnPg=="
   };
+  //#endregion
+  //#region node_modules/.pnpm/@kubohiroya+turbowarp-extension-data-editor@https+++codeload.github.com+kubohiroya+turb_5174995e0659a2991b0bf213cfddbf18/node_modules/@kubohiroya/turbowarp-extension-data-editor/dist/fixed-input-schema.js
+  var numberToken = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$/u;
+  var invalidNumber = Object.freeze({
+  	kind: "invalid",
+  	code: "fixed-number-input-invalid"
+  });
+  /**
+  * Parse a NEW numeric draft according to NP-finite-new-input-v1.
+  * Never apply this to opening/no-op raw values or use it as an owner validator.
+  * Keep the validated token so negative zero, precision and exponent spelling survive.
+  */
+  function parseFixedNumberInput(input) {
+  	if (typeof input === "number") {
+  		if (!Number.isFinite(input)) return invalidNumber;
+  		return Object.freeze({
+  			kind: "valid",
+  			token: Object.is(input, -0) ? "-0" : String(input),
+  			value: input
+  		});
+  	}
+  	if (typeof input !== "string") return invalidNumber;
+  	const token = input.trim();
+  	if (!numberToken.test(token)) return invalidNumber;
+  	const value = Number(token);
+  	return Number.isFinite(value) ? Object.freeze({
+  		kind: "valid",
+  		token,
+  		value
+  	}) : invalidNumber;
+  }
+  var block_editor_fixed_inputs_schema_default = {
+  	$schema: "https://json-schema.org/draft/2020-12/schema",
+  	$id: "https://kubohiroya.github.io/turbowarp-http-server/schemas/block-editor-fixed-inputs.schema.json",
+  	$defs: {
+  		"changeHandlerVariable": {
+  			"type": "object",
+  			"properties": { "AMOUNT": { "type": "number" } },
+  			"required": ["AMOUNT"],
+  			"additionalProperties": true
+  		},
+  		"setHttpStatus": {
+  			"type": "object",
+  			"properties": { "STATUS": { "type": "number" } },
+  			"required": ["STATUS"],
+  			"additionalProperties": true
+  		},
+  		"respondWithNamedBody": {
+  			"type": "object",
+  			"properties": {
+  				"KIND": {
+  					"type": "string",
+  					"enum": [
+  						"structured",
+  						"document",
+  						"binary",
+  						"asset"
+  					]
+  				},
+  				"SCOPE": {
+  					"type": "string",
+  					"enum": ["target", "project"]
+  				},
+  				"REPRESENTATION": {
+  					"type": "string",
+  					"enum": [
+  						"json",
+  						"yaml",
+  						"html",
+  						"markdown",
+  						"raw"
+  					]
+  				},
+  				"MAX_BYTES": {
+  					"type": "number",
+  					"minimum": 1,
+  					"exclusiveMaximum": 9007199254740992
+  				}
+  			},
+  			"required": [
+  				"KIND",
+  				"SCOPE",
+  				"REPRESENTATION",
+  				"MAX_BYTES"
+  			],
+  			"additionalProperties": true
+  		},
+  		"markdownHeading": {
+  			"type": "object",
+  			"properties": { "LEVEL": { "type": "number" } },
+  			"required": ["LEVEL"],
+  			"additionalProperties": true
+  		}
+  	}
+  };
+  //#endregion
+  //#region src/fixed-input-schema.ts
+  var repository$1 = "turbowarp-http-server";
+  /** The owner JSON document is canonical; this selects a primitive field fragment. */
+  function fixedInputBundle(opcode, argument) {
+  	const source = {
+  		repository: repository$1,
+  		path: "schemas/block-editor-fixed-inputs.schema.json",
+  		symbol: `#/$defs/${opcode}/properties/${argument}`
+  	};
+  	const blocks = block_editor_fixed_inputs_schema_default.$defs;
+  	return {
+  		identity: {
+  			ownerId: repository$1,
+  			contractId: opcode,
+  			revision: "fixed-inputs-v1",
+  			variantId: argument
+  		},
+  		dialect: "2020-12",
+  		root: {
+  			retrievalUri: block_editor_fixed_inputs_schema_default.$id,
+  			document: blocks[opcode].properties[argument],
+  			artifact: {
+  				role: "canonical-schema",
+  				source
+  			}
+  		},
+  		resources: [],
+  		provenance: {
+  			canonicalSources: [source, {
+  				repository: repository$1,
+  				path: "src/extension.ts",
+  				symbol: opcode
+  			}],
+  			generatedFiles: [],
+  			referenceSchemas: [],
+  			generationSources: []
+  		}
+  	};
+  }
+  //#endregion
+  //#region src/fixed-input-editors.ts
+  var extensionId = "kubohiroyaturbowarphttpserver";
+  var repository = "turbowarp-http-server";
+  var fields = [
+  	{
+  		"opcode": "changeHandlerVariable",
+  		"argument": "AMOUNT",
+  		"control": "number",
+  		"choices": [],
+  		"normalization": "identity",
+  		"shape": "math_number.NUM",
+  		"maxBytes": false
+  	},
+  	{
+  		"opcode": "setHttpStatus",
+  		"argument": "STATUS",
+  		"control": "number",
+  		"choices": [],
+  		"normalization": "identity",
+  		"shape": "math_number.NUM",
+  		"maxBytes": false
+  	},
+  	{
+  		"opcode": "respondWithNamedBody",
+  		"argument": "KIND",
+  		"control": "enum",
+  		"choices": [
+  			"structured",
+  			"document",
+  			"binary",
+  			"asset"
+  		],
+  		"normalization": "lowercase",
+  		"shape": "text.TEXT",
+  		"maxBytes": false
+  	},
+  	{
+  		"opcode": "respondWithNamedBody",
+  		"argument": "SCOPE",
+  		"control": "enum",
+  		"choices": ["target", "project"],
+  		"normalization": "lowercase",
+  		"shape": "text.TEXT",
+  		"maxBytes": false
+  	},
+  	{
+  		"opcode": "respondWithNamedBody",
+  		"argument": "REPRESENTATION",
+  		"control": "enum",
+  		"choices": [
+  			"json",
+  			"yaml",
+  			"html",
+  			"markdown",
+  			"raw"
+  		],
+  		"normalization": "lowercase",
+  		"shape": "text.TEXT",
+  		"maxBytes": false
+  	},
+  	{
+  		"opcode": "respondWithNamedBody",
+  		"argument": "MAX_BYTES",
+  		"control": "number",
+  		"choices": [],
+  		"normalization": "identity",
+  		"shape": "math_number.NUM",
+  		"maxBytes": true
+  	},
+  	{
+  		"opcode": "markdownHeading",
+  		"argument": "LEVEL",
+  		"control": "number",
+  		"choices": [],
+  		"normalization": "identity",
+  		"shape": "math_number.NUM",
+  		"maxBytes": false
+  	}
+  ];
+  function literalString(value) {
+  	if (typeof value !== "string") throw new TypeError("Expected a string literal.");
+  	return value;
+  }
+  /** Legacy nonempty finite aliases are projections; opening never creates a write. */
+  function existingFixedNumber(value) {
+  	if (typeof value !== "string" && typeof value !== "number" || typeof value === "string" && value.trim() === "") throw new TypeError("Unavailable numeric projection.");
+  	const number = Number(value);
+  	if (!Number.isFinite(number)) throw new TypeError("Unavailable numeric projection.");
+  	return number;
+  }
+  function normalizeChoice(field, raw) {
+  	if (field.normalization === "lowercase") return raw.toLowerCase();
+  	if (field.normalization === "method") return raw.trim().toUpperCase();
+  	if (field.normalization === "trim") return raw.trim();
+  	if (field.normalization === "parse-format") {
+  		const lower = raw.trim().toLowerCase();
+  		return lower === "json" ? "JSON" : lower === "yaml" ? "YAML" : lower === "auto" ? "auto" : raw;
+  	}
+  	return raw;
+  }
+  function binding(field) {
+  	return {
+  		argument: field.argument,
+  		schemaBundle: fixedInputBundle(field.opcode, field.argument),
+  		control: {
+  			kind: field.control,
+  			...field.control === "enum" ? { choices: field.choices.map((value) => ({ value })) } : {}
+  		},
+  		read(value) {
+  			return field.control === "number" ? existingFixedNumber(value) : normalizeChoice(field, literalString(value));
+  		},
+  		encode(value) {
+  			if (field.control === "number") {
+  				const parsed = parseFixedNumberInput(value);
+  				if (parsed.kind !== "valid") throw new TypeError("Invalid new numeric input.");
+  				return parsed.token;
+  			}
+  			const raw = literalString(value), normalized = normalizeChoice(field, raw);
+  			if (!field.choices.includes(normalized)) throw new TypeError("Unsupported fixed choice.");
+  			return field.shape === "menu-shadow" || field.shape === "direct-field-dropdown" ? normalized : raw;
+  		},
+  		validateCandidate(value) {
+  			try {
+  				if (field.control === "number") {
+  					const number = existingFixedNumber(value);
+  					if (field.maxBytes && (!Number.isSafeInteger(Math.trunc(number)) || Math.trunc(number) < 1)) return [{ message: "Invalid named body size." }];
+  					return [];
+  				}
+  				return field.choices.includes(normalizeChoice(field, literalString(value))) ? [] : [{ message: "Unsupported fixed choice." }];
+  			} catch {
+  				return [{ message: "Invalid fixed input." }];
+  			}
+  		}
+  	};
+  }
+  var fixedInputEditors = [...new Set(fields.map((f) => f.opcode))].map((opcode) => ({
+  	apiVersion: 1,
+  	extensionId,
+  	editorId: `${opcode}-fixed-inputs`,
+  	opcodes: [`${extensionId}_${opcode}`],
+  	contractId: `${repository}/${opcode}`,
+  	contractRevision: "fixed-inputs-v1",
+  	bindings: fields.filter((field) => field.opcode === opcode).map(binding),
+  	validationContext: () => ({
+  		consumerId: repository,
+  		nowMs: 0,
+  		settings: null
+  	})
+  }));
+  /** Registration follows the advertised opcode membership and the optional host capability. */
+  function fixedInputRegistration(scratch) {
+  	const host = scratch ?? {};
+  	let active;
+  	let membership = "";
+  	const removers = [];
+  	let stopped = false;
+  	const clear = () => {
+  		host.vm?.runtime?.off?.("RUNTIME_DISPOSED", shutdown);
+  		for (const remove of removers.splice(0).reverse()) remove();
+  		active = void 0;
+  		membership = "";
+  	};
+  	const shutdown = () => {
+  		stopped = true;
+  		clear();
+  	};
+  	return {
+  		ensure(visibleOpcodes) {
+  			const api = host.gui?.blockEditors;
+  			const definitions = fixedInputEditors.filter((definition) => definition.opcodes.every((opcode) => visibleOpcodes.includes(opcode)));
+  			const key = definitions.map((definition) => definition.editorId).join(",");
+  			if (stopped || api === active && membership === key) return;
+  			clear();
+  			if (api?.apiVersion !== 1 || typeof api.registerFixedInputEditor !== "function" || !definitions.length) return;
+  			try {
+  				for (const definition of definitions) {
+  					const remove = api.registerFixedInputEditor.call(api, definition);
+  					if (typeof remove !== "function") throw new TypeError("Invalid fixed input cleanup.");
+  					removers.push(remove);
+  				}
+  				active = api;
+  				membership = key;
+  				host.vm?.runtime?.on?.("RUNTIME_DISPOSED", shutdown);
+  			} catch (error) {
+  				clear();
+  				throw error;
+  			}
+  		},
+  		dispose: shutdown
+  	};
+  }
   var block_definitions_default = {
   	extensionName: "TurboWarp-HTTP-Server",
   	blocks: [
@@ -731,6 +1058,7 @@
   ]);
   var TurboWarpHttpServerExtension = class {
   	constructor() {
+  		this.fixedInputs = fixedInputRegistration(typeof Scratch === "undefined" ? void 0 : Scratch);
   		this.serverUrl = DEFAULT_SERVER_URL;
   		this.socket = null;
   		this.lastReceivedMessage = "";
@@ -741,7 +1069,11 @@
   		this.requestContexts = /* @__PURE__ */ new Map();
   		this.currentRequestContextId = "";
   	}
+  	dispose() {
+  		this.fixedInputs.dispose();
+  	}
   	getInfo() {
+  		this.fixedInputs.ensure(blockDefinitions.map((block) => `${extensionConfig.id}_${block.opcode}`));
   		return {
   			id: extensionConfig.id,
   			name: Scratch.translate(block_definitions_default.extensionName),

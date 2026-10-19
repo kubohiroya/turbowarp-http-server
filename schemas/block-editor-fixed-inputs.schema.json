@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kubohiroya.github.io/turbowarp-http-server/schemas/block-editor-fixed-inputs.schema.json",
+  "$defs": {
+    "changeHandlerVariable": {
+      "type": "object",
+      "properties": {
+        "AMOUNT": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "AMOUNT"
+      ],
+      "additionalProperties": true
+    },
+    "setHttpStatus": {
+      "type": "object",
+      "properties": {
+        "STATUS": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "STATUS"
+      ],
+      "additionalProperties": true
+    },
+    "respondWithNamedBody": {
+      "type": "object",
+      "properties": {
+        "KIND": {
+          "type": "string",
+          "enum": [
+            "structured",
+            "document",
+            "binary",
+            "asset"
+          ]
+        },
+        "SCOPE": {
+          "type": "string",
+          "enum": [
+            "target",
+            "project"
+          ]
+        },
+        "REPRESENTATION": {
+          "type": "string",
+          "enum": [
+            "json",
+            "yaml",
+            "html",
+            "markdown",
+            "raw"
+          ]
+        },
+        "MAX_BYTES": {
+          "type": "number",
+          "minimum": 1,
+          "exclusiveMaximum": 9007199254740992
+        }
+      },
+      "required": [
+        "KIND",
+        "SCOPE",
+        "REPRESENTATION",
+        "MAX_BYTES"
+      ],
+      "additionalProperties": true
+    },
+    "markdownHeading": {
+      "type": "object",
+      "properties": {
+        "LEVEL": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "LEVEL"
+      ],
+      "additionalProperties": true
+    }
+  }
+}
