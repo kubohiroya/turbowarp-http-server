@@ -1,0 +1,607 @@
+[
+  {
+    "id": "native-default",
+    "values": {},
+    "getInfo": {
+      "id": "kubohiroyaturbowarphttpserver",
+      "name": "TurboWarp-HTTP-Server",
+      "docsURI": "https://kubohiroya.github.io/turbowarp-http-server/",
+      "blockIconURI": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMDAvc3ZnIiB2aWV3Qm94PSIwIDAgNDggNDgiPjxyZWN0IHg9IjYiIHk9IjEwIiB3aWR0aD0iMzYiIGhlaWdodD0iMjgiIHJ4PSI0IiBmaWxsPSIjMjU2M0VCIi8+PHBhdGggZD0iTTEyIDE4aDI0TTExIDI0aDE0TTExIDMwaDIwIiBzdHJva2U9IiNGRkYiIHN0cm9rZS13aWR0aD0iMyIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGNpcmNsZSBjeD0iMzQiIGN5PSIzMCIgcj0iMyIgZmlsbD0iIzIyQzU1RSIvPjwvc3ZnPg==",
+      "blocks": [
+        {
+          "opcode": "setServerUrl",
+          "blockType": "command",
+          "text": "set HTTP bridge URL to [URL]",
+          "arguments": {
+            "URL": {
+              "type": "string",
+              "defaultValue": "ws://127.0.0.1:8787/ws"
+            }
+          }
+        },
+        {
+          "opcode": "connect",
+          "blockType": "command",
+          "text": "connect to HTTP bridge",
+          "arguments": {}
+        },
+        {
+          "opcode": "disconnect",
+          "blockType": "command",
+          "text": "disconnect from HTTP bridge",
+          "arguments": {}
+        },
+        {
+          "opcode": "isConnected",
+          "blockType": "Boolean",
+          "text": "HTTP bridge connected?",
+          "arguments": {}
+        },
+        {
+          "opcode": "sendText",
+          "blockType": "command",
+          "text": "send [MESSAGE] to HTTP bridge",
+          "arguments": {
+            "MESSAGE": {
+              "type": "string",
+              "defaultValue": "{\"type\":\"ping\"}"
+            }
+          }
+        },
+        {
+          "opcode": "lastMessage",
+          "blockType": "reporter",
+          "text": "last HTTP bridge message",
+          "arguments": {}
+        },
+        {
+          "opcode": "whenHttpRequestReceived",
+          "blockType": "hat",
+          "text": "when HTTP request received",
+          "arguments": {}
+        },
+        {
+          "opcode": "useHttpRequest",
+          "blockType": "command",
+          "text": "use HTTP request [ID]",
+          "arguments": {
+            "ID": {
+              "type": "string",
+              "defaultValue": "req-1"
+            }
+          }
+        },
+        {
+          "opcode": "currentRequestId",
+          "blockType": "reporter",
+          "text": "current request ID",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentHttpMethod",
+          "blockType": "reporter",
+          "text": "current HTTP method",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentRequestPath",
+          "blockType": "reporter",
+          "text": "current request path",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentRequestUrl",
+          "blockType": "reporter",
+          "text": "current request URL",
+          "arguments": {}
+        },
+        {
+          "opcode": "requestHeader",
+          "blockType": "reporter",
+          "text": "request header [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "accept"
+            }
+          }
+        },
+        {
+          "opcode": "queryParameter",
+          "blockType": "reporter",
+          "text": "query parameter [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "q"
+            }
+          }
+        },
+        {
+          "opcode": "pathParameter",
+          "blockType": "reporter",
+          "text": "path parameter [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "id"
+            }
+          }
+        },
+        {
+          "opcode": "currentRequestBody",
+          "blockType": "reporter",
+          "text": "current request body",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentRequestContentType",
+          "blockType": "reporter",
+          "text": "current request content type",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentRequestClientAddress",
+          "blockType": "reporter",
+          "text": "current request client address",
+          "arguments": {}
+        },
+        {
+          "opcode": "setHandlerVariable",
+          "blockType": "command",
+          "text": "set handler variable [NAME] to [VALUE]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "value"
+            },
+            "VALUE": {
+              "type": "string",
+              "defaultValue": "0"
+            }
+          }
+        },
+        {
+          "opcode": "changeHandlerVariable",
+          "blockType": "command",
+          "text": "change handler variable [NAME] by [AMOUNT]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "value"
+            },
+            "AMOUNT": {
+              "type": "number",
+              "defaultValue": 1
+            }
+          }
+        },
+        {
+          "opcode": "handlerVariable",
+          "blockType": "reporter",
+          "text": "handler variable [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "value"
+            }
+          }
+        },
+        {
+          "opcode": "handlerVariableExists",
+          "blockType": "Boolean",
+          "text": "handler variable [NAME] exists?",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "value"
+            }
+          }
+        },
+        {
+          "opcode": "deleteHandlerVariable",
+          "blockType": "command",
+          "text": "delete handler variable [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "value"
+            }
+          }
+        },
+        {
+          "opcode": "clearHandlerVariables",
+          "blockType": "command",
+          "text": "delete all handler variables",
+          "arguments": {}
+        },
+        {
+          "opcode": "listHandlerVariables",
+          "blockType": "reporter",
+          "text": "active handler variables",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentAuthType",
+          "blockType": "reporter",
+          "text": "current auth type",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentAuthenticatedUser",
+          "blockType": "reporter",
+          "text": "current authenticated user",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentAuthProvider",
+          "blockType": "reporter",
+          "text": "current auth provider",
+          "arguments": {}
+        },
+        {
+          "opcode": "currentAuthProfileJson",
+          "blockType": "reporter",
+          "text": "current auth profile JSON",
+          "arguments": {}
+        },
+        {
+          "opcode": "authProfileField",
+          "blockType": "reporter",
+          "text": "auth profile field [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "email"
+            }
+          }
+        },
+        {
+          "opcode": "currentResponseStatus",
+          "blockType": "reporter",
+          "text": "current response status",
+          "arguments": {}
+        },
+        {
+          "opcode": "setHttpStatus",
+          "blockType": "command",
+          "text": "set HTTP status [STATUS]",
+          "arguments": {
+            "STATUS": {
+              "type": "number",
+              "defaultValue": 200
+            }
+          }
+        },
+        {
+          "opcode": "setResponseHeader",
+          "blockType": "command",
+          "text": "set response header [NAME] to [VALUE]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "content-type"
+            },
+            "VALUE": {
+              "type": "string",
+              "defaultValue": "text/plain; charset=utf-8"
+            }
+          }
+        },
+        {
+          "opcode": "removeResponseHeader",
+          "blockType": "command",
+          "text": "remove response header [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "content-type"
+            }
+          }
+        },
+        {
+          "opcode": "responseHeader",
+          "blockType": "reporter",
+          "text": "response header [NAME]",
+          "arguments": {
+            "NAME": {
+              "type": "string",
+              "defaultValue": "content-type"
+            }
+          }
+        },
+        {
+          "opcode": "setResponseBody",
+          "blockType": "command",
+          "text": "set response body [BODY]",
+          "arguments": {
+            "BODY": {
+              "type": "string",
+              "defaultValue": "Hello"
+            }
+          }
+        },
+        {
+          "opcode": "sendResponse",
+          "blockType": "command",
+          "text": "send response [BODY]",
+          "arguments": {
+            "BODY": {
+              "type": "string",
+              "defaultValue": "Hello"
+            }
+          }
+        },
+        {
+          "opcode": "respondWithText",
+          "blockType": "command",
+          "text": "respond with text [BODY]",
+          "arguments": {
+            "BODY": {
+              "type": "string",
+              "defaultValue": "Hello"
+            }
+          }
+        },
+        {
+          "opcode": "respondWithHtml",
+          "blockType": "command",
+          "text": "respond with HTML [BODY]",
+          "arguments": {
+            "BODY": {
+              "type": "string",
+              "defaultValue": "<p>Hello</p>"
+            }
+          }
+        },
+        {
+          "opcode": "respondWithJson",
+          "blockType": "command",
+          "text": "respond with JSON [BODY]",
+          "arguments": {
+            "BODY": {
+              "type": "string",
+              "defaultValue": "{\"ok\":true}"
+            }
+          }
+        },
+        {
+          "opcode": "respondWithNamedBody",
+          "blockType": "command",
+          "text": "respond with named [NAMESPACE] [NAME] kind [KIND] scope [SCOPE] target [TARGET_ID] as [REPRESENTATION] max bytes [MAX_BYTES]",
+          "arguments": {
+            "NAMESPACE": {
+              "type": "string",
+              "defaultValue": "asset"
+            },
+            "NAME": {
+              "type": "string",
+              "defaultValue": "avatar"
+            },
+            "KIND": {
+              "type": "string",
+              "defaultValue": "asset"
+            },
+            "SCOPE": {
+              "type": "string",
+              "defaultValue": "project"
+            },
+            "TARGET_ID": {
+              "type": "string",
+              "defaultValue": "Stage:1"
+            },
+            "REPRESENTATION": {
+              "type": "string",
+              "defaultValue": "raw"
+            },
+            "MAX_BYTES": {
+              "type": "number",
+              "defaultValue": 10485760
+            }
+          }
+        },
+        {
+          "opcode": "recordHttpLog",
+          "blockType": "command",
+          "text": "record HTTP log [ENTRY]",
+          "arguments": {
+            "ENTRY": {
+              "type": "string",
+              "defaultValue": "{\"method\":\"GET\",\"path\":\"/\",\"status\":200}"
+            }
+          }
+        },
+        {
+          "opcode": "clearHttpLogs",
+          "blockType": "command",
+          "text": "clear HTTP logs",
+          "arguments": {}
+        },
+        {
+          "opcode": "httpLogViewerHtml",
+          "blockType": "reporter",
+          "text": "HTTP log viewer HTML",
+          "arguments": {}
+        },
+        {
+          "opcode": "httpLogViewerHtmlFromJson",
+          "blockType": "reporter",
+          "text": "HTTP log viewer HTML from [LOGS]",
+          "arguments": {
+            "LOGS": {
+              "type": "string",
+              "defaultValue": "[{\"method\":\"GET\",\"path\":\"/\",\"status\":200}]"
+            }
+          }
+        },
+        {
+          "opcode": "newMarkdownDocument",
+          "blockType": "reporter",
+          "text": "new markdown document",
+          "arguments": {}
+        },
+        {
+          "opcode": "markdownHeading",
+          "blockType": "reporter",
+          "text": "markdown [DOC] with heading level [LEVEL] [TEXT]",
+          "arguments": {
+            "DOC": {
+              "type": "string",
+              "defaultValue": "md:1"
+            },
+            "LEVEL": {
+              "type": "number",
+              "defaultValue": 1
+            },
+            "TEXT": {
+              "type": "string",
+              "defaultValue": "Title"
+            }
+          }
+        },
+        {
+          "opcode": "markdownParagraph",
+          "blockType": "reporter",
+          "text": "markdown [DOC] with paragraph [TEXT]",
+          "arguments": {
+            "DOC": {
+              "type": "string",
+              "defaultValue": "md:1"
+            },
+            "TEXT": {
+              "type": "string",
+              "defaultValue": "Hello"
+            }
+          }
+        },
+        {
+          "opcode": "markdownBullet",
+          "blockType": "reporter",
+          "text": "markdown [DOC] with bullet [TEXT]",
+          "arguments": {
+            "DOC": {
+              "type": "string",
+              "defaultValue": "md:1"
+            },
+            "TEXT": {
+              "type": "string",
+              "defaultValue": "Item"
+            }
+          }
+        },
+        {
+          "opcode": "markdownCodeBlock",
+          "blockType": "reporter",
+          "text": "markdown [DOC] with code [CODE] language [LANG]",
+          "arguments": {
+            "DOC": {
+              "type": "string",
+              "defaultValue": "md:1"
+            },
+            "CODE": {
+              "type": "string",
+              "defaultValue": "console.log('hello')"
+            },
+            "LANG": {
+              "type": "string",
+              "defaultValue": "js"
+            }
+          }
+        },
+        {
+          "opcode": "renderMarkdown",
+          "blockType": "reporter",
+          "text": "render markdown [DOC]",
+          "arguments": {
+            "DOC": {
+              "type": "string",
+              "defaultValue": "md:1"
+            }
+          }
+        },
+        {
+          "opcode": "newHtmlElement",
+          "blockType": "reporter",
+          "text": "new HTML element [TAG]",
+          "arguments": {
+            "TAG": {
+              "type": "string",
+              "defaultValue": "div"
+            }
+          }
+        },
+        {
+          "opcode": "htmlText",
+          "blockType": "reporter",
+          "text": "HTML text [TEXT]",
+          "arguments": {
+            "TEXT": {
+              "type": "string",
+              "defaultValue": "Hello"
+            }
+          }
+        },
+        {
+          "opcode": "htmlSetAttribute",
+          "blockType": "reporter",
+          "text": "HTML [NODE] with attribute [NAME] [VALUE]",
+          "arguments": {
+            "NODE": {
+              "type": "string",
+              "defaultValue": "html:1"
+            },
+            "NAME": {
+              "type": "string",
+              "defaultValue": "class"
+            },
+            "VALUE": {
+              "type": "string",
+              "defaultValue": "content"
+            }
+          }
+        },
+        {
+          "opcode": "htmlAppendChild",
+          "blockType": "reporter",
+          "text": "HTML [PARENT] with child [CHILD]",
+          "arguments": {
+            "PARENT": {
+              "type": "string",
+              "defaultValue": "html:1"
+            },
+            "CHILD": {
+              "type": "string",
+              "defaultValue": "html:2"
+            }
+          }
+        },
+        {
+          "opcode": "renderHtml",
+          "blockType": "reporter",
+          "text": "render HTML [NODE]",
+          "arguments": {
+            "NODE": {
+              "type": "string",
+              "defaultValue": "html:1"
+            }
+          }
+        },
+        {
+          "opcode": "renderHtmlDocument",
+          "blockType": "reporter",
+          "text": "render HTML document title [TITLE] body [BODY]",
+          "arguments": {
+            "TITLE": {
+              "type": "string",
+              "defaultValue": "Page"
+            },
+            "BODY": {
+              "type": "string",
+              "defaultValue": "html:1"
+            }
+          }
+        }
+      ]
+    }
+  }
+]

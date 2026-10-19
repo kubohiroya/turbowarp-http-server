@@ -318,7 +318,7 @@ end
 レビューした exact version をインストールします。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-http-server@0.2.0
+pnpm add --save-exact @kubohiroya/turbowarp-http-server@0.2.1
 ```
 
 standalone bundle は次の場所から読み込めます。
@@ -330,7 +330,7 @@ node_modules/@kubohiroya/turbowarp-http-server/dist/turbowarp-http-server.js
 version 固定の CDN URL は次の形式です。
 
 ```text
-https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-http-server@0.2.0/dist/turbowarp-http-server.js
+https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-http-server@0.2.1/dist/turbowarp-http-server.js
 ```
 
 ## 開発
@@ -358,3 +358,5 @@ pnpm check
 ## ライセンス
 
 [Mozilla Public License 2.0](LICENSE) (SPDX: `MPL-2.0`)。
+
+固定入力の編集範囲・互換性・切戻しについては [固定入力の編集](docs/fixed-input-editors.ja.md) を参照してください。
