@@ -1,16 +1,14 @@
 allowBuilds:
-  "@kubohiroya/turbowarp-extension-data-editor@https://codeload.github.com/kubohiroya/turbowarp-extension-data-editor/tar.gz/485f0e550e622235624b5e9176820161aeeba252": true
   '@firebase/util': false
   esbuild: false
   protobufjs: false
   re2: true
   workerd: true
 minimumReleaseAgeExclude:
-  - '@kubohiroya/vite-plugin-turbowarp-extension@0.1.0 || 0.4.0'
-  - '@kubohiroya/turbowarp-named-data@0.1.0'
   - '@cloudflare/workers-types@5.20260919.1'
-  - '@kubohiroya/turbowarp-named-data@0.2.0'
-  - '@kubohiroya/turbowarp-extension-manifest@0.3.0'
-  - '@kubohiroya/turbowarp-named-data@0.3.0'
   - miniflare@5.20260918.0-alpha
   - wrangler@4.135.0
+  - '@kubohiroya/turbowarp-extension-data-editor@0.2.1'
+  - '@kubohiroya/turbowarp-extension-manifest@0.3.2'
+  - '@kubohiroya/turbowarp-named-data@0.3.1'
+  - '@kubohiroya/vite-plugin-turbowarp-extension@0.6.1'
