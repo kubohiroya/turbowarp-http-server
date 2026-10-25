@@ -27,6 +27,7 @@
     "turbowarp-http-server": "dist/cli.js"
   },
   "files": [
+    "assets/",
     "dist/",
     "docs/",
     "examples/",
