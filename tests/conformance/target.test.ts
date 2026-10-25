@@ -9,6 +9,7 @@ import {compileDeployIrV2, type DeployIrV2} from '../../src/compiler/index.js';
 const execFileAsync = promisify(execFile);
 
 describe('conformance target layer', () => {
+  // Two tsc subprocesses need more than Vitest's default 5 seconds on CI runners.
   it('runs every registered target matrix entry deterministically and typechecks its output', async () => {
     const matrix = JSON.parse(
       await readFile(resolve('tests/fixtures/conformance/target/matrix.json'), 'utf8')
@@ -36,7 +37,7 @@ describe('conformance target layer', () => {
         expect(first.files['firestore.rules']).toContain('allow read, write: if false');
       }
     }
-  });
+  }, 30_000);
 
   it('rejects secret config and keeps authentication capability target-specific', () => {
     for (const target of ['cloudflare-workers', 'firebase-functions']) {
