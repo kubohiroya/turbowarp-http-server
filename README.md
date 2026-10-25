@@ -1,5 +1,7 @@
 # TurboWarp-HTTP-Server
 
+<img src="assets/block-icon.svg" alt="" width="48" height="48">
+
 [English](README.md) | [日本語](README.ja.md)
 
 A companion package with both a CLI HTTP bridge server and a TurboWarp extension that connects Scratch-style block programs to that server over WebSocket.
