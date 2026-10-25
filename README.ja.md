@@ -2,7 +2,7 @@
 
 <img src="assets/block-icon.svg" alt="" width="48" height="48">
 
-[English](README.md) | [日本語](README.ja.md)
+[English](README.md) | 日本語
 
 CLI で起動する HTTP ブリッジサーバと、そのサーバへ WebSocket 接続する TurboWarp 機能拡張を同じ package で提供します。
 
