@@ -25,16 +25,16 @@ importers:
         specifier: ^9.39.5
         version: 9.39.5
       '@kubohiroya/turbowarp-extension-data-editor':
-        specifier: 0.2.1
+        specifier: "^0.2.1"
         version: 0.2.1(react@18.3.1)
       '@kubohiroya/turbowarp-extension-manifest':
-        specifier: 0.3.2
+        specifier: "^0.3.2"
         version: 0.3.2
       '@kubohiroya/turbowarp-named-data':
-        specifier: 0.3.1
+        specifier: "^0.3.1"
         version: 0.3.1
       '@kubohiroya/vite-plugin-turbowarp-extension':
-        specifier: 0.6.1
+        specifier: "^0.6.1"
         version: 0.6.1(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
       '@types/node':
         specifier: ^24.13.3
