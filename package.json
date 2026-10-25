@@ -89,7 +89,7 @@
     "vite": "^8.2.2",
     "vitest": "^4.1.10",
     "wrangler": "4.135.0",
-    "@kubohiroya/turbowarp-extension-data-editor": "^0.2.1"
+    "@kubohiroya/turbowarp-extension-data-editor": "^0.3.3"
   },
   "gitHead": "43f179cbde9bc0f6b734a15e13eeb4495fc6e7b8",
   "x-turbowarp-source": {
