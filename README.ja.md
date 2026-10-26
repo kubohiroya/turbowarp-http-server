@@ -17,7 +17,7 @@ CLI で起動する HTTP ブリッジサーバと、そのサーバへ WebSocket
 ## 要件と安全性
 
 - カスタム拡張機能を有効化した TurboWarp Desktop、TurboWarp Web、または TurboWarp Packager。
-- CLI ブリッジサーバを動かすための Node.js 22 以上。
+- CLI ブリッジサーバを動かすための Node.js 24 以上。
 - この拡張機能は incoming HTTP request で TurboWarp の hat thread を起動するため、unsandboxed mode が必要です。
 
 ## インストール
@@ -337,9 +337,10 @@ https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-http-server@0.3.0/dist/turbow
 
 ## 開発
 
-`packageManager` で宣言された pnpm と Node.js 22 以上を使います。
+`packageManager` で宣言された pnpm と Node.js 24 以上を使います。
 
 ```bash
+npm install --global corepack@latest
 corepack enable
 pnpm install --frozen-lockfile
 pnpm check

@@ -119,7 +119,9 @@ const examples: Example[] = [
 ];
 
 for (const example of examples) {
-  const child = spawn('pnpm', ['exec', 'tsx', example.path], {
+  // Run tsx in this process's Node directly: a package-manager wrapper does not always forward
+  // SIGTERM, which leaves the example server running and the check waiting on its pipes.
+  const child = spawn(process.execPath, ['--import', 'tsx', example.path], {
     env: {...process.env, PORT: String(example.port)},
     stdio: ['ignore', 'pipe', 'pipe']
   });
