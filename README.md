@@ -17,7 +17,7 @@ A companion package with both a CLI HTTP bridge server and a TurboWarp extension
 ## Requirements and safety
 
 - TurboWarp Desktop, TurboWarp Web, or TurboWarp Packager with custom extensions enabled.
-- Node.js 22 or newer for the CLI bridge server.
+- Node.js 24 or newer for the CLI bridge server.
 - The extension requires unsandboxed mode so incoming HTTP requests can start TurboWarp hat threads.
 
 ## Installation
@@ -908,9 +908,10 @@ Renders a full HTML document from an HTML body node handle.
 
 ## Development
 
-Use Node.js 22 or newer and the pnpm version declared by `packageManager`.
+Use Node.js 24 or newer and the pnpm version declared by `packageManager`.
 
 ```bash
+npm install --global corepack@latest
 corepack enable
 pnpm install --frozen-lockfile
 pnpm check
