@@ -1,0 +1,47 @@
+name: Publish verified release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  publish-existing:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Install OIDC-capable npm
+        run: npm install --global npm@11.21.0
+      - name: Verify release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          node --input-type=module -e "import fs from 'node:fs'; const p = JSON.parse(fs.readFileSync('package.json')); if (p.name !== '@kubohiroya/turbowarp-http-server' || p.version !== '0.3.0') throw new Error('Main has advanced');"
+          gh release download v0.3.0 --repo kubohiroya/turbowarp-http-server --pattern kubohiroya-turbowarp-http-server-0.3.0.tgz
+          echo 'fe00e72f5b8b755c1aa527e712071780da8ba9eb  kubohiroya-turbowarp-http-server-0.3.0.tgz' | sha1sum --check
+          tar -xOf kubohiroya-turbowarp-http-server-0.3.0.tgz package/package.json > package-metadata.json
+          node --input-type=module -e "import fs from 'node:fs'; const p = JSON.parse(fs.readFileSync('package-metadata.json')); if (p.name !== '@kubohiroya/turbowarp-http-server' || p.version !== '0.3.0') throw new Error('Unexpected package');"
+      - name: Publish once with provenance and finalize tags
+        run: |
+          set -eu
+          npm view @kubohiroya/turbowarp-http-server@0.3.0 --json --prefer-online > published.json 2> registry-error.txt || {
+            node --input-type=module -e "import fs from 'node:fs'; const p = JSON.parse(fs.readFileSync('published.json')); if (p.error?.code !== 'E404') throw new Error('Registry lookup failed');"
+            npm publish ./kubohiroya-turbowarp-http-server-0.3.0.tgz --access public --provenance --tag latest --ignore-scripts
+          }
+          npm view @kubohiroya/turbowarp-http-server@0.3.0 dist.shasum --json --prefer-online > visible-hash.json 2>/dev/null || true
+          node --input-type=module -e "import fs from 'node:fs'; const t=fs.readFileSync('visible-hash.json','utf8').trim(); if(t){ const p=JSON.parse(t); if(!p.error && p!=='fe00e72f5b8b755c1aa527e712071780da8ba9eb') throw new Error('Published artifact differs'); if(p.error && p.error.code!=='E404') throw new Error('Registry lookup failed'); }"
+          node scripts/finalize-release-tags.ts @kubohiroya/turbowarp-http-server 0.3.0
+          npm view @kubohiroya/turbowarp-http-server@0.3.0 dist.shasum --json --prefer-online > published-hash.json
+          node --input-type=module -e "import fs from 'node:fs'; if (JSON.parse(fs.readFileSync('published-hash.json')) !== 'fe00e72f5b8b755c1aa527e712071780da8ba9eb') throw new Error('Published artifact differs');"
