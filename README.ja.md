@@ -8,6 +8,21 @@ CLI で起動する HTTP ブリッジサーバと、そのサーバへ WebSocket
 
 **ユーザーガイド:** [English](https://kubohiroya.github.io/turbowarp-http-server/)
 
+## 最小デモ
+
+[TurboWarp Editorで開く](https://turbowarp.org/editor?project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-http-server%2Fsamples%2Frespond-hello-http.sb3) · [SB3をダウンロード](https://kubohiroya.github.io/turbowarp-http-server/samples/respond-hello-http.sb3)
+
+repoをcloneし依存install後 `node dist/cli.js --host 127.0.0.1 --port 8787`。SB3の緑旗→C→Sでtrue。別ターミナルで `curl http://127.0.0.1:8787/hello` とすると `Hello from TurboWarp`。Xで切断しCLIをCtrl+Cで停止。再実行は緑旗から。bridge URLは非表示変数に保存し、公開SB3にはloopbackだけを使用。
+
+要件: Node.js 24以上とこのrepoのCLI bridge（依存hono/@hono/node-server/wsをinstall）。別端末へ公開せず127.0.0.1で起動。Pages自体は静的ホスティングでHTTP serverを動かしません。HTTPS Editorからws loopbackへのアクセスはブラウザのローカルネットワーク許可/混在コンテンツ規則に従います。必要ならローカルEditorまたは信頼済みwss bridgeを使用。
+
+未検証: 外部ホスト・TLS/wss設定・各ブラウザのローカルネットワーク許可・認証・本番公開は未検証。
+
+既知の制約: 検証した既存distでは `when HTTP request received` hat経路でhandlerが開始せず504となりました。このデモは緑旗の待機ループから `current request ID` をポーリングし、未処理リクエストに `respond with text` で返します。hat経路の修正・検証は本PRの対象外です。
+
+
+[編集・再生成手順](samples/README.md)
+
 ## できること
 
 - コマンドラインからローカル HTTP/WebSocket ブリッジサーバを起動できます。

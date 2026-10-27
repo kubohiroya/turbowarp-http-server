@@ -8,6 +8,17 @@ A companion package with both a CLI HTTP bridge server and a TurboWarp extension
 
 **User guide:** [English](https://kubohiroya.github.io/turbowarp-http-server/)
 
+## Minimal demo
+
+[TurboWarp Editor — open demo](https://turbowarp.org/editor?project_url=https%3A%2F%2Fkubohiroya.github.io%2Fturbowarp-http-server%2Fsamples%2Frespond-hello-http.sb3) · [SB3 download](https://kubohiroya.github.io/turbowarp-http-server/samples/respond-hello-http.sb3)
+
+Requires Node.js 24+ and this repository CLI bridge with dependencies installed. Run `node dist/cli.js --host 127.0.0.1 --port 8787`. Green flag resets without connecting; C connects, S reads state. `curl http://127.0.0.1:8787/hello` returns `Hello from TurboWarp`. X disconnects; Ctrl+C stops the CLI. Pages only hosts the project and does not run a server. HTTPS Editor to loopback ws depends on browser local-network/mixed-content policy; use a local Editor or trusted wss bridge if needed. External hosts, TLS/wss, cross-browser permissions, authentication and production hosting remain unverified.
+
+Known limitation: with the reviewed existing dist, the `when HTTP request received` hat did not start its handler and the request timed out (504). This demo polls `current request ID` in its green-flag wait loop and uses `respond with text` for pending requests. Repair and validation of the hat path are outside this PR.
+
+
+[Editable sources and rebuild instructions](samples/README.md)
+
 ## What it does
 
 - Starts a local HTTP/WebSocket bridge server from the command line.

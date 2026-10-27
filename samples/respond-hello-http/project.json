@@ -1,0 +1,576 @@
+{
+  "targets": [
+    {
+      "isStage": true,
+      "name": "Stage",
+      "variables": {
+        "sample-state": [
+          "status",
+          "Ready"
+        ],
+        "bridge-url": [
+          "bridge URL",
+          "ws://127.0.0.1:8787/ws"
+        ],
+        "connected": [
+          "connected?",
+          false
+        ],
+        "request-path": [
+          "last request",
+          "(none)"
+        ],
+        "response": [
+          "response",
+          "Hello from TurboWarp"
+        ]
+      },
+      "lists": {},
+      "broadcasts": {},
+      "blocks": {
+        "b1": {
+          "opcode": "kubohiroyaturbowarphttpserver_disconnect",
+          "next": "b2",
+          "parent": "b7",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b2": {
+          "opcode": "kubohiroyaturbowarphttpserver_setServerUrl",
+          "next": "b4",
+          "parent": "b1",
+          "inputs": {
+            "URL": [
+              3,
+              [
+                12,
+                "bridge URL",
+                "bridge-url"
+              ],
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b3": {
+          "opcode": "kubohiroyaturbowarphttpserver_isConnected",
+          "next": null,
+          "parent": "b4",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b4": {
+          "opcode": "data_setvariableto",
+          "next": "b5",
+          "parent": "b2",
+          "inputs": {
+            "VALUE": [
+              2,
+              "b3"
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "connected?",
+              "connected"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b5": {
+          "opcode": "data_setvariableto",
+          "next": "b6",
+          "parent": "b4",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                10,
+                "(none)"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "last request",
+              "request-path"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b6": {
+          "opcode": "data_setvariableto",
+          "next": "keep-running",
+          "parent": "b5",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                10,
+                "Ready"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "status",
+              "sample-state"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b7": {
+          "opcode": "event_whenflagclicked",
+          "next": "b1",
+          "parent": null,
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": true,
+          "x": 860,
+          "y": 90
+        },
+        "b8": {
+          "opcode": "kubohiroyaturbowarphttpserver_setServerUrl",
+          "next": "b9",
+          "parent": "b11",
+          "inputs": {
+            "URL": [
+              3,
+              [
+                12,
+                "bridge URL",
+                "bridge-url"
+              ],
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b9": {
+          "opcode": "kubohiroyaturbowarphttpserver_connect",
+          "next": "b10",
+          "parent": "b8",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b10": {
+          "opcode": "data_setvariableto",
+          "next": null,
+          "parent": "b9",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                10,
+                "Connecting; S reads state"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "status",
+              "sample-state"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b11": {
+          "opcode": "event_whenkeypressed",
+          "next": "b8",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "KEY_OPTION": [
+              "c",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 860,
+          "y": 150
+        },
+        "b12": {
+          "opcode": "kubohiroyaturbowarphttpserver_isConnected",
+          "next": null,
+          "parent": "b13",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b13": {
+          "opcode": "data_setvariableto",
+          "next": null,
+          "parent": "b14",
+          "inputs": {
+            "VALUE": [
+              2,
+              "b12"
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "connected?",
+              "connected"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b14": {
+          "opcode": "event_whenkeypressed",
+          "next": "b13",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "KEY_OPTION": [
+              "s",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 580,
+          "y": 210
+        },
+        "b16": {
+          "opcode": "kubohiroyaturbowarphttpserver_currentRequestPath",
+          "next": null,
+          "parent": "b17",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b17": {
+          "opcode": "data_setvariableto",
+          "next": "b18",
+          "parent": "has-request",
+          "inputs": {
+            "VALUE": [
+              2,
+              "b16"
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "last request",
+              "request-path"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b18": {
+          "opcode": "kubohiroyaturbowarphttpserver_respondWithText",
+          "next": null,
+          "parent": "b17",
+          "inputs": {
+            "BODY": [
+              3,
+              [
+                12,
+                "response",
+                "response"
+              ],
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b19": {
+          "opcode": "kubohiroyaturbowarphttpserver_disconnect",
+          "next": "b21",
+          "parent": "b23",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b20": {
+          "opcode": "kubohiroyaturbowarphttpserver_isConnected",
+          "next": null,
+          "parent": "b21",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "b21": {
+          "opcode": "data_setvariableto",
+          "next": "b22",
+          "parent": "b19",
+          "inputs": {
+            "VALUE": [
+              2,
+              "b20"
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "connected?",
+              "connected"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b22": {
+          "opcode": "data_setvariableto",
+          "next": "stop-all",
+          "parent": "b21",
+          "inputs": {
+            "VALUE": [
+              1,
+              [
+                10,
+                "Closed"
+              ]
+            ]
+          },
+          "fields": {
+            "VARIABLE": [
+              "status",
+              "sample-state"
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "b23": {
+          "opcode": "event_whenkeypressed",
+          "next": "b19",
+          "parent": null,
+          "inputs": {},
+          "fields": {
+            "KEY_OPTION": [
+              "x",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": true,
+          "x": 860,
+          "y": 330
+        },
+        "keep-running": {
+          "opcode": "control_forever",
+          "next": null,
+          "parent": "b6",
+          "inputs": {
+            "SUBSTACK": [
+              2,
+              "has-request"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "idle-wait": {
+          "opcode": "control_wait",
+          "next": null,
+          "parent": "has-request",
+          "inputs": {
+            "DURATION": [
+              1,
+              [
+                5,
+                "0.2"
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "stop-all": {
+          "opcode": "control_stop",
+          "next": null,
+          "parent": "b22",
+          "inputs": {},
+          "fields": {
+            "STOP_OPTION": [
+              "all",
+              null
+            ]
+          },
+          "shadow": false,
+          "topLevel": false
+        },
+        "has-request": {
+          "opcode": "control_if",
+          "next": "idle-wait",
+          "parent": "keep-running",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "not-empty"
+            ],
+            "SUBSTACK": [
+              2,
+              "b17"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "not-empty": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "has-request",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "request-empty"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "request-empty": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "not-empty",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "read-id"
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "read-id": {
+          "opcode": "kubohiroyaturbowarphttpserver_currentRequestId",
+          "next": null,
+          "parent": "request-empty",
+          "inputs": {},
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        }
+      },
+      "comments": {},
+      "currentCostume": 0,
+      "costumes": [
+        {
+          "name": "instructions",
+          "assetId": "",
+          "dataFormat": "svg",
+          "md5ext": "backdrop.svg",
+          "rotationCenterX": 240,
+          "rotationCenterY": 180
+        }
+      ],
+      "sounds": [],
+      "volume": 0,
+      "layerOrder": 0,
+      "tempo": 60,
+      "videoTransparency": 50,
+      "videoState": "off",
+      "textToSpeechLanguage": null
+    }
+  ],
+  "monitors": [
+    {
+      "id": "connected",
+      "mode": "default",
+      "opcode": "data_variable",
+      "params": {
+        "VARIABLE": "connected?"
+      },
+      "spriteName": null,
+      "value": false,
+      "width": 0,
+      "height": 0,
+      "x": 12,
+      "y": 190,
+      "visible": true,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "isDiscrete": true
+    },
+    {
+      "id": "request-path",
+      "mode": "default",
+      "opcode": "data_variable",
+      "params": {
+        "VARIABLE": "last request"
+      },
+      "spriteName": null,
+      "value": "(none)",
+      "width": 0,
+      "height": 0,
+      "x": 12,
+      "y": 218,
+      "visible": true,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "isDiscrete": true
+    },
+    {
+      "id": "response",
+      "mode": "default",
+      "opcode": "data_variable",
+      "params": {
+        "VARIABLE": "response"
+      },
+      "spriteName": null,
+      "value": "Hello from TurboWarp",
+      "width": 0,
+      "height": 0,
+      "x": 12,
+      "y": 246,
+      "visible": true,
+      "sliderMin": 0,
+      "sliderMax": 100,
+      "isDiscrete": true
+    }
+  ],
+  "extensions": [
+    "kubohiroyaturbowarphttpserver"
+  ],
+  "meta": {
+    "semver": "3.0.0",
+    "vm": "0.2.0",
+    "agent": "P3 minimal sample"
+  }
+}

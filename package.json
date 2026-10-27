@@ -60,7 +60,10 @@
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "start": "node dist/cli.js",
     "check:dist": "pnpm run build && node scripts/check-dist.ts",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run examples:check && pnpm run docs:check && pnpm run check:dist && pnpm run pack:check"
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run examples:check && pnpm run docs:check && pnpm run check:dist && pnpm run pack:check && pnpm run samples:check",
+    "samples:build": "node scripts/build-samples.mjs",
+    "samples:check": "node scripts/build-samples.mjs --check && node --test scripts/verify-samples.mjs",
+    "pages:build": "node scripts/prepare-pages.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
