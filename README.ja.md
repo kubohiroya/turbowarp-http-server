@@ -320,7 +320,7 @@ end
 レビューした exact version をインストールします。
 
 ```bash
-pnpm add --save-exact @kubohiroya/turbowarp-http-server@0.3.0
+pnpm add --save-exact @kubohiroya/turbowarp-http-server@0.4.0
 ```
 
 standalone bundle は次の場所から読み込めます。
@@ -332,7 +332,7 @@ node_modules/@kubohiroya/turbowarp-http-server/dist/turbowarp-http-server.js
 version 固定の CDN URL は次の形式です。
 
 ```text
-https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-http-server@0.3.0/dist/turbowarp-http-server.js
+https://cdn.jsdelivr.net/npm/@kubohiroya/turbowarp-http-server@0.4.0/dist/turbowarp-http-server.js
 ```
 
 ## 開発

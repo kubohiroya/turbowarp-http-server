@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-http-server",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A TurboWarp extension for connecting block programs to an HTTP bridge server.",
   "author": "Hiroya Kubo <hiroya@cuc.ac.jp>",
   "license": "MPL-2.0",
@@ -68,14 +68,14 @@
     "ws": "^8.18.3"
   },
   "peerDependencies": {
-    "@kubohiroya/turbowarp-named-data": "^0.5.0"
+    "@kubohiroya/turbowarp-named-data": "^0.6.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260919.1",
     "@eslint/js": "^9.39.5",
-    "@kubohiroya/turbowarp-extension-manifest": "^0.3.2",
-    "@kubohiroya/turbowarp-named-data": "^0.5.0",
-    "@kubohiroya/vite-plugin-turbowarp-extension": "^0.8.0",
+    "@kubohiroya/turbowarp-extension-manifest": "^0.4.0",
+    "@kubohiroya/turbowarp-named-data": "^0.6.0",
+    "@kubohiroya/vite-plugin-turbowarp-extension": "^0.9.0",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",
     "eslint": "^9.39.5",
@@ -89,11 +89,11 @@
     "vite": "^8.2.2",
     "vitest": "^4.1.10",
     "wrangler": "4.135.0",
-    "@kubohiroya/turbowarp-extension-data-editor": "^0.3.4"
+    "@kubohiroya/turbowarp-extension-data-editor": "^0.4.0"
   },
-  "gitHead": "c3accb55082f9a8fe07f2d85506542faebe76b53",
+  "gitHead": "a1bf89b8787f9270e591f43512b427ada69f85ef",
   "x-turbowarp-source": {
-    "revision": "c3accb55082f9a8fe07f2d85506542faebe76b53",
+    "revision": "a1bf89b8787f9270e591f43512b427ada69f85ef",
     "revisionRole": "base-commit",
     "sourceState": "local-release-overlay"
   }
