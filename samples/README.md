@@ -16,6 +16,9 @@ Node.js 24以上とこのrepoのCLI bridge（依存hono/@hono/node-server/wsをi
 
 自動検証は無音（browser `--mute-audio`）で実施し、音声再生・カメラ・外部サービスを自動起動しません。
 
+
+既知の制約: 検証した既存distでは `when HTTP request received` hat経路でhandlerが開始せず504となりました。このデモは緑旗の待機ループから `current request ID` をポーリングし、未処理リクエストに `respond with text` で返します。hat経路の修正・検証は本PRの対象外です。
+
 ## 編集と再生成
 
 `respond-hello-http/project.json` とSVGが編集元、`manifest.json` は配信/依存/確認条件です。Node.jsは`.nvmrc`を使用し `node scripts/build-samples.mjs`、`node scripts/build-samples.mjs --check`、`node --test scripts/verify-samples.mjs`、`node scripts/prepare-pages.mjs` で生成・検査します。ZIP日時/エントリー順は固定。SB3のJSは通常の拡張許可画面で非サンドボックス実行を選択します。

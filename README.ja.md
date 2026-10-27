@@ -18,6 +18,9 @@ repoをcloneし依存install後 `node dist/cli.js --host 127.0.0.1 --port 8787`�
 
 未検証: 外部ホスト・TLS/wss設定・各ブラウザのローカルネットワーク許可・認証・本番公開は未検証。
 
+既知の制約: 検証した既存distでは `when HTTP request received` hat経路でhandlerが開始せず504となりました。このデモは緑旗の待機ループから `current request ID` をポーリングし、未処理リクエストに `respond with text` で返します。hat経路の修正・検証は本PRの対象外です。
+
+
 [編集・再生成手順](samples/README.md)
 
 ## できること
