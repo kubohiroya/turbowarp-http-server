@@ -255,17 +255,6 @@
           "x": 580,
           "y": 210
         },
-        "b15": {
-          "opcode": "kubohiroyaturbowarphttpserver_whenHttpRequestReceived",
-          "next": "b17",
-          "parent": null,
-          "inputs": {},
-          "fields": {},
-          "shadow": false,
-          "topLevel": true,
-          "x": 20,
-          "y": 800
-        },
         "b16": {
           "opcode": "kubohiroyaturbowarphttpserver_currentRequestPath",
           "next": null,
@@ -278,7 +267,7 @@
         "b17": {
           "opcode": "data_setvariableto",
           "next": "b18",
-          "parent": "b15",
+          "parent": "has-request",
           "inputs": {
             "VALUE": [
               2,
@@ -398,7 +387,7 @@
           "inputs": {
             "SUBSTACK": [
               2,
-              "idle-wait"
+              "has-request"
             ]
           },
           "fields": {},
@@ -408,7 +397,7 @@
         "idle-wait": {
           "opcode": "control_wait",
           "next": null,
-          "parent": "keep-running",
+          "parent": "has-request",
           "inputs": {
             "DURATION": [
               1,
@@ -433,6 +422,68 @@
               null
             ]
           },
+          "shadow": false,
+          "topLevel": false
+        },
+        "has-request": {
+          "opcode": "control_if",
+          "next": "idle-wait",
+          "parent": "keep-running",
+          "inputs": {
+            "CONDITION": [
+              2,
+              "not-empty"
+            ],
+            "SUBSTACK": [
+              2,
+              "b17"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "not-empty": {
+          "opcode": "operator_not",
+          "next": null,
+          "parent": "has-request",
+          "inputs": {
+            "OPERAND": [
+              2,
+              "request-empty"
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "request-empty": {
+          "opcode": "operator_equals",
+          "next": null,
+          "parent": "not-empty",
+          "inputs": {
+            "OPERAND1": [
+              2,
+              "read-id"
+            ],
+            "OPERAND2": [
+              1,
+              [
+                10,
+                ""
+              ]
+            ]
+          },
+          "fields": {},
+          "shadow": false,
+          "topLevel": false
+        },
+        "read-id": {
+          "opcode": "kubohiroyaturbowarphttpserver_currentRequestId",
+          "next": null,
+          "parent": "request-empty",
+          "inputs": {},
+          "fields": {},
           "shadow": false,
           "topLevel": false
         }
