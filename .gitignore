@@ -15,3 +15,5 @@ docs/*.visual-check.*
 .claude/
 .playwright-mcp/
 .serena/
+
+_site/

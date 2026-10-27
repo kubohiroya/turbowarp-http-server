@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'samples/**'
+      - 'dist/**'
+      - 'src/block-definitions.json'
+      - 'scripts/build-samples.mjs'
+      - 'scripts/prepare-pages.mjs'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -26,9 +31,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/setup-node@v4
         with:
-          path: docs
+          node-version-file: .nvmrc
+      - name: Verify samples and prepare site
+        run: node scripts/prepare-pages.mjs
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
