@@ -66,6 +66,23 @@ ${bundle}
 })();`;
 }
 
+
+// Keep declarative metadata visible before any sample-specific executable wrapper.
+export function withSecurityMetadata(bundle, extension, code = bundle) {
+  assert.equal(typeof extension.unsandboxed, 'boolean', 'Declare the sandbox requirement explicitly');
+  const header = bundle.slice(0, 16384).match(/^\s*(?:(?:\/\/[^\n]*(?:\n|$))|(?:\/\*[\s\S]*?\*\/)\s*)*/)[0];
+  const fields = [...header.matchAll(/^\/\/\s*([^:\r\n]+):\s*([^\r\n]*)/gm)];
+  const field = name => fields.find(match => match[1].trim().toLowerCase() === name)?.[2].trim();
+  assert.equal(field('id'), extension.id, 'Leading bundle ID must match the manifest');
+  assert.ok(field('name'), 'Bundle must declare its name before executable code');
+  const requirement = extension.unsandboxed ? 'required' : 'not-needed';
+  for (const match of fields.filter(match => match[1].trim().toLowerCase() === 'unsandboxed')) {
+    assert.equal(match[2].trim().toLowerCase(), requirement, 'Conflicting sandbox declaration');
+  }
+  const metadata = header.replace(/^\/\/\s*Unsandboxed:[^\n]*(?:\n|$)/gim, '').trimEnd();
+  return `${metadata}\n// Unsandboxed: ${requirement}\n\n${code}`;
+}
+
 export async function buildSamples({check = false} = {}) {
   const {extension, baseURL, samples} = manifest;
   const base = new URL(baseURL);
@@ -123,7 +140,7 @@ export async function buildSamples({check = false} = {}) {
     // TurboWarp offers the unsandboxed consent checkbox for embedded data URLs.
     // Arbitrary HTTPS extension URLs from projects are always loaded sandboxed.
     const extensionURL = extension.unsandboxed
-      ? `data:application/javascript;base64,${Buffer.from(withStartupFlags(bundle, extension.startupFlags ?? {})).toString('base64')}`
+      ? `data:application/javascript;base64,${Buffer.from(withSecurityMetadata(bundle, extension, withStartupFlags(bundle, extension.startupFlags ?? {}))).toString('base64')}`
       : new URL(extension.bundle, base).href;
     project.extensionURLs = {[extension.id]: extensionURL};
     for (const dep of dependencies) {
@@ -131,7 +148,7 @@ export async function buildSamples({check = false} = {}) {
       const source = await readFile(new URL(dep.bundle, root));
       assert.equal(createHash('sha256').update(source).digest('hex'), dep.sha256, 'Dependency checksum');
       assert.ok(source.toString().includes(`// ID: ${dep.id}\n`), 'Dependency bundle ID');
-      project.extensionURLs[dep.id] = `data:application/javascript;base64,${source.toString('base64')}`;
+      project.extensionURLs[dep.id] = `data:application/javascript;base64,${Buffer.from(withSecurityMetadata(source.toString(), dep)).toString('base64')}`;
     }
     entries.set('project.json', Buffer.from(`${JSON.stringify(project)}\n`));
     const output = new URL(`samples/${sample.name}.sb3`, root);
