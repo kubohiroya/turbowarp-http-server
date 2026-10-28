@@ -25,17 +25,17 @@ importers:
         specifier: ^9.39.5
         version: 9.39.5
       '@kubohiroya/turbowarp-extension-data-editor':
-        specifier: ^0.4.0
-        version: 0.4.0(react@18.3.1)
+        specifier: ^0.5.0
+        version: 0.5.0(react@18.3.1)
       '@kubohiroya/turbowarp-extension-manifest':
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.5.0
+        version: 0.5.0
       '@kubohiroya/turbowarp-named-data':
-        specifier: ^0.6.0
-        version: 0.6.0
+        specifier: ^0.7.0
+        version: 0.7.0
       '@kubohiroya/vite-plugin-turbowarp-extension':
-        specifier: ^0.9.0
-        version: 0.9.0(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
+        specifier: ^0.10.0
+        version: 0.10.0(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.5
@@ -967,8 +967,8 @@ packages:
   '@jsdevtools/ono@7.1.3':
     resolution: {integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg==}
 
-  '@kubohiroya/turbowarp-extension-data-editor@0.4.0':
-    resolution: {integrity: sha512-AijNYwf8LG+i0NLx48wYsKpObWRZ347BEtrsLv4PNIc20UItC4hs4yTwnGNd+ffGHIrSqcWUjt3ZJysFt/KzsQ==}
+  '@kubohiroya/turbowarp-extension-data-editor@0.5.0':
+    resolution: {integrity: sha512-MltTv+sDgmWXS9RDl8Ea1oPpISycTPq4h3hevZ6aVBkuFQB/2JiRekYK2CkIazj+L6w3egLV6HekDmP4vtVaUQ==}
     engines: {node: '>=24'}
     peerDependencies:
       react: ^16.14.0 || ^17 || ^18
@@ -979,16 +979,16 @@ packages:
       react-dom:
         optional: true
 
-  '@kubohiroya/turbowarp-extension-manifest@0.4.0':
-    resolution: {integrity: sha512-42Wv4Zu9K7kYKUFZX+jSeJsXztwL9XS1nPaTDWmwhyseaUAbaCjFLyH9Iu9S8B00Hi+5/s8pcbEmSDcDjq/XOQ==}
+  '@kubohiroya/turbowarp-extension-manifest@0.5.0':
+    resolution: {integrity: sha512-YD8fwGTwTC6oMinmVLRp5+x/6piKLTYNraKnsc+oEi/w6NFdePm1ocV8eHnBBMcqEO2usr2mI/0qnV66Ex35YA==}
     engines: {node: '>=24'}
 
-  '@kubohiroya/turbowarp-named-data@0.6.0':
-    resolution: {integrity: sha512-SsKA0F5tFisCmSJ0wnZ85Ll4pRiKSirkUPe90YFhTtY1uLPBQh7+44MO9uH29u8ZzwPuKYzgRa9EimVUXjw1Gw==}
+  '@kubohiroya/turbowarp-named-data@0.7.0':
+    resolution: {integrity: sha512-eUj57qTCKDWUguY0/OB3v97jb7NHcpFhfBxNwS0vyT/C79fiiVxCrXSsk8LEHp8l1p1PtMTricUmrqao1q7UZw==}
     engines: {node: '>=24'}
 
-  '@kubohiroya/vite-plugin-turbowarp-extension@0.9.0':
-    resolution: {integrity: sha512-RU1+s/xJ02rsuEdMvYMEcxiPpTF7eyiTFlodmF780rzC91cAiESPf4HiFqQCJix6zd+eNbu3SulI2piQK6C1Zw==}
+  '@kubohiroya/vite-plugin-turbowarp-extension@0.10.0':
+    resolution: {integrity: sha512-N/c1gsmOS9dozskUzmSLRwqVZzOLDGs44cOPBv2VdITR2v//TFQKlNw3jhBLVeyMfdlfAICwrpvC74xFgZxrNA==}
     engines: {node: '>=24'}
     peerDependencies:
       vite: '>=8.0.0'
@@ -4840,7 +4840,7 @@ snapshots:
 
   '@jsdevtools/ono@7.1.3': {}
 
-  '@kubohiroya/turbowarp-extension-data-editor@0.4.0(react@18.3.1)':
+  '@kubohiroya/turbowarp-extension-data-editor@0.5.0(react@18.3.1)':
     dependencies:
       '@rjsf/core': 5.24.13(@rjsf/utils@5.24.13(react@18.3.1))(react@18.3.1)
       '@rjsf/utils': 5.24.13(react@18.3.1)
@@ -4852,11 +4852,11 @@ snapshots:
     optionalDependencies:
       react: 18.3.1
 
-  '@kubohiroya/turbowarp-extension-manifest@0.4.0': {}
+  '@kubohiroya/turbowarp-extension-manifest@0.5.0': {}
 
-  '@kubohiroya/turbowarp-named-data@0.6.0': {}
+  '@kubohiroya/turbowarp-named-data@0.7.0': {}
 
-  '@kubohiroya/vite-plugin-turbowarp-extension@0.9.0(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))':
+  '@kubohiroya/vite-plugin-turbowarp-extension@0.10.0(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))':
     dependencies:
       acorn: 8.18.0
       vite: 8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1)
