@@ -1,6 +1,6 @@
-# Structured Data named values（設計案）
+# Structured Data named values（設計）
 
-`@kubohiroya/turbowarp-structured-data` 0.11の名前付きの値（target-local named data）を、Deploy IR v2でサーバー実行できるようにするための設計です。実装はこの設計の合意後に行います。現行の0.4.0向けの規則は[Structured Data lowering](structured-data-lowering.ja.md)にあり、実装と同時に置き換えます。
+`@kubohiroya/turbowarp-structured-data` 0.11の名前付きの値（target-local named data）を、Deploy IR v2でサーバー実行できるようにするための設計です。「決定事項」の6点は推奨案で合意済みで、実装は段階1から進めます。現行の0.4.0向けの規則は[Structured Data lowering](structured-data-lowering.ja.md)にあり、実装と同時に置き換えます。
 
 ## 現状
 
@@ -103,14 +103,14 @@ frontendには、Structured DataのCOMMAND blockを`StructuredDataLoweringContex
 
 14 codeすべてをHTTP 422の`IrRuntimeError`にします。responseにはcodeだけを入れ、名前、path、入力値は入れません（既存の規則と同じ）。段階1で新たに出るcodeは、`INVALID_NAME`、`DATA_NOT_FOUND`、`PARSE_LIMIT_EXCEEDED`です。
 
-## 決めること
+## 決定事項
 
-1. **0.4.0への対応をやめるか。**推奨：やめる。allowlistはoperation IDだけで引くため、`structuredData.get`など同じIDで引数の違う2つのsignatureを同時に持てません。両方を残すには、allowlistをpackageの版ごとに分ける必要があります。0.4.0をlockしたprojectは、registryで`TW2_MANIFEST_OPERATION_MISMATCH`になります。
-2. **版の固定方法。**推奨：`STRUCTURED_DATA_PACKAGE_VERSION`を、検証済みの版の一覧に置き換えます。lockは今と同じく正確な版を要求し、signatureの完全一致が契約の本体です。
-3. **JSONの解析。**推奨：段階1はcoreの中で完結させ、`JSON.parse`にcodecと同じ上限の数え方を足します。codecのJSON解析は、jsonc-parserで構文を確かめてから`JSON.parse`で値を作るので、厳密な`JSON.parse`と受け付ける構文は同じです。差は上限とerrorの分類だけで、これはparity fixtureで確かめます。
-4. **`set`のVALUEへの上限。**ブラウザはVALUEを`JSON.parse`するだけで、codecの上限を適用しません。推奨：段階1はブラウザに合わせて上限を設けず、structured-data側で両方に同じ上限を入れるかは別に決めます。
-5. **YAMLの実装（段階2）。**推奨：`@kubohiroya/turbowarp-yaml-json`のcodecを、YAMLのnodeを使うときだけgenerated packageの依存に加えます。codecは`TextEncoder`しか使わない純粋なJavaScriptで、`eval`も使いません。esbuildで最小化すると約116 KB（gzipで約36 KB）です。YAMLの細かな規則（`.inf`やaliasの拒否、keyの書き出し方）を再実装すると、ずれる危険が大きいためです。この場合、coreが`type {Hono}`しかimportしないという今の性質は、YAMLを使うprojectに限って崩れます。
-6. **schemaの実装（段階3）。**ブラウザのschema registryとbuilderの下書きはtargetごとにあり、projectの停止で消えます。サーバーではどちらもリクエストごとに持ちます。推奨：validatorは`@kubohiroya/turbowarp-named-functions`の`./composition`を依存に加えて使います。`enum`と`const`の比較が`JSON.stringify`によることや、最初のerrorだけを報告することなど、ブラウザと同じ癖を持たせるためです。
+1. **0.4.0への対応をやめる。**allowlistはoperation IDだけで引くため、`structuredData.get`など同じIDで引数の違う2つのsignatureを同時に持てません。両方を残すには、allowlistをpackageの版ごとに分ける必要があります。0.4.0をlockしたprojectは、registryで`TW2_MANIFEST_OPERATION_MISMATCH`になります。
+2. **版は検証済みの一覧で固定する。**`STRUCTURED_DATA_PACKAGE_VERSION`を、検証済みの版の一覧に置き換えます。lockは今と同じく正確な版を要求し、signatureの完全一致が契約の本体です。
+3. **JSONの解析はcoreの中で完結させる。**段階1では`JSON.parse`にcodecと同じ上限の数え方を足します。codecのJSON解析は、jsonc-parserで構文を確かめてから`JSON.parse`で値を作るので、厳密な`JSON.parse`と受け付ける構文は同じです。差は上限とerrorの分類だけで、これはparity fixtureで確かめます。
+4. **`set`のVALUEには上限を設けない。**ブラウザはVALUEを`JSON.parse`するだけで、codecの上限を適用しません。段階1はこれに合わせます。structured-data側で両方に同じ上限を入れるかは別に決めます。
+5. **YAML（段階2）はcodecを依存に加える。**`@kubohiroya/turbowarp-yaml-json`のcodecを、YAMLのnodeを使うときだけgenerated packageの依存に加えます。codecは`TextEncoder`しか使わない純粋なJavaScriptで、`eval`も使いません。esbuildで最小化すると約116 KB（gzipで約36 KB）です。YAMLの細かな規則（`.inf`やaliasの拒否、keyの書き出し方）を再実装すると、ずれる危険が大きいためです。この場合、coreが`type {Hono}`しかimportしないという今の性質は、YAMLを使うprojectに限って崩れます。
+6. **schema（段階3）はnamed-functionsのvalidatorを使う。**ブラウザのschema registryとbuilderの下書きはtargetごとにあり、projectの停止で消えます。サーバーではどちらもリクエストごとに持ちます。validatorは`@kubohiroya/turbowarp-named-functions`の`./composition`を依存に加えて使います。`enum`と`const`の比較が`JSON.stringify`によることや、最初のerrorだけを報告することなど、ブラウザと同じ癖を持たせるためです。
 
 ## 検証
 
