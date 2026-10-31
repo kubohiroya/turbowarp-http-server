@@ -273,12 +273,14 @@ describe('TurboWarp server subset frontend validation', () => {
       'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
     );
     const project = projectWithChain([
-      ['structured', 'kubohiroyastructureddata_normalizeJson'],
-      ['asset', 'kubohiroyaassetcache_isLoaded']
+      ['structured', 'kubohiroyastructureddata_parseJson'],
+      ['asset', 'kubohiroyaassetcache_isLoaded'],
+      // Structured Data 0.11 marks only the Document Data tree copy browser-only.
+      ['tree', 'kubohiroyastructureddata_copyDocumentTree']
     ]);
     const diagnostics = validateTurboWarpServerSubset(project, registry);
-    expect(codes(diagnostics)).toEqual(['TW2_UNSUPPORTED_OPERATION']);
-    expect(diagnostics[0]?.sourceRef?.blockId).toBe('asset');
+    expect(codes(diagnostics)).toEqual(['TW2_UNSUPPORTED_OPERATION', 'TW2_UNSUPPORTED_OPERATION']);
+    expect(diagnostics.map((diagnostic) => diagnostic.sourceRef?.blockId).sort()).toEqual(['asset', 'tree']);
   });
 
   it('rejects every locked Asset Cache browser opcode instead of guessing storage semantics', async () => {

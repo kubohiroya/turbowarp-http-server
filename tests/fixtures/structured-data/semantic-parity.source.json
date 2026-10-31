@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/kubohiroya/turbowarp-structured-data",
+  "commit": "6bbb908b5ee71a4debf19cf41fb3fbee7db7e660",
+  "path": "tests/fixtures/semantic-parity.json",
+  "sha256": "4ba109a07a488677a995acb7c438ecebd7c36dfe6861ab351b40d2060cc7772a",
+  "note": "Copied byte for byte. Commit 6bbb908 is used instead of the v0.11.0-rc.1 tag because it records manifestFormatVersion 2, the version the published 0.11.0-rc.1 manifest carries."
+}

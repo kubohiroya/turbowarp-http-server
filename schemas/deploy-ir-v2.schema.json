@@ -455,6 +455,51 @@
             "loopId": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
             "sourceRef": {"$ref": "#/$defs/sourceRef"}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "name"],
+          "properties": {
+            "kind": {"const": "named-value"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "name": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "name"],
+          "properties": {
+            "kind": {"const": "named-value-exists"},
+            "valueType": {"const": "boolean"},
+            "name": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "format", "text"],
+          "properties": {
+            "kind": {"const": "structured-decode"},
+            "valueType": {"$ref": "#/$defs/jsonValueType"},
+            "format": {"const": "json"},
+            "text": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "valueType", "value"],
+          "properties": {
+            "kind": {"const": "json-scalar-text"},
+            "valueType": {"const": "string"},
+            "value": {"$ref": "#/$defs/expression"},
+            "sourceRef": {"$ref": "#/$defs/sourceRef"}
+          }
         }
       ]
     },
@@ -514,6 +559,8 @@
         {"$ref": "#/$defs/ifStatement"},
         {"$ref": "#/$defs/boundedLoop"},
         {"$ref": "#/$defs/jsonForEach"},
+        {"$ref": "#/$defs/namedValueSet"},
+        {"$ref": "#/$defs/namedValueDelete"},
         {"$ref": "#/$defs/respondBinary"},
         {"$ref": "#/$defs/respondNamedBody"},
         {"$ref": "#/$defs/respond"}
@@ -745,6 +792,28 @@
         "path": {"$ref": "#/$defs/path"},
         "maxIterations": {"type": "integer", "minimum": 1, "maximum": 1000},
         "body": {"type": "array", "items": {"$ref": "#/$defs/statement"}},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "namedValueSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "value", "schema"],
+      "properties": {
+        "kind": {"const": "named-value-set"},
+        "name": {"$ref": "#/$defs/expression"},
+        "value": {"$ref": "#/$defs/expression"},
+        "schema": {"enum": ["drop", "keep"]},
+        "sourceRef": {"$ref": "#/$defs/sourceRef"}
+      }
+    },
+    "namedValueDelete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"const": "named-value-delete"},
+        "name": {"$ref": "#/$defs/expression"},
         "sourceRef": {"$ref": "#/$defs/sourceRef"}
       }
     },

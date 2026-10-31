@@ -7,22 +7,36 @@ export const KNOWN_SERVER_OPERATIONS = {
     'kvs.has': signature('hasKey', 'BOOLEAN', [{ id: 'KEY', type: STRING }, { id: 'NAMESPACE', type: STRING }], 'boolean', 'storage-read'),
     'kvs.listKeys': signature('listKeys', 'REPORTER', [{ id: 'NAMESPACE', type: STRING }], 'json', 'storage-read'),
     'kvs.setText': signature('setValue', 'COMMAND', [{ id: 'KEY', type: STRING }, { id: 'NAMESPACE', type: STRING }, { id: 'VALUE', type: STRING }], 'void', 'storage-write', false),
+    // Structured Data 0.11.0-rc.1: every server-supported block of the published manifest. Phases 2
+    // (YAML) and 3 (schema) are listed so the whole manifest registers; their lowering still stops.
+    'structuredData.addSchemaProperty': signature('addSchemaProperty', 'COMMAND', [stringArgument('PROPERTY'), stringArgument('REQUIRED'), stringArgument('TYPE')], 'void', 'state'),
+    'structuredData.beginSchema': signature('beginSchema', 'COMMAND', [stringArgument('EXTRA'), stringArgument('SCHEMA_ID'), stringArgument('VERSION')], 'void', 'state'),
+    'structuredData.commitSchema': signature('commitSchema', 'COMMAND', [], 'void', 'state'),
+    'structuredData.currentGet': signature('currentJsonAtPath', 'REPORTER', [pathArgument()], 'jsonText', 'control'),
+    'structuredData.currentGetText': signature('currentTextAtPath', 'REPORTER', [pathArgument()], 'string', 'control'),
     'structuredData.currentIndex': signature('currentIndex', 'REPORTER', [], 'number', 'control'),
     'structuredData.currentKey': signature('currentKey', 'REPORTER', [], 'string', 'control'),
-    'structuredData.currentValue': signature('currentValueJson', 'REPORTER', [], 'json', 'control'),
-    'structuredData.delete': signature('deleteAtPath', 'REPORTER', [{ id: 'JSON', type: STRING }, pathArgument()], 'json', 'immutable'),
-    'structuredData.forEach': signature('forEachAtPath', 'LOOP', [
-        { id: 'JSON', type: STRING },
-        { id: 'MAX', type: NUMBER, staticLiteral: true, minimum: 1, maximum: 1000 },
-        pathArgument()
-    ], 'void', 'control'),
-    'structuredData.get': signature('getJsonAtPath', 'REPORTER', [{ id: 'JSON', type: STRING }, pathArgument()], 'json', 'pure'),
-    'structuredData.has': signature('hasPath', 'BOOLEAN', [{ id: 'JSON', type: STRING }, pathArgument()], 'boolean', 'pure'),
-    'structuredData.isValidJson': signature('isValidJson', 'BOOLEAN', [{ id: 'JSON', type: STRING }], 'boolean', 'pure'),
-    'structuredData.keys': signature('keysAtPath', 'REPORTER', [{ id: 'JSON', type: STRING }, pathArgument()], 'json', 'pure'),
-    'structuredData.length': signature('lengthAtPath', 'REPORTER', [{ id: 'JSON', type: STRING }, pathArgument()], 'number', 'pure'),
-    'structuredData.normalizeJson': signature('normalizeJson', 'REPORTER', [{ id: 'JSON', type: STRING }], 'json', 'pure'),
-    'structuredData.set': signature('setJsonAtPath', 'REPORTER', [{ id: 'JSON', type: STRING }, pathArgument(), { id: 'VALUE', type: STRING }], 'json', 'immutable')
+    'structuredData.currentValue': signature('currentValueJson', 'REPORTER', [], 'jsonText', 'control'),
+    'structuredData.defineSchema': signature('defineSchema', 'COMMAND', [stringArgument('SCHEMA_ID'), stringArgument('TEXT'), stringArgument('VERSION')], 'void', 'state'),
+    'structuredData.delete': signature('deleteAtPath', 'COMMAND', [nameArgument(), pathArgument()], 'void', 'state'),
+    'structuredData.deleteData': signature('deleteStructuredData', 'COMMAND', [nameArgument()], 'void', 'state'),
+    'structuredData.deleteSchema': signature('deleteSchema', 'COMMAND', [stringArgument('SCHEMA_ID'), stringArgument('VERSION')], 'void', 'state'),
+    'structuredData.forEach': signature('forEachAtPath', 'LOOP', [{ id: 'MAX', type: NUMBER, staticLiteral: true, minimum: 1, maximum: 1000 }, nameArgument(), pathArgument()], 'void', 'control'),
+    'structuredData.get': signature('getJsonAtPath', 'REPORTER', [nameArgument(), pathArgument()], 'jsonText', 'pure'),
+    'structuredData.getText': signature('getTextAtPath', 'REPORTER', [nameArgument(), pathArgument()], 'string', 'pure'),
+    'structuredData.has': signature('hasPath', 'BOOLEAN', [nameArgument(), pathArgument()], 'boolean', 'pure'),
+    'structuredData.hasData': signature('hasStructuredData', 'BOOLEAN', [nameArgument()], 'boolean', 'pure'),
+    'structuredData.hasSchema': signature('hasSchema', 'BOOLEAN', [stringArgument('SCHEMA_ID'), stringArgument('VERSION')], 'boolean', 'pure'),
+    'structuredData.keys': signature('keysAtPath', 'REPORTER', [nameArgument(), pathArgument()], 'jsonText', 'pure'),
+    'structuredData.length': signature('lengthAtPath', 'REPORTER', [nameArgument(), pathArgument()], 'number', 'pure'),
+    'structuredData.parseJson': signature('parseJson', 'COMMAND', [nameArgument(), stringArgument('TEXT')], 'void', 'state'),
+    'structuredData.parseJsonWithSchema': signature('parseJsonWithSchema', 'COMMAND', [nameArgument(), stringArgument('SCHEMA_ID'), stringArgument('TEXT'), stringArgument('VERSION')], 'void', 'state'),
+    'structuredData.parseYaml': signature('parseYaml', 'COMMAND', [nameArgument(), stringArgument('TEXT')], 'void', 'state'),
+    'structuredData.parseYamlWithSchema': signature('parseYamlWithSchema', 'COMMAND', [nameArgument(), stringArgument('SCHEMA_ID'), stringArgument('TEXT'), stringArgument('VERSION')], 'void', 'state'),
+    'structuredData.schemaOf': signature('schemaOf', 'REPORTER', [nameArgument()], 'jsonText', 'pure'),
+    'structuredData.set': signature('setJsonAtPath', 'COMMAND', [nameArgument(), pathArgument(), stringArgument('VALUE')], 'void', 'state'),
+    'structuredData.toJson': signature('toJson', 'REPORTER', [nameArgument()], 'jsonText', 'pure'),
+    'structuredData.toYaml': signature('toYaml', 'REPORTER', [nameArgument()], 'yamlText', 'pure')
 };
 export function validateServerOperationHint(block) {
     const operation = block.server?.irOperation;
@@ -50,6 +64,13 @@ export function validateServerOperationHint(block) {
 }
 function signature(opcode, blockType, argumentsValue, resultType, effect, immutable = true) {
     return { opcode, blockType, arguments: argumentsValue, resultType, effect, immutable };
+}
+/** Argument objects keep the manifest parser's key order, because signatures compare as JSON text. */
+function stringArgument(id) {
+    return { id, type: STRING };
+}
+function nameArgument() {
+    return stringArgument('NAME');
 }
 function pathArgument() {
     return { id: 'PATH', type: STRING, normalizesTo: 'pathSegments' };

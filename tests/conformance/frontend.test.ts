@@ -34,18 +34,23 @@ describe('conformance frontend layer', () => {
       }))
     ).toEqual(fixture.externalVectors);
 
-    const entry = resolveCompilerProjectOpcode(resolved.registry, 'kubohiroyastructureddata_normalizeJson');
+    const entry = resolveCompilerProjectOpcode(resolved.registry, 'kubohiroyastructureddata_parseJson');
     if (entry === undefined) throw new Error('Locked Structured Data operation is missing.');
     const lowering = new StructuredDataLoweringContext();
     expect(
-      lowering.lowerReporter(
+      lowering.lowerStatement(
         entry,
-        {JSON: {kind: 'request', valueType: 'string', source: 'body-text'}},
-        {targetIndex: 0, targetName: 'Stage', blockId: 'normalize', opcode: entry.projectOpcode}
+        {
+          NAME: {kind: 'literal', valueType: 'string', value: 'body'},
+          TEXT: {kind: 'request', valueType: 'string', source: 'body-text'}
+        },
+        {targetIndex: 0, targetName: 'Stage', blockId: 'parse', opcode: entry.projectOpcode}
       )
     ).toMatchObject({
-      kind: 'json-stringify',
-      value: {kind: 'json-parse', text: {kind: 'json-text-coerce', input: {kind: 'request'}}}
+      kind: 'named-value-set',
+      name: {kind: 'literal', value: 'body'},
+      value: {kind: 'structured-decode', format: 'json', text: {kind: 'request', source: 'body-text'}},
+      schema: 'drop'
     });
     expect(lowering.diagnostics).toEqual([]);
 

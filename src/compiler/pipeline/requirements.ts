@@ -85,6 +85,8 @@ function statementExpressions(statement: StatementIrV2): ExpressionIrV2[] {
   if (statement.kind === 'asset-object-delete' && statement.target.kind === 'ref') return [statement.target.ref];
   if (statement.kind === 'if') return [statement.condition];
   if (statement.kind === 'json-for-each') return [statement.root];
+  if (statement.kind === 'named-value-set') return [statement.value, statement.name];
+  if (statement.kind === 'named-value-delete') return [statement.name];
   if (statement.kind === 'respond') return [statement.body];
   return [];
 }
@@ -135,5 +137,8 @@ function childExpressions(expression: ExpressionIrV2): ExpressionIrV2[] {
     return [expression.namespace, expression.key];
   }
   if (expression.kind === 'kvs-list-keys') return [expression.namespace];
+  if (expression.kind === 'named-value' || expression.kind === 'named-value-exists') return [expression.name];
+  if (expression.kind === 'structured-decode') return [expression.text];
+  if (expression.kind === 'json-scalar-text') return [expression.value];
   return [];
 }
