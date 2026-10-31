@@ -4,34 +4,791 @@
   "pathSegmentType": {
     "kind": "discriminatedUnion",
     "variants": [
-      {"kind": "key", "valueType": "string"},
-      {"kind": "index", "valueType": "nonNegativeInteger"}
+      {
+        "kind": "key",
+        "valueType": "string"
+      },
+      {
+        "kind": "index",
+        "valueType": "nonNegativeInteger"
+      }
     ]
   },
+  "dataReferenceType": {
+    "kind": "named",
+    "scope": "target",
+    "lifetime": "untilProjectStop",
+    "valueType": "jsonValue"
+  },
   "blocks": [
+    {
+      "opcode": "addSchemaProperty",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "PROPERTY",
+          "type": "STRING"
+        },
+        {
+          "id": "REQUIRED",
+          "type": "STRING"
+        },
+        {
+          "id": "TYPE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.addSchemaProperty"
+      }
+    },
+    {
+      "opcode": "beginSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "EXTRA",
+          "type": "STRING"
+        },
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.beginSchema"
+      }
+    },
+    {
+      "opcode": "commitSchema",
+      "blockType": "COMMAND",
+      "arguments": [],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.commitSchema"
+      }
+    },
+    {
+      "opcode": "copyDocumentTree",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "DOCUMENT",
+          "type": "STRING"
+        },
+        {
+          "id": "LOCATION",
+          "type": "STRING"
+        },
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "POSITIONS",
+          "type": "STRING",
+          "menu": "documentTreePositions"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "PARSE_LIMIT_EXCEEDED"
+      ],
+      "server": {
+        "supported": false
+      }
+    },
+    {
+      "opcode": "currentIndex",
+      "blockType": "REPORTER",
+      "arguments": [],
+      "resultType": "number",
+      "effect": "control",
+      "immutable": true,
+      "errors": [
+        "ITERATION_CONTEXT_REQUIRED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.currentIndex"
+      }
+    },
+    {
+      "opcode": "currentJsonAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "jsonText",
+      "effect": "control",
+      "immutable": true,
+      "errors": [
+        "ITERATION_CONTEXT_REQUIRED",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.currentGet"
+      }
+    },
+    {
+      "opcode": "currentKey",
+      "blockType": "REPORTER",
+      "arguments": [],
+      "resultType": "string",
+      "effect": "control",
+      "immutable": true,
+      "errors": [
+        "ITERATION_CONTEXT_REQUIRED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.currentKey"
+      }
+    },
+    {
+      "opcode": "currentTextAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "string",
+      "effect": "control",
+      "immutable": true,
+      "errors": [
+        "ITERATION_CONTEXT_REQUIRED",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.currentGetText"
+      }
+    },
+    {
+      "opcode": "currentValueJson",
+      "blockType": "REPORTER",
+      "arguments": [],
+      "resultType": "jsonText",
+      "effect": "control",
+      "immutable": true,
+      "errors": [
+        "ITERATION_CONTEXT_REQUIRED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.currentValue"
+      }
+    },
+    {
+      "opcode": "defineSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.defineSchema"
+      }
+    },
+    {
+      "opcode": "deleteAtPath",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE",
+        "SCHEMA_VALIDATION_FAILED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.delete"
+      }
+    },
+    {
+      "opcode": "deleteSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA",
+        "SCHEMA_NOT_FOUND"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.deleteSchema"
+      }
+    },
+    {
+      "opcode": "deleteStructuredData",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.deleteData"
+      }
+    },
     {
       "opcode": "forEachAtPath",
       "blockType": "LOOP",
       "arguments": [
-        {"id": "JSON", "type": "STRING"},
-        {"id": "MAX", "type": "NUMBER", "staticLiteral": true, "minimum": 1, "maximum": 1000},
-        {"id": "PATH", "type": "STRING", "normalizesTo": "pathSegments"}
+        {
+          "id": "MAX",
+          "type": "NUMBER",
+          "staticLiteral": true,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
       ],
       "resultType": "void",
       "effect": "control",
       "immutable": true,
-      "errors": ["INVALID_JSON", "INVALID_PATH", "PATH_NOT_FOUND", "TYPE_MISMATCH", "INDEX_OUT_OF_RANGE", "ITERATION_LIMIT_EXCEEDED"],
-      "server": {"supported": true, "irOperation": "structuredData.forEach"}
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE",
+        "ITERATION_LIMIT_EXCEEDED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.forEach"
+      }
     },
     {
-      "opcode": "normalizeJson",
+      "opcode": "getJsonAtPath",
       "blockType": "REPORTER",
-      "arguments": [{"id": "JSON", "type": "STRING"}],
-      "resultType": "json",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "jsonText",
       "effect": "pure",
       "immutable": true,
-      "errors": ["INVALID_JSON"],
-      "server": {"supported": true, "irOperation": "structuredData.normalizeJson"}
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.get"
+      }
+    },
+    {
+      "opcode": "getTextAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "string",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.getText"
+      }
+    },
+    {
+      "opcode": "hasPath",
+      "blockType": "BOOLEAN",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "boolean",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "TYPE_MISMATCH"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.has"
+      }
+    },
+    {
+      "opcode": "hasSchema",
+      "blockType": "BOOLEAN",
+      "arguments": [
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "boolean",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_SCHEMA"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.hasSchema"
+      }
+    },
+    {
+      "opcode": "hasStructuredData",
+      "blockType": "BOOLEAN",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "boolean",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.hasData"
+      }
+    },
+    {
+      "opcode": "keysAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "jsonText",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.keys"
+      }
+    },
+    {
+      "opcode": "lengthAtPath",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        }
+      ],
+      "resultType": "number",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.length"
+      }
+    },
+    {
+      "opcode": "parseJson",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_JSON",
+        "INVALID_NAME",
+        "PARSE_LIMIT_EXCEEDED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.parseJson"
+      }
+    },
+    {
+      "opcode": "parseJsonWithSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_JSON",
+        "INVALID_NAME",
+        "PARSE_LIMIT_EXCEEDED",
+        "INVALID_SCHEMA",
+        "SCHEMA_NOT_FOUND",
+        "SCHEMA_VALIDATION_FAILED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.parseJsonWithSchema"
+      }
+    },
+    {
+      "opcode": "parseYaml",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_YAML",
+        "INVALID_NAME",
+        "PARSE_LIMIT_EXCEEDED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.parseYaml"
+      }
+    },
+    {
+      "opcode": "parseYamlWithSchema",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "SCHEMA_ID",
+          "type": "STRING"
+        },
+        {
+          "id": "TEXT",
+          "type": "STRING"
+        },
+        {
+          "id": "VERSION",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_YAML",
+        "INVALID_NAME",
+        "PARSE_LIMIT_EXCEEDED",
+        "INVALID_SCHEMA",
+        "SCHEMA_NOT_FOUND",
+        "SCHEMA_VALIDATION_FAILED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.parseYamlWithSchema"
+      }
+    },
+    {
+      "opcode": "schemaOf",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "jsonText",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.schemaOf"
+      }
+    },
+    {
+      "opcode": "setJsonAtPath",
+      "blockType": "COMMAND",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        },
+        {
+          "id": "PATH",
+          "type": "STRING",
+          "normalizesTo": "pathSegments"
+        },
+        {
+          "id": "VALUE",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "void",
+      "effect": "state",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND",
+        "INVALID_JSON",
+        "INVALID_PATH",
+        "PATH_NOT_FOUND",
+        "TYPE_MISMATCH",
+        "INDEX_OUT_OF_RANGE",
+        "SCHEMA_VALIDATION_FAILED"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.set"
+      }
+    },
+    {
+      "opcode": "toJson",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "jsonText",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.toJson"
+      }
+    },
+    {
+      "opcode": "toYaml",
+      "blockType": "REPORTER",
+      "arguments": [
+        {
+          "id": "NAME",
+          "type": "STRING"
+        }
+      ],
+      "resultType": "yamlText",
+      "effect": "pure",
+      "immutable": true,
+      "errors": [
+        "INVALID_NAME",
+        "DATA_NOT_FOUND"
+      ],
+      "server": {
+        "supported": true,
+        "irOperation": "structuredData.toYaml"
+      }
+    }
+  ],
+  "menus": [
+    {
+      "id": "documentTreePositions",
+      "acceptReporters": false
     }
   ]
 }

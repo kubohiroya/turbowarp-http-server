@@ -24,7 +24,11 @@ export const IR_V2_EXPRESSION_KINDS = [
   'json-length',
   'iteration-key',
   'iteration-index',
-  'iteration-value'
+  'iteration-value',
+  'named-value',
+  'named-value-exists',
+  'structured-decode',
+  'json-scalar-text'
 ] as const;
 
 export const IR_V2_STATEMENT_KINDS = [
@@ -49,6 +53,8 @@ export const IR_V2_STATEMENT_KINDS = [
   'if',
   'bounded-loop',
   'json-for-each',
+  'named-value-set',
+  'named-value-delete',
   'respond-binary',
   'respond-named-body',
   'respond'
@@ -88,6 +94,9 @@ export const IR_V2_STATEMENT_EFFECTS = {
   if: ['control'],
   'bounded-loop': ['control'],
   'json-for-each': ['control'],
+  // Named values live in the same request-local store lifetime as handler variables.
+  'named-value-set': ['handler-state-write'],
+  'named-value-delete': ['handler-state-write'],
   'respond-binary': ['response-write', 'binary-consume'],
   'respond-named-body': ['response-write'],
   respond: ['response-write']
@@ -128,6 +137,12 @@ export type BinaryContentDispositionV2 =
 export type NamedDataKindV2 = 'structured' | 'document' | 'binary' | 'asset';
 export type NamedDataScopeV2 = 'target' | 'project';
 export type NamedBodyRepresentationV2 = 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+
+/** Structured Data codec formats; phase 1 decodes JSON only. */
+export type StructuredDecodeFormatV2 = 'json';
+
+/** Whether a named-value write drops (`parse`) or keeps (path update) the binding's schema reference. */
+export type NamedValueSchemaPolicyV2 = 'drop' | 'keep';
 
 export interface NamedDataReferenceV2 {
   namespace: string;
@@ -299,7 +314,17 @@ export type ExpressionIrV2 =
     }
   | {kind: 'iteration-key'; valueType: 'string'; loopId: string; sourceRef?: SourceRefV2}
   | {kind: 'iteration-index'; valueType: 'number'; loopId: string; sourceRef?: SourceRefV2}
-  | {kind: 'iteration-value'; valueType: JsonValueTypeV2; loopId: string; sourceRef?: SourceRefV2};
+  | {kind: 'iteration-value'; valueType: JsonValueTypeV2; loopId: string; sourceRef?: SourceRefV2}
+  | {kind: 'named-value'; valueType: JsonValueTypeV2; name: ExpressionIrV2; sourceRef?: SourceRefV2}
+  | {kind: 'named-value-exists'; valueType: 'boolean'; name: ExpressionIrV2; sourceRef?: SourceRefV2}
+  | {
+      kind: 'structured-decode';
+      valueType: JsonValueTypeV2;
+      format: StructuredDecodeFormatV2;
+      text: ExpressionIrV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {kind: 'json-scalar-text'; valueType: 'string'; value: ExpressionIrV2; sourceRef?: SourceRefV2};
 
 export type StatementIrV2 =
   | {kind: 'set-status'; status: number; sourceRef?: SourceRefV2}
@@ -401,6 +426,14 @@ export type StatementIrV2 =
       body: StatementIrV2[];
       sourceRef?: SourceRefV2;
     }
+  | {
+      kind: 'named-value-set';
+      name: ExpressionIrV2;
+      value: ExpressionIrV2;
+      schema: NamedValueSchemaPolicyV2;
+      sourceRef?: SourceRefV2;
+    }
+  | {kind: 'named-value-delete'; name: ExpressionIrV2; sourceRef?: SourceRefV2}
   | {
       kind: 'respond-binary';
       body: string;

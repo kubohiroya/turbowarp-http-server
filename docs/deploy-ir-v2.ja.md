@@ -38,7 +38,7 @@ IR JSONへ格納できるatomic value typeは次のとおりです。
 - `json-object`
 - `binary-ref`
 
-`number`は有限IEEE-754 binary64とし、`NaN`と±`Infinity`を拒否します。`-0`は`0`へ正規化します。`json-text`は有効なapplication JSONを表すnominal string境界で、通常の`string`やparse済みJSON値とは暗黙に混同しません。`json-array`と`json-object`は再帰的なJSON値で、resourceを内包できません。
+`number`は有限IEEE-754 binary64とし、`NaN`と±`Infinity`を拒否します。`-0`は`0`へ正規化します。`json-text`は有効なapplication JSONを表すnominal string境界で、通常の`string`やparse済みJSON値とは暗黙に混同しません。ただしruntimeではstringなので、validatorはScratchが値をstringにする位置（handler variable、KVS、response header、Structured Dataの名前とTEXT）では`json-text`もScratch scalarとして受け付けます。`json-array`と`json-object`は再帰的なJSON値で、resourceを内包できません。
 
 `binary-ref`はbyte列ではなく、`namespace`と`key`、任意の`contentType`、`size`、`sha256:<hex>`形式の`integrity`、opaque `revision`を持つ論理descriptorです。`base64`、`bytes`、data URL等のinline payload fieldは許可しません。
 
@@ -52,9 +52,24 @@ union typeは次の形式です。
 
 ## Expressionとstatement
 
-すべてのexpressionは`valueType`を持ちます。v2で定義済みのexpressionはliteral、request、request-value、concat、handler-variable、handler-variable-exists、handler-variable-names、bindingに加え、KVS get／has／list、明示的なJSON parse／serialize、path操作、iteration reporterです。
+すべてのexpressionは`valueType`を持ちます。v2で定義済みのexpressionはliteral、request、request-value、concat、handler-variable、handler-variable-exists、handler-variable-names、bindingに加え、KVS get／has／list、明示的なJSON parse／serialize、path操作、iteration reporter、Structured Dataの名前付きの値の読み出し・解析・text化です。
 
-statementはHTTP response操作、handler-variable操作、KVS set／delete、論理record／object storage操作、binary body producer／consumer、typed `if`、bounded-loop、`json-for-each`、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
+statementはHTTP response操作、handler-variable操作、Structured Dataの名前付きの値の書き込み・削除、KVS set／delete、論理record／object storage操作、binary body producer／consumer、typed `if`、bounded-loop、`json-for-each`、terminal responseを表現します。一般的なScratch control blockを受理するかどうかはschemaではなくfrontend／validatorの責務です。
+
+### Structured Dataの名前付きの値
+
+名前付きの値はリクエスト内の保管場所に置き、リクエストの開始時は空で、終了時に破棄します。既存のjson nodeは任意のJSON式をrootに取るimmutableな式なので、その前後に次の読み出しと書き込みを置きます。規則の詳細は[Structured Data lowering](structured-data-lowering.ja.md)を参照してください。
+
+| 種類 | node | 型・意味 |
+| --- | --- | --- |
+| 式 | `named-value {name}` | JSON値。名前は`Cast.toString`して前後の空白を除き、空なら`INVALID_NAME`、なければ`DATA_NOT_FOUND` |
+| 式 | `named-value-exists {name}` | boolean。空の名前は`INVALID_NAME` |
+| 式 | `structured-decode {format: 'json', text}` | JSON値。UTF-8で262,144 byte、深さ64、値50,000個のcodecと同じ上限（`PARSE_LIMIT_EXCEEDED`）と`INVALID_JSON` |
+| 式 | `json-scalar-text {value}` | string。stringはそのまま、numberとbooleanはJSON表記、null・array・objectは`TYPE_MISMATCH` |
+| 文 | `named-value-set {name, value, schema: 'drop' \| 'keep'}` | 値を名前に結び付ける。値を先に、名前を後に評価する。`drop`はschema参照を外し、`keep`は残す |
+| 文 | `named-value-delete {name}` | 名前を外す。なければ`DATA_NOT_FOUND` |
+
+名前とTEXTはScratch scalar（string、number、boolean、`json-text`）、`named-value-set`の値と`json-scalar-text`の入力はtyped JSON値でなければなりません。work budgetは各nodeを1 stepとし、入力の分を加えます。`named-value-set`と`named-value-delete`のeffectは、handler variableと同じ`handler-state-write`です。
 
 statementのeffectは入力側が自由に申告するfieldにはせず、statement kindから`IR_V2_STATEMENT_EFFECTS`で決定的に導出します。分類は`response-write`、`handler-state-write`、`key-value-read`、`key-value-write`、`record-read`、`record-write`、`control`等です。これにより入力がeffectを過少申告してvalidatorを迂回することを防ぎます。
 

@@ -41,13 +41,14 @@ describe('compiler extension manifest registry', () => {
         'kubohiroyakvs_listKeys',
         'kubohiroyakvs_setValue',
         'kubohiroyastructureddata_forEachAtPath',
-        'kubohiroyastructureddata_normalizeJson'
+        'kubohiroyastructureddata_parseJson'
       ])
     );
-    expect(resolveCompilerProjectOpcode(first.registry, 'kubohiroyastructureddata_normalizeJson')).toMatchObject({
+    expect(resolveCompilerProjectOpcode(first.registry, 'kubohiroyastructureddata_parseJson')).toMatchObject({
       extensionId: 'kubohiroyastructureddata',
-      opcode: 'normalizeJson',
-      block: {effect: 'pure', server: {irOperation: 'structuredData.normalizeJson'}}
+      opcode: 'parseJson',
+      packageVersion: '0.11.0-rc.1',
+      block: {effect: 'state', server: {irOperation: 'structuredData.parseJson'}}
     });
     expect(resolveCompilerProjectOpcode(first.registry, 'kubohiroyakvs_setValue')).toMatchObject({
       extensionId: 'kubohiroyakvs',
@@ -60,7 +61,7 @@ describe('compiler extension manifest registry', () => {
 
   it('hashes exact manifest bytes and rejects modified content', async () => {
     const bytes = await readFile(`${fixtureDirectory}/structured-data.json`);
-    expect(manifestIntegrity(bytes)).toBe('sha256-atsgtqeDE72WUR23msLnagXtyHYwN/8OfCSJH0BZw5M=');
+    expect(manifestIntegrity(bytes)).toBe('sha256-HQLxeHKHXs74OsGEZjcQGdRfeFAqTg6vK+Io6a6Cp6E=');
 
     const directory = await temporaryDirectory();
     const manifestPath = join(directory, 'structured-data.json');
@@ -74,9 +75,9 @@ describe('compiler extension manifest registry', () => {
           {
             extensionId: 'kubohiroyastructureddata',
             packageName: '@kubohiroya/turbowarp-structured-data',
-            packageVersion: '0.4.0',
+            packageVersion: '0.11.0-rc.1',
             manifestFormatVersion: 2,
-            integrity: 'sha256-atsgtqeDE72WUR23msLnagXtyHYwN/8OfCSJH0BZw5M=',
+            integrity: 'sha256-HQLxeHKHXs74OsGEZjcQGdRfeFAqTg6vK+Io6a6Cp6E=',
             source: {kind: 'local', path: 'structured-data.json'}
           }
         ]
@@ -132,7 +133,7 @@ describe('compiler extension manifest registry', () => {
   it('rejects server-operation hints whose allowlisted signature does not match', async () => {
     const source = await readFile(`${fixtureDirectory}/structured-data.json`, 'utf8');
     const manifest = parseCompilerExtensionManifestJson(
-      source.replace('"opcode": "normalizeJson"', '"opcode": "normalizeJsonChanged"')
+      source.replace('"opcode": "toJson"', '"opcode": "toJsonChanged"')
     );
     expectManifestError(
       () =>
@@ -143,10 +144,35 @@ describe('compiler extension manifest registry', () => {
             lock: {
               extensionId: manifest.id,
               packageName: '@kubohiroya/turbowarp-structured-data',
-              packageVersion: '0.4.0',
+              packageVersion: '0.11.0-rc.1',
               manifestFormatVersion: 2,
               integrity: manifestIntegrity(source),
               source: {kind: 'bundled', id: 'test'}
+            }
+          }
+        ]),
+      'TW2_MANIFEST_OPERATION_MISMATCH'
+    );
+  });
+
+  it('rejects a Structured Data 0.4.0 manifest instead of falling back to its JSON-text API', () => {
+    // The 0.4.0 blocks took JSON text and returned JSON text; 0.11 reuses the operation IDs for named
+    // values, so the allowlist cannot hold both and the old signature no longer matches.
+    const text = JSON.stringify(STRUCTURED_DATA_0_4_0_MANIFEST);
+    const manifest = parseCompilerExtensionManifestJson(text);
+    expectManifestError(
+      () =>
+        buildCompilerOpcodeRegistry([
+          {
+            manifest,
+            exactIntegrity: manifestIntegrity(text),
+            lock: {
+              extensionId: manifest.id,
+              packageName: '@kubohiroya/turbowarp-structured-data',
+              packageVersion: '0.4.0',
+              manifestFormatVersion: 2,
+              integrity: manifestIntegrity(text),
+              source: {kind: 'bundled', id: 'structured-data@0.4.0'}
             }
           }
         ]),
@@ -228,6 +254,45 @@ describe('compiler extension manifest registry', () => {
     await expect(readFile('schemas/compiler-manifest-lock-v1.schema.json', 'utf8').then(JSON.parse)).resolves.toBeTruthy();
   });
 });
+
+/** The two-block 0.4.0-shaped manifest this suite used as its Structured Data fixture until 0.11. */
+const STRUCTURED_DATA_0_4_0_MANIFEST = {
+  formatVersion: 2,
+  id: 'kubohiroyastructureddata',
+  pathSegmentType: {
+    kind: 'discriminatedUnion',
+    variants: [
+      {kind: 'key', valueType: 'string'},
+      {kind: 'index', valueType: 'nonNegativeInteger'}
+    ]
+  },
+  blocks: [
+    {
+      opcode: 'forEachAtPath',
+      blockType: 'LOOP',
+      arguments: [
+        {id: 'JSON', type: 'STRING'},
+        {id: 'MAX', type: 'NUMBER', staticLiteral: true, minimum: 1, maximum: 1000},
+        {id: 'PATH', type: 'STRING', normalizesTo: 'pathSegments'}
+      ],
+      resultType: 'void',
+      effect: 'control',
+      immutable: true,
+      errors: ['INVALID_JSON', 'INVALID_PATH', 'PATH_NOT_FOUND', 'TYPE_MISMATCH', 'INDEX_OUT_OF_RANGE', 'ITERATION_LIMIT_EXCEEDED'],
+      server: {supported: true, irOperation: 'structuredData.forEach'}
+    },
+    {
+      opcode: 'normalizeJson',
+      blockType: 'REPORTER',
+      arguments: [{id: 'JSON', type: 'STRING'}],
+      resultType: 'json',
+      effect: 'pure',
+      immutable: true,
+      errors: ['INVALID_JSON'],
+      server: {supported: true, irOperation: 'structuredData.normalizeJson'}
+    }
+  ]
+};
 
 function basicBlock(opcode: string): Record<string, unknown> {
   return {opcode, blockType: 'COMMAND', arguments: []};
