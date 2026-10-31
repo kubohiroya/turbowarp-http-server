@@ -7,7 +7,7 @@ manifest registryはTurboWarp projectをIR v2へ変換する唯一の外部exten
 ## 対応形式
 
 - compiler manifest format 1: extension ID、block type、argument ID/typeだけを提供するlegacy block API manifest。
-- compiler manifest format 2: format 1にresult type、effect、immutable、runtime error、server-operation hintを加えた形式。Asset Cache 0.1.0のbrowser-only宣言、Structured Data 0.4.0、KVS 0.1.0のfixtureとの互換性を確認します。
+- compiler manifest format 2: format 1にresult type、effect、immutable、runtime error、server-operation hintを加えた形式。Asset Cache 0.1.0のbrowser-only宣言、Structured Data 0.11.0-rc.1、KVS 0.1.0のfixtureとの互換性を確認します。Structured Dataは公開packageの`dist/extension-manifest.json`をそのままfixtureにしています。
 - lock format 1: extension ID、exact package version、manifest format version、exact-byte SHA-256、sourceを固定します。
 
 machine-readable schemaは次のとおりです。
@@ -26,7 +26,7 @@ format 1 manifestはregistryへ読めますが、server-operation hintがないb
     {
       "extensionId": "kubohiroyastructureddata",
       "packageName": "@kubohiroya/turbowarp-structured-data",
-      "packageVersion": "0.4.0",
+      "packageVersion": "0.11.0-rc.1",
       "manifestFormatVersion": 2,
       "integrity": "sha256-<base64 SHA-256>",
       "source": {"kind": "local", "path": "manifests/structured-data.json"}

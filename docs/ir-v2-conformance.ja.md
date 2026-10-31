@@ -42,6 +42,7 @@ record IDはtest adapterが`record-0001`から決定的に採番します。cloc
 ## 現在のvector
 
 - Structured Data: immutable path更新、Unicode code point順serialize、nested iteration、安定422 error
+- Structured Data named values: turbowarp-structured-dataのsemantic-parity fixture（commit `6bbb908`から取り込み）をfrontendからgenerated coreまで実行するtestと、公開ブラウザ版と同じblock列の結果を比べるtest（[Structured Data lowering](structured-data-lowering.ja.md#検証)）
 - Binary: file-backed put/get/delete、stream size limit、consume-once/error contract
 - Named body: fake Structured Data／Asset Manager provider、JSON／raw response、HEAD metadata
 - direct IR／TurboWarp frontend: status／header／bodyのobservable parity
