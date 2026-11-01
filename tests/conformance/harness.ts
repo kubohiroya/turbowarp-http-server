@@ -68,36 +68,56 @@ export async function readCoreFixture(path: string): Promise<CoreFixture> {
 }
 
 export async function runGeneratedCore(irInput: unknown, request: ConformanceRequest): Promise<CoreTrace> {
+  const core = await loadGeneratedCore(irInput);
+  return {response: await core.request(request), effects: core.effects};
+}
+
+export interface LoadedGeneratedCore {
+  /** Sends a request to the same registered app, so state that leaked between requests would show. */
+  request(request: ConformanceRequest): Promise<ResponseTrace>;
+  effects: EffectTrace[];
+}
+
+/** Generates, transpiles, and registers one core; extra services are merged over the traced defaults. */
+export async function loadGeneratedCore(
+  irInput: unknown,
+  services: Record<string, unknown> = {}
+): Promise<LoadedGeneratedCore> {
   const ir = parseDeployIrV2(irInput);
   const generated = generateHonoCore(ir);
   const directory = await mkdtemp(join(tmpdir(), 'tw-conformance-core-'));
+  let core: {registerCoreRoutes(app: Hono, services: unknown): void};
   try {
     const modulePath = join(directory, 'core.mjs');
     const javascript = transpileModule(generated.files['src/core.generated.ts']!, {
       compilerOptions: {target: ScriptTarget.ES2022, module: ModuleKind.ES2022}
     }).outputText;
     await writeFile(modulePath, javascript);
-    const core = (await import(`${pathToFileURL(modulePath).href}?id=${encodeURIComponent(ir.name)}`)) as {
-      registerCoreRoutes(app: Hono, services: unknown): void;
-    };
-    const effects: EffectTrace[] = [];
-    const records = new TraceRecordStore(effects);
-    const objects = new TraceBinaryObjectStore(effects);
-    const app = new Hono();
-    core.registerCoreRoutes(app, {
-      records: () => records,
-      objects: () => objects,
-      clientAddress: () => '192.0.2.1'
-    });
-    const response = await app.request(request.url, {
-      method: request.method,
-      ...(request.headers === undefined ? {} : {headers: request.headers}),
-      ...(request.bodyText === undefined ? {} : {body: request.bodyText})
-    });
-    return {response: await responseTrace(response), effects};
+    core = (await import(`${pathToFileURL(modulePath).href}?id=${encodeURIComponent(ir.name)}`)) as typeof core;
   } finally {
     await rm(directory, {recursive: true, force: true});
   }
+  const effects: EffectTrace[] = [];
+  const records = new TraceRecordStore(effects);
+  const objects = new TraceBinaryObjectStore(effects);
+  const app = new Hono();
+  core.registerCoreRoutes(app, {
+    records: () => records,
+    objects: () => objects,
+    clientAddress: () => '192.0.2.1',
+    ...services
+  });
+  return {
+    effects,
+    async request(request) {
+      const response = await app.request(request.url, {
+        method: request.method,
+        ...(request.headers === undefined ? {} : {headers: request.headers}),
+        ...(request.bodyText === undefined ? {} : {body: request.bodyText})
+      });
+      return responseTrace(response);
+    }
+  };
 }
 
 export async function runBinaryVector(bytes: Uint8Array, maxBytes: number): Promise<{

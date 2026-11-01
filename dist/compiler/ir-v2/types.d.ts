@@ -1,6 +1,6 @@
 export declare const DEPLOY_IR_V2_VERSION: 2;
-export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "kvs-get-text", "kvs-has", "kvs-list-keys", "binding", "json-text-coerce", "json-parse", "json-stringify", "json-is-valid", "json-get", "json-has", "json-set", "json-delete", "json-keys", "json-length", "iteration-key", "iteration-index", "iteration-value"];
-export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "kvs-set-text", "kvs-delete", "record-create", "record-list", "record-get", "record-delete", "asset-resolve", "request-body-binary", "asset-object-get", "asset-object-put", "asset-object-delete", "if", "bounded-loop", "json-for-each", "respond-binary", "respond-named-body", "respond"];
+export declare const IR_V2_EXPRESSION_KINDS: readonly ["literal", "request", "request-value", "concat", "handler-variable", "handler-variable-exists", "handler-variable-names", "kvs-get-text", "kvs-has", "kvs-list-keys", "binding", "json-text-coerce", "json-parse", "json-stringify", "json-is-valid", "json-get", "json-has", "json-set", "json-delete", "json-keys", "json-length", "iteration-key", "iteration-index", "iteration-value", "named-value", "named-value-exists", "structured-decode", "json-scalar-text"];
+export declare const IR_V2_STATEMENT_KINDS: readonly ["set-status", "set-header", "remove-header", "set-handler-variable", "change-handler-variable", "delete-handler-variable", "clear-handler-variables", "kvs-set-text", "kvs-delete", "record-create", "record-list", "record-get", "record-delete", "asset-resolve", "request-body-binary", "asset-object-get", "asset-object-put", "asset-object-delete", "if", "bounded-loop", "json-for-each", "named-value-set", "named-value-delete", "respond-binary", "respond-named-body", "respond"];
 export type EffectKindV2 = 'response-write' | 'handler-state-write' | 'record-read' | 'record-write' | 'key-value-read' | 'key-value-write' | 'object-read' | 'object-write' | 'binary-consume' | 'control';
 export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly 'set-status': readonly ["response-write"];
@@ -24,6 +24,8 @@ export declare const IR_V2_STATEMENT_EFFECTS: {
     readonly if: readonly ["control"];
     readonly 'bounded-loop': readonly ["control"];
     readonly 'json-for-each': readonly ["control"];
+    readonly 'named-value-set': readonly ["handler-state-write"];
+    readonly 'named-value-delete': readonly ["handler-state-write"];
     readonly 'respond-binary': readonly ["response-write", "binary-consume"];
     readonly 'respond-named-body': readonly ["response-write"];
     readonly respond: readonly ["response-write"];
@@ -66,6 +68,10 @@ export type BinaryContentDispositionV2 = {
 export type NamedDataKindV2 = 'structured' | 'document' | 'binary' | 'asset';
 export type NamedDataScopeV2 = 'target' | 'project';
 export type NamedBodyRepresentationV2 = 'json' | 'yaml' | 'html' | 'markdown' | 'raw';
+/** Structured Data codec formats; phase 1 decodes JSON only. */
+export type StructuredDecodeFormatV2 = 'json';
+/** Whether a named-value write drops (`parse`) or keeps (path update) the binding's schema reference. */
+export type NamedValueSchemaPolicyV2 = 'drop' | 'keep';
 export interface NamedDataReferenceV2 {
     namespace: string;
     name: string;
@@ -246,6 +252,27 @@ export type ExpressionIrV2 = {
     valueType: JsonValueTypeV2;
     loopId: string;
     sourceRef?: SourceRefV2;
+} | {
+    kind: 'named-value';
+    valueType: JsonValueTypeV2;
+    name: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'named-value-exists';
+    valueType: 'boolean';
+    name: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'structured-decode';
+    valueType: JsonValueTypeV2;
+    format: StructuredDecodeFormatV2;
+    text: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'json-scalar-text';
+    valueType: 'string';
+    value: ExpressionIrV2;
+    sourceRef?: SourceRefV2;
 };
 export type StatementIrV2 = {
     kind: 'set-status';
@@ -346,6 +373,16 @@ export type StatementIrV2 = {
     path: PathSegmentV2[];
     maxIterations: number;
     body: StatementIrV2[];
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'named-value-set';
+    name: ExpressionIrV2;
+    value: ExpressionIrV2;
+    schema: NamedValueSchemaPolicyV2;
+    sourceRef?: SourceRefV2;
+} | {
+    kind: 'named-value-delete';
+    name: ExpressionIrV2;
     sourceRef?: SourceRefV2;
 } | {
     kind: 'respond-binary';

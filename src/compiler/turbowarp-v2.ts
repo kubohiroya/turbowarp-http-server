@@ -13,7 +13,7 @@ import {
 import type {CompilerOpcodeRegistry, CompilerOpcodeRegistryEntry} from './manifest/types.js';
 import {isKvsEntry, KvsLoweringContext} from './kvs/lowering.js';
 import {lowerNamedBodyResponse, type NamedBodyArguments} from './named-body/lowering.js';
-import {StructuredDataLoweringContext} from './structured-data/lowering.js';
+import {isStructuredDataEntry, StructuredDataLoweringContext} from './structured-data/lowering.js';
 import {validateTurboWarpServerSubset} from './validator/turbowarp-subset.js';
 
 const PREFIX = `${extensionConfig.id}_`;
@@ -325,6 +325,11 @@ function compileStatement(
     const statement = new KvsLoweringContext(context.diagnostics).lowerStatement(manifestEntry, args, source);
     if (statement !== undefined) addCapability(context, {kind: 'key-value-store'});
     return statement ?? null;
+  }
+  if (manifestEntry !== undefined && isStructuredDataEntry(manifestEntry)) {
+    const args = compileManifestArguments(context, manifestEntry, inputs, id, structured);
+    if (args === null) return null;
+    return structured.lowerStatement(manifestEntry, args, source) ?? null;
   }
   report(context, 'TW2_UNSUPPORTED_COMMAND', `Unsupported command block: ${opcode}`, source);
   return null;

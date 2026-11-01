@@ -23,7 +23,11 @@ export const IR_V2_EXPRESSION_KINDS = [
     'json-length',
     'iteration-key',
     'iteration-index',
-    'iteration-value'
+    'iteration-value',
+    'named-value',
+    'named-value-exists',
+    'structured-decode',
+    'json-scalar-text'
 ];
 export const IR_V2_STATEMENT_KINDS = [
     'set-status',
@@ -47,6 +51,8 @@ export const IR_V2_STATEMENT_KINDS = [
     'if',
     'bounded-loop',
     'json-for-each',
+    'named-value-set',
+    'named-value-delete',
     'respond-binary',
     'respond-named-body',
     'respond'
@@ -73,6 +79,9 @@ export const IR_V2_STATEMENT_EFFECTS = {
     if: ['control'],
     'bounded-loop': ['control'],
     'json-for-each': ['control'],
+    // Named values live in the same request-local store lifetime as handler variables.
+    'named-value-set': ['handler-state-write'],
+    'named-value-delete': ['handler-state-write'],
     'respond-binary': ['response-write', 'binary-consume'],
     'respond-named-body': ['response-write'],
     respond: ['response-write']

@@ -53,7 +53,8 @@ export interface CoreServices {
   clientAddress?: (context: unknown) => string;
 }
 type App = Hono<any>;
-const ir: any = ${canonicalizeDeployIrV2(ir)};
+// Parsed from text: in an object literal a "__proto__" key would set the prototype instead of a property.
+const ir: any = JSON.parse(${JSON.stringify(canonicalizeDeployIrV2(ir))});
 
 export function registerCoreRoutes(app: App, services: CoreServices): void {
   for (const route of ir.routes) {
@@ -67,6 +68,8 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
   const headers = new Headers();
   const bindings = new Map<string, unknown>();
   const handlerVariables = new Map<string, string>();
+  // Structured Data named values: request-local like handler variables, so nothing outlives the request.
+  const namedValues = new Map<string, {value: JsonValue; schemaRef?: {id: string; version: string}}>();
   const iterations = new Map<string, {key: string; index: number; value: unknown}>();
   let bodyText: string | undefined;
   try {
@@ -101,7 +104,16 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
       } else if (statement.kind === 'delete-handler-variable') {
         handlerVariables.delete(asText(await expression(statement.name)));
       } else if (statement.kind === 'clear-handler-variables') handlerVariables.clear();
-      else if (statement.kind === 'kvs-set-text') {
+      else if (statement.kind === 'named-value-set') {
+        // The value comes first: the browser decodes parse JSON text before it checks the name.
+        const value = await expression(statement.value);
+        assertJsonValue(value);
+        const name = structuredName(await expression(statement.name));
+        const schemaRef = statement.schema === 'keep' ? namedValues.get(name)?.schemaRef : undefined;
+        namedValues.set(name, schemaRef === undefined ? {value} : {value, schemaRef});
+      } else if (statement.kind === 'named-value-delete') {
+        if (!namedValues.delete(structuredName(await expression(statement.name)))) throw runtimeError('DATA_NOT_FOUND', 422);
+      } else if (statement.kind === 'kvs-set-text') {
         await requiredKeyValues().set(asText(await expression(statement.namespace)), asText(await expression(statement.key)), asText(await expression(statement.value)));
       } else if (statement.kind === 'kvs-delete') {
         await requiredKeyValues().delete(asText(await expression(statement.namespace)), asText(await expression(statement.key)));
@@ -212,6 +224,17 @@ async function executeRoute(route: (typeof ir.routes)[number], c: any, services:
     if (value.kind === 'iteration-key') return requiredIteration(value.loopId).key;
     if (value.kind === 'iteration-index') return requiredIteration(value.loopId).index;
     if (value.kind === 'iteration-value') return requiredIteration(value.loopId).value;
+    if (value.kind === 'named-value') {
+      const entry = namedValues.get(structuredName(await expression(value.name)));
+      if (entry === undefined) throw runtimeError('DATA_NOT_FOUND', 422);
+      return entry.value;
+    }
+    if (value.kind === 'named-value-exists') return namedValues.has(structuredName(await expression(value.name)));
+    if (value.kind === 'structured-decode') {
+      if (value.format !== 'json') throw runtimeError('IR_EXPRESSION_UNSUPPORTED');
+      return decodeStructuredJson(String(await expression(value.text)));
+    }
+    if (value.kind === 'json-scalar-text') return jsonScalarText(await expression(value.value));
     throw runtimeError('IR_EXPRESSION_UNSUPPORTED');
   }
   function requiredRecords(): RecordStore {
@@ -310,6 +333,9 @@ function runtimeFault(error: unknown): {code: string; status: number} {
 }
 const KNOWN_RUNTIME_STATUS: Readonly<Record<string, number>> = {
   INVALID_JSON: 422,
+  INVALID_NAME: 422,
+  DATA_NOT_FOUND: 422,
+  PARSE_LIMIT_EXCEEDED: 422,
   INVALID_PATH: 422,
   PATH_NOT_FOUND: 422,
   TYPE_MISMATCH: 422,
@@ -345,6 +371,41 @@ function parseApplicationJson(text: unknown): JsonValue {
     if (error instanceof IrRuntimeError) throw error;
     throw runtimeError('INVALID_JSON', 422);
   }
+}
+// Structured Data's codec limits: UTF-8 input bytes, nesting below the depth-0 root, and values (keys excluded).
+const STRUCTURED_DECODE_LIMITS = {maxInputBytes: 262144, maxDepth: 64, maxNodes: 50000};
+function decodeStructuredJson(text: string): JsonValue {
+  const limit = STRUCTURED_DECODE_LIMITS.maxInputBytes;
+  if (text.length > limit || new TextEncoder().encode(text).byteLength > limit) throw runtimeError('PARSE_LIMIT_EXCEEDED', 422);
+  let value: unknown;
+  try {value = JSON.parse(text);}
+  catch {throw runtimeError('INVALID_JSON', 422);}
+  let nodes = 0;
+  const visit = (item: unknown, depth: number): void => {
+    if (depth > STRUCTURED_DECODE_LIMITS.maxDepth) throw runtimeError('PARSE_LIMIT_EXCEEDED', 422);
+    nodes += 1;
+    if (nodes > STRUCTURED_DECODE_LIMITS.maxNodes) throw runtimeError('PARSE_LIMIT_EXCEEDED', 422);
+    if (item === null || typeof item === 'string' || typeof item === 'boolean') return;
+    if (typeof item === 'number') {
+      if (Number.isFinite(item)) return;
+      throw runtimeError('INVALID_JSON', 422);
+    }
+    if (Array.isArray(item)) {for (const child of item) visit(child, depth + 1); return;}
+    const record = item as Record<string, unknown>;
+    for (const key of Object.keys(record)) visit(record[key], depth + 1);
+  };
+  visit(value, 0);
+  return value as JsonValue;
+}
+function structuredName(value: unknown): string {
+  const name = String(value).trim();
+  if (name.length === 0) throw runtimeError('INVALID_NAME', 422);
+  return name;
+}
+function jsonScalarText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return JSON.stringify(value);
+  throw runtimeError('TYPE_MISMATCH', 422);
 }
 function stringifyApplicationJson(value: unknown): string {
   assertJsonValue(value);

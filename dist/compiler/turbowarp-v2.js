@@ -2,7 +2,7 @@ import { extensionConfig } from '../config.js';
 import { DEPLOY_IR_V2_VERSION } from './ir-v2/types.js';
 import { isKvsEntry, KvsLoweringContext } from './kvs/lowering.js';
 import { lowerNamedBodyResponse } from './named-body/lowering.js';
-import { StructuredDataLoweringContext } from './structured-data/lowering.js';
+import { isStructuredDataEntry, StructuredDataLoweringContext } from './structured-data/lowering.js';
 import { validateTurboWarpServerSubset } from './validator/turbowarp-subset.js';
 const PREFIX = `${extensionConfig.id}_`;
 const HAT_OPCODE = `${PREFIX}whenHttpRequestReceived`;
@@ -235,6 +235,12 @@ function compileStatement(context, id, block, structured) {
         if (statement !== undefined)
             addCapability(context, { kind: 'key-value-store' });
         return statement ?? null;
+    }
+    if (manifestEntry !== undefined && isStructuredDataEntry(manifestEntry)) {
+        const args = compileManifestArguments(context, manifestEntry, inputs, id, structured);
+        if (args === null)
+            return null;
+        return structured.lowerStatement(manifestEntry, args, source) ?? null;
     }
     report(context, 'TW2_UNSUPPORTED_COMMAND', `Unsupported command block: ${opcode}`, source);
     return null;

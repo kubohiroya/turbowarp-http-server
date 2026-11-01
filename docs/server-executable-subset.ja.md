@@ -37,10 +37,12 @@ handler variableはrequestごとに生成・破棄するScratch互換scalar stat
 - nameはScratch scalarからstring castできるものだけ
 - `set`はscalar inputをScratch string変換してstringを保持
 - `change`はscalar inputと既存値をScratch number変換してnumberを保持
-- JSON、`binary-ref`、`binary-body`を格納しない
+- parse済みJSON、`binary-ref`、`binary-body`を格納しない（JSON文字列の`json-text`はstringとして格納する）
 - route間、request間、thread間で共有しない
 
 未設定nameのreadはScratch互換の空文字、existsはfalseとして初期化されます。globalな初期値や前requestの値を引き継ぎません。
+
+Structured Dataの名前付きの値も、handler variableと同じくrequestごとに生成・破棄します。値はparse済みJSONで、名前はScratch scalarを`Cast.toString`して前後の空白を除いたものです。route間、request間で共有しません（[Structured Data lowering](structured-data-lowering.ja.md)）。
 
 JSON、record result、binary参照、resourceはcompilerが割り当てるlexical typed bindingで扱います。binding IDはdynamicなuser inputから作らず、producerより後かつ同じscope内だけで参照できます。`if`の後へbindingを持ち出す場合、継続する両branchが同じIDと型を宣言する必要があります。loop内で宣言したbindingはloop外へ漏れません。
 

@@ -378,6 +378,25 @@ function parseStatement(value: unknown, location: string): StatementIrV2 {
       sourceRef
     );
   }
+  if (kind === 'named-value-set') {
+    exactKeys(statement, ['kind', 'name', 'value', 'schema', 'sourceRef'], location);
+    const schema = statement.schema;
+    if (schema !== 'drop' && schema !== 'keep') throw new Error(`${location}.schema must be drop or keep.`);
+    return optional(
+      {
+        kind,
+        name: parseExpression(statement.name, `${location}.name`),
+        value: parseExpression(statement.value, `${location}.value`),
+        schema
+      },
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'named-value-delete') {
+    exactKeys(statement, ['kind', 'name', 'sourceRef'], location);
+    return optional({kind, name: parseExpression(statement.name, `${location}.name`)}, 'sourceRef', sourceRef);
+  }
   if (kind === 'respond') {
     exactKeys(statement, ['kind', 'format', 'body', 'sourceRef'], location);
     const format = statement.format;
@@ -652,6 +671,35 @@ function parseExpression(value: unknown, location: string): ExpressionIrV2 {
     }
     requireJsonValueType(expression.valueType, `${location}.valueType`);
     return optional({kind, valueType: JSON_VALUE_TYPE_V2, loopId}, 'sourceRef', sourceRef);
+  }
+  if (kind === 'named-value' || kind === 'named-value-exists') {
+    exactKeys(expression, ['kind', 'valueType', 'name', 'sourceRef'], location);
+    const name = parseExpression(expression.name, `${location}.name`);
+    if (kind === 'named-value-exists') {
+      requireValueType(expression.valueType, 'boolean', `${location}.valueType`);
+      return optional({kind, valueType: 'boolean', name}, 'sourceRef', sourceRef);
+    }
+    requireJsonValueType(expression.valueType, `${location}.valueType`);
+    return optional({kind, valueType: JSON_VALUE_TYPE_V2, name}, 'sourceRef', sourceRef);
+  }
+  if (kind === 'structured-decode') {
+    exactKeys(expression, ['kind', 'valueType', 'format', 'text', 'sourceRef'], location);
+    requireJsonValueType(expression.valueType, `${location}.valueType`);
+    if (expression.format !== 'json') throw new Error(`${location}.format must be json.`);
+    return optional(
+      {kind, valueType: JSON_VALUE_TYPE_V2, format: 'json', text: parseExpression(expression.text, `${location}.text`)},
+      'sourceRef',
+      sourceRef
+    );
+  }
+  if (kind === 'json-scalar-text') {
+    exactKeys(expression, ['kind', 'valueType', 'value', 'sourceRef'], location);
+    requireValueType(expression.valueType, 'string', `${location}.valueType`);
+    return optional(
+      {kind, valueType: 'string', value: parseExpression(expression.value, `${location}.value`)},
+      'sourceRef',
+      sourceRef
+    );
   }
   throw new Error(`${location}.kind is unsupported: ${kind}`);
 }

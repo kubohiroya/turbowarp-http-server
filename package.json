@@ -82,6 +82,7 @@
     "@eslint/js": "^9.39.5",
     "@kubohiroya/turbowarp-extension-manifest": "^0.5.0",
     "@kubohiroya/turbowarp-named-data": "^0.7.0",
+    "@kubohiroya/turbowarp-structured-data": "0.11.0-rc.1",
     "@kubohiroya/vite-plugin-turbowarp-extension": "^0.10.0",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",

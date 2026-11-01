@@ -20,9 +20,9 @@
     {
       "extensionId": "kubohiroyastructureddata",
       "packageName": "@kubohiroya/turbowarp-structured-data",
-      "packageVersion": "0.4.0",
+      "packageVersion": "0.11.0-rc.1",
       "manifestFormatVersion": 2,
-      "integrity": "sha256-atsgtqeDE72WUR23msLnagXtyHYwN/8OfCSJH0BZw5M=",
+      "integrity": "sha256-HQLxeHKHXs74OsGEZjcQGdRfeFAqTg6vK+Io6a6Cp6E=",
       "source": {"kind": "local", "path": "structured-data.json"}
     }
   ]

@@ -5,13 +5,27 @@ export const STRUCTURED_DATA_HTTP_STATUS = 422;
 
 export const STRUCTURED_DATA_RUNTIME_ERROR_CODES = [
   'INVALID_JSON',
+  'INVALID_NAME',
+  'DATA_NOT_FOUND',
   'INVALID_PATH',
   'PATH_NOT_FOUND',
   'TYPE_MISMATCH',
   'INDEX_OUT_OF_RANGE',
   'ITERATION_LIMIT_EXCEEDED',
-  'ITERATION_CONTEXT_REQUIRED'
+  'ITERATION_CONTEXT_REQUIRED',
+  'PARSE_LIMIT_EXCEEDED'
 ] as const;
+
+/**
+ * The limits `@kubohiroya/turbowarp-yaml-json`'s codec applies when Structured Data parses text. The
+ * root value is at depth 0 and each nested value one deeper; every value counts toward the node limit,
+ * object keys do not.
+ */
+export const STRUCTURED_DECODE_LIMITS = {
+  maxInputBytes: 256 * 1024,
+  maxDepth: 64,
+  maxNodes: 50_000
+} as const;
 
 export type StructuredDataRuntimeErrorCode = (typeof STRUCTURED_DATA_RUNTIME_ERROR_CODES)[number];
 
@@ -30,6 +44,61 @@ export function parseApplicationJson(text: unknown): JsonValue {
     if (error instanceof IrRuntimeError) throw error;
     runtimeError('INVALID_JSON', 'Input must be valid application JSON.');
   }
+}
+
+/**
+ * Decodes JSON text the way Structured Data's `parse JSON` block does: the UTF-8 size is checked before
+ * parsing, a syntax error is INVALID_JSON, and the depth and node limits are then checked in the same
+ * depth-first order as the codec, so a non-finite number met first is INVALID_JSON and a limit met
+ * first is PARSE_LIMIT_EXCEEDED.
+ */
+export function decodeStructuredJson(text: string): JsonValue {
+  if (exceedsInputBytes(text)) {
+    runtimeError('PARSE_LIMIT_EXCEEDED', 'Input exceeds the Structured Data size limit.');
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    runtimeError('INVALID_JSON', 'Input must be valid JSON.');
+  }
+  let nodes = 0;
+  const visit = (item: unknown, depth: number): void => {
+    if (depth > STRUCTURED_DECODE_LIMITS.maxDepth) {
+      runtimeError('PARSE_LIMIT_EXCEEDED', 'Data exceeds the Structured Data nesting limit.');
+    }
+    nodes += 1;
+    if (nodes > STRUCTURED_DECODE_LIMITS.maxNodes) {
+      runtimeError('PARSE_LIMIT_EXCEEDED', 'Data exceeds the Structured Data node limit.');
+    }
+    if (item === null || typeof item === 'string' || typeof item === 'boolean') return;
+    if (typeof item === 'number') {
+      if (Number.isFinite(item)) return;
+      runtimeError('INVALID_JSON', 'JSON contains an unsupported value.');
+    }
+    if (Array.isArray(item)) {
+      for (const child of item) visit(child, depth + 1);
+      return;
+    }
+    const record = item as Record<string, unknown>;
+    for (const key of Object.keys(record)) visit(record[key], depth + 1);
+  };
+  visit(value, 0);
+  return value as JsonValue;
+}
+
+/** The name a Structured Data block reads: Scratch's Cast.toString, then trimmed; empty is INVALID_NAME. */
+export function structuredDataName(value: unknown): string {
+  const name = String(value).trim();
+  if (name.length === 0) runtimeError('INVALID_NAME', 'Structured data name cannot be empty.');
+  return name;
+}
+
+/** A scalar as reporter text: a string as is, a number or boolean as JSON; null and containers fail. */
+export function jsonScalarText(value: JsonValue): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return stringifyApplicationJson(value);
+  runtimeError('TYPE_MISMATCH', 'Text requires a string, number, or boolean.');
 }
 
 export function isValidApplicationJson(text: unknown): boolean {
@@ -206,6 +275,15 @@ function assertJsonValue(value: unknown): asserts value is JsonValue {
     return;
   }
   runtimeError('INVALID_JSON', 'JSON contains an unsupported value.');
+}
+
+/**
+ * Counts with TextEncoder as the codec does, so a lone surrogate is the three bytes of U+FFFD. Every
+ * UTF-16 code unit encodes to at least one byte, so a longer string is over the limit without encoding.
+ */
+function exceedsInputBytes(text: string): boolean {
+  const limit = STRUCTURED_DECODE_LIMITS.maxInputBytes;
+  return text.length > limit || new TextEncoder().encode(text).byteLength > limit;
 }
 
 function isJsonObject(value: JsonValue): value is {[key: string]: JsonValue} {

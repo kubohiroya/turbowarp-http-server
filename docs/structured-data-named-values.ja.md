@@ -1,14 +1,14 @@
 # Structured Data named values（設計）
 
-`@kubohiroya/turbowarp-structured-data` 0.11の名前付きの値（target-local named data）を、Deploy IR v2でサーバー実行できるようにするための設計です。「決定事項」の6点は推奨案で合意済みで、実装は段階1から進めます。現行の0.4.0向けの規則は[Structured Data lowering](structured-data-lowering.ja.md)にあり、実装と同時に置き換えます。
+`@kubohiroya/turbowarp-structured-data` 0.11の名前付きの値（target-local named data）を、Deploy IR v2でサーバー実行できるようにするための設計です。「決定事項」の6点は推奨案で合意済みです。段階1（JSON）は0.11.0-rc.1に対して実装済みで、実装した規則は[Structured Data lowering](structured-data-lowering.ja.md)にあります。段階2と段階3は未実装です。
 
-## 現状
+## 実装前の状態
 
-compilerは0.4.0の、JSON文字列を引数で受け取りJSON文字列を返すAPIに固定されています（`src/compiler/structured-data/lowering.ts`の`STRUCTURED_DATA_PACKAGE_VERSION = '0.4.0'`）。0.11では、`parse JSON`で値に名前を付け、以後は名前とpathで読み書きします。
+段階1の実装前、compilerは0.4.0の、JSON文字列を引数で受け取りJSON文字列を返すAPIに固定されていました（`src/compiler/structured-data/lowering.ts`の`STRUCTURED_DATA_PACKAGE_VERSION = '0.4.0'`）。0.11では、`parse JSON`で値に名前を付け、以後は名前とpathで読み書きします。
 
-0.11の`dist/extension-manifest.json`（format version 2）はmanifest readerで読めますが、`buildCompilerOpcodeRegistry`が最初のblockで`TW2_MANIFEST_OPERATION_MISMATCH`（`structuredData.addSchemaProperty`がallowlistにない）を返します。0.11を使うprojectはサーバーでは1つもcompileできません。
+0.11の`dist/extension-manifest.json`（format version 2）はmanifest readerで読めましたが、`buildCompilerOpcodeRegistry`が最初のblockで`TW2_MANIFEST_OPERATION_MISMATCH`（`structuredData.addSchemaProperty`がallowlistにない）を返していました。0.11を使うprojectはサーバーでは1つもcompileできませんでした。
 
-サーバー実行に対応した28 operationと`KNOWN_SERVER_OPERATIONS`の照合結果です。
+実装前の、サーバー実行に対応した28 operationと`KNOWN_SERVER_OPERATIONS`の照合結果です。
 
 | 結果 | 件数 | operation |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ compilerは0.4.0の、JSON文字列を引数で受け取りJSON文字列を返�
 | allowlistにない | 18 | `getText`、`currentGet`、`currentGetText`、`parseJson`、`parseYaml`、`toJson`、`toYaml`、`deleteData`、`hasData`、schema系9件 |
 | allowlistだけにある | 2 | `isValidJson`、`normalizeJson`（0.11にない） |
 
-manifest側の語彙（`effect: state`、`resultType: jsonText`／`yamlText`、`dataReferenceType`）はreaderがすでに受け付けます。不足しているのはallowlist、lowering、IR、generated coreです。また、frontendはmanifestのCOMMAND blockをKVSにしか渡さず、Structured Dataのcommandは`TW2_UNSUPPORTED_COMMAND`になります。
+manifest側の語彙（`effect: state`、`resultType: jsonText`／`yamlText`、`dataReferenceType`）はreaderがすでに受け付けていました。不足していたのはallowlist、lowering、IR、generated coreです。また、frontendはmanifestのCOMMAND blockをKVSにしか渡さず、Structured Dataのcommandは`TW2_UNSUPPORTED_COMMAND`になっていました。
 
 ## 値の寿命と範囲
 
@@ -36,13 +36,18 @@ manifest側の語彙（`effect: state`、`resultType: jsonText`／`yamlText`、`
 
 ## 段階
 
-| 段階 | operation | 件数 |
-| --- | --- | --- |
-| 1. JSON | `parseJson`、`get`、`getText`、`has`、`keys`、`length`、`set`、`delete`、`deleteData`、`hasData`、`toJson`、`forEach`、`currentKey`、`currentIndex`、`currentValue`、`currentGet`、`currentGetText` | 17 |
-| 2. YAML | `parseYaml`、`toYaml` | 2 |
-| 3. schema | `defineSchema`、`beginSchema`、`addSchemaProperty`、`commitSchema`、`deleteSchema`、`hasSchema`、`schemaOf`、`parseJsonWithSchema`、`parseYamlWithSchema` | 9 |
+| 段階 | operation | 件数 | 状態 |
+| --- | --- | --- | --- |
+| 1. JSON | `parseJson`、`get`、`getText`、`has`、`keys`、`length`、`set`、`delete`、`deleteData`、`hasData`、`toJson`、`forEach`、`currentKey`、`currentIndex`、`currentValue`、`currentGet`、`currentGetText` | 17 | 実装済み |
+| 2. YAML | `parseYaml`、`toYaml` | 2 | 未実装 |
+| 3. schema | `defineSchema`、`beginSchema`、`addSchemaProperty`、`commitSchema`、`deleteSchema`、`hasSchema`、`schemaOf`、`parseJsonWithSchema`、`parseYamlWithSchema` | 9 | 未実装 |
 
 段階1で28 operationすべてのsignatureをallowlistに入れ、manifestを登録できるようにします。まだloweringしないoperationは、使われたblockごとに`TW2_UNSUPPORTED_OPERATION`で停止します。類似処理へのfallbackはしません。
+
+段階1の実装では、この設計に次の2点を足しました。詳細は[Structured Data lowering](structured-data-lowering.ja.md)にあります。
+
+- `named-value-set`は値を先に、名前を後に評価します。`parse JSON`がTEXTの解析をNAMEの確認より先に行うためです。`set`と`delete`の値は`named-value`を含むので、名前のerrorは引き続き先に出ます。
+- IR validatorは、Scratchが値をstringにする位置で`json-text`をScratch scalarとして受け付けます。これがないと「`to JSON [NAME]`の結果を`kvs.setText`に渡す」使い方がvalidatorで拒否されます。
 
 ## IR v2の追加
 
@@ -114,7 +119,7 @@ frontendには、Structured DataのCOMMAND blockを`StructuredDataLoweringContex
 
 ## 検証
 
-- structured-dataのgit tagから`tests/fixtures/semantic-parity.json`と`tests/fixtures/schema-parity.json`を取り込み、取り込み元のtagを記録します（npm packageには含まれません）。`readCases`はIR operation名で書かれているので、conformance harnessでgenerated coreに対してそのまま実行できます。
+- structured-dataのgit tagから`tests/fixtures/semantic-parity.json`と`tests/fixtures/schema-parity.json`を取り込み、取り込み元のtagを記録します（npm packageには含まれません）。段階1では、v0.11.0-rc.1のtagがmanifestFormatVersionを3と記録しているため、2に直したcommit `6bbb908`から`semantic-parity.json`を取り込みました。`schema-parity.json`は段階3で取り込みます。`readCases`はIR operation名で書かれているので、conformance harnessでgenerated coreに対してそのまま実行できます。
 - fixtureには`has`、`keys`、`length`、`delete`、`toYaml`、MAX、上限のcaseがありません。structured-data側で先に追加します。
 - `@kubohiroya/turbowarp-structured-data`をdevDependencyに加え、`tests/compiler-manifest-artifacts.test.ts`が実際のmanifestを読み、registryに登録できることまで確かめます。今はpackageが入っていないため、このtestは0.11のmanifestを読んでいません。
 - 0.4.0向けのtestとfixture（`tests/fixtures/compiler-manifests/structured-data.json`、`structured-*`のconformance fixture）は0.11向けに置き換えます。

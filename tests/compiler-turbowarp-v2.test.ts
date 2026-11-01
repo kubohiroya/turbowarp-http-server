@@ -186,36 +186,47 @@ describe('TurboWarp IR v2 frontend', () => {
     ]);
   });
 
-  it('uses the locked manifest registry to lower Structured Data reporters in project.json', async () => {
+  it('uses the locked manifest registry to lower Structured Data blocks in project.json', async () => {
     const {registry} = await resolveCompilerManifestLock(
       'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
     );
     const project = namedProject();
     const blocks = targetBlocks(project);
     blocks.named = {
+      opcode: 'kubohiroyastructureddata_parseJson',
+      next: 'respond',
+      parent: 'hat',
+      inputs: {NAME: [1, [10, 'doc']], TEXT: [1, [10, '{"b":2,"a":1}']]}
+    };
+    blocks.respond = {
       opcode: `${prefix}respondWithJson`,
       next: null,
-      parent: 'hat',
-      inputs: {BODY: [3, 'normalize']}
-    };
-    blocks.normalize = {
-      opcode: 'kubohiroyastructureddata_normalizeJson',
-      next: null,
       parent: 'named',
-      inputs: {JSON: [1, [10, '{"b":2,"a":1}']]}
+      inputs: {BODY: [3, 'toJson']}
+    };
+    blocks.toJson = {
+      opcode: 'kubohiroyastructureddata_toJson',
+      next: null,
+      parent: 'respond',
+      inputs: {NAME: [1, [10, 'doc']]}
     };
 
     const result = compileTurboWarpProjectV2(project, registry);
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.ir.routes[0]?.body[0]).toMatchObject({
-      kind: 'respond',
-      format: 'json',
-      body: {
-        kind: 'json-stringify',
-        value: {kind: 'literal', valueType: 'json-object', value: {b: 2, a: 1}}
+    expect(result.ir.routes[0]?.body).toMatchObject([
+      {
+        kind: 'named-value-set',
+        name: {kind: 'literal', valueType: 'string', value: 'doc'},
+        value: {kind: 'literal', valueType: 'json-object', value: {b: 2, a: 1}},
+        schema: 'drop'
+      },
+      {
+        kind: 'respond',
+        format: 'json',
+        body: {kind: 'json-stringify', value: {kind: 'named-value', name: {kind: 'literal', value: 'doc'}}}
       }
-    });
+    ]);
 
     const directory = await mkdtemp(join(tmpdir(), 'tw-v2-manifest-'));
     temporaryDirectories.push(directory);
@@ -230,7 +241,9 @@ describe('TurboWarp IR v2 frontend', () => {
       manifestLock: 'tests/fixtures/compiler-manifests/turbowarp-server.lock.json'
     });
     expect(compiled.diagnostics).toEqual([]);
-    expect(await readFile(join(output, 'src/core.generated.ts'), 'utf8')).toContain('stringifyApplicationJson');
+    const core = await readFile(join(output, 'src/core.generated.ts'), 'utf8');
+    expect(core).toContain('stringifyApplicationJson');
+    expect(core).toContain('const namedValues = new Map');
   });
 
   it('lowers locked KVS commands and reporters to target-neutral IR', async () => {

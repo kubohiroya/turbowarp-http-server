@@ -9,11 +9,12 @@ import {
   type StatementIrV2
 } from '../ir-v2/types.js';
 import {IrRuntimeError} from '../runtime/error.js';
-import {isValidApplicationJson, parseApplicationJson} from './runtime.js';
+import {decodeStructuredJson, parseApplicationJson} from './runtime.js';
 import {parseStructuredDataPath} from './path.js';
 
 export type StructuredDataLoweringDiagnosticCode =
   | 'TW2_STRUCTURED_INVALID_LITERAL'
+  | 'TW2_STRUCTURED_INVALID_NAME'
   | 'TW2_STRUCTURED_DYNAMIC_PATH'
   | 'TW2_STRUCTURED_INVALID_PATH'
   | 'TW2_STRUCTURED_INVALID_MAX'
@@ -32,9 +33,38 @@ export interface StructuredDataLoweringDiagnostic {
 
 export type StructuredDataArguments = Readonly<Record<string, ExpressionIrV2>>;
 
+export const STRUCTURED_DATA_EXTENSION_ID = 'kubohiroyastructureddata';
 export const STRUCTURED_DATA_PACKAGE_NAME = '@kubohiroya/turbowarp-structured-data';
-export const STRUCTURED_DATA_PACKAGE_VERSION = '0.4.0';
+/**
+ * Exact package versions whose manifest signatures and block semantics this lowering was checked
+ * against. Any other locked version stops at the first Structured Data block; nothing falls back.
+ */
+export const STRUCTURED_DATA_PACKAGE_VERSIONS: readonly string[] = ['0.11.0-rc.1'];
 
+/** Server-supported operations of the manifest that later phases of the named-values design lower. */
+const LATER_PHASE_OPERATIONS: Readonly<Record<string, string>> = {
+  'structuredData.parseYaml': 'phase 2 (YAML)',
+  'structuredData.toYaml': 'phase 2 (YAML)',
+  'structuredData.defineSchema': 'phase 3 (schema)',
+  'structuredData.beginSchema': 'phase 3 (schema)',
+  'structuredData.addSchemaProperty': 'phase 3 (schema)',
+  'structuredData.commitSchema': 'phase 3 (schema)',
+  'structuredData.deleteSchema': 'phase 3 (schema)',
+  'structuredData.hasSchema': 'phase 3 (schema)',
+  'structuredData.schemaOf': 'phase 3 (schema)',
+  'structuredData.parseJsonWithSchema': 'phase 3 (schema)',
+  'structuredData.parseYamlWithSchema': 'phase 3 (schema)'
+};
+
+export function isStructuredDataEntry(entry: CompilerOpcodeRegistryEntry): boolean {
+  return entry.extensionId === STRUCTURED_DATA_EXTENSION_ID;
+}
+
+/**
+ * Lowers Structured Data 0.11 blocks. Named values become request-local IR state: reads go through
+ * `named-value`, writes through `named-value-set`, and every path operation is one of the existing
+ * immutable json nodes between them.
+ */
 export class StructuredDataLoweringContext {
   public readonly diagnostics: StructuredDataLoweringDiagnostic[];
 
@@ -52,58 +82,124 @@ export class StructuredDataLoweringContext {
   ): ExpressionIrV2 | undefined {
     const operation = this.operation(entry, sourceRef);
     if (operation === undefined) return undefined;
-    if (operation === 'structuredData.currentKey') return this.current('key', sourceRef);
-    if (operation === 'structuredData.currentIndex') return this.current('index', sourceRef);
-    if (operation === 'structuredData.currentValue') {
-      const value = this.current('value', sourceRef);
-      return value === undefined ? undefined : jsonStringify(value, sourceRef);
-    }
-
-    const jsonArgument = requireArgument(args, 'JSON');
-    if (jsonArgument === undefined) return this.missingArgument('JSON', sourceRef);
-    if (operation === 'structuredData.isValidJson') {
-      if (isLiteralText(jsonArgument)) return literal('boolean', isValidApplicationJson(jsonArgument.value), sourceRef);
-      const text = this.jsonText(jsonArgument, sourceRef);
-      return text === undefined ? undefined : {kind: 'json-is-valid', valueType: 'boolean', text, sourceRef};
-    }
-    const root = this.parseJsonArgument(jsonArgument, inputSource(sourceRef, 'JSON'));
-    if (root === undefined) return undefined;
-    if (operation === 'structuredData.normalizeJson') return jsonStringify(root, sourceRef);
-
-    const path = this.literalPath(args.PATH, inputSource(sourceRef, 'PATH'));
-    if (path === undefined) return undefined;
-    if (operation === 'structuredData.get') {
-      return jsonStringify({kind: 'json-get', valueType: JSON_VALUE_TYPE_V2, root, path, sourceRef}, sourceRef);
-    }
-    if (operation === 'structuredData.has') return {kind: 'json-has', valueType: 'boolean', root, path, sourceRef};
-    if (operation === 'structuredData.delete') {
-      if (path.length === 0) {
-        this.report(
-          'TW2_STRUCTURED_INVALID_PATH',
-          'Structured Data delete cannot target the root path.',
-          'The browser extension rejects deleting the root value.',
-          'Delete a child key/index or use a different root value.',
-          inputSource(sourceRef, 'PATH')
-        );
-        return undefined;
+    switch (operation) {
+      case 'structuredData.currentKey':
+        return this.current('key', sourceRef);
+      case 'structuredData.currentIndex':
+        return this.current('index', sourceRef);
+      case 'structuredData.currentValue': {
+        const value = this.current('value', sourceRef);
+        return value === undefined ? undefined : jsonStringify(value, sourceRef);
       }
-      return jsonStringify({kind: 'json-delete', valueType: JSON_VALUE_TYPE_V2, root, path, sourceRef}, sourceRef);
+      case 'structuredData.currentGet':
+      case 'structuredData.currentGetText': {
+        // The browser checks for an active loop before it parses the path, so a missing loop is the
+        // only diagnostic even when the path is also invalid.
+        const value = this.current('value', sourceRef);
+        if (value === undefined) return undefined;
+        const path = this.literalPath(args.PATH, inputSource(sourceRef, 'PATH'));
+        if (path === undefined) return undefined;
+        const read = jsonGet(value, path, sourceRef);
+        return operation === 'structuredData.currentGet' ? jsonStringify(read, sourceRef) : scalarText(read, sourceRef);
+      }
+      case 'structuredData.hasData': {
+        const name = this.name(args, sourceRef);
+        return name === undefined ? undefined : {kind: 'named-value-exists', valueType: 'boolean', name, sourceRef};
+      }
+      case 'structuredData.toJson': {
+        const name = this.name(args, sourceRef);
+        return name === undefined ? undefined : jsonStringify(namedValue(name, sourceRef), sourceRef);
+      }
+      case 'structuredData.get':
+      case 'structuredData.getText':
+      case 'structuredData.has':
+      case 'structuredData.keys':
+      case 'structuredData.length': {
+        const name = this.name(args, sourceRef);
+        const path = this.literalPath(args.PATH, inputSource(sourceRef, 'PATH'));
+        if (name === undefined || path === undefined) return undefined;
+        const root = namedValue(name, sourceRef);
+        if (operation === 'structuredData.get') return jsonStringify(jsonGet(root, path, sourceRef), sourceRef);
+        if (operation === 'structuredData.getText') return scalarText(jsonGet(root, path, sourceRef), sourceRef);
+        if (operation === 'structuredData.has') return {kind: 'json-has', valueType: 'boolean', root, path, sourceRef};
+        if (operation === 'structuredData.keys') {
+          return jsonStringify({kind: 'json-keys', valueType: 'json-array', root, path, sourceRef}, sourceRef);
+        }
+        return {kind: 'json-length', valueType: 'number', root, path, sourceRef};
+      }
+      default:
+        return this.notLowered(operation, sourceRef);
     }
-    if (operation === 'structuredData.keys') {
-      return jsonStringify({kind: 'json-keys', valueType: 'json-array', root, path, sourceRef}, sourceRef);
+  }
+
+  public lowerStatement(
+    entry: CompilerOpcodeRegistryEntry,
+    args: StructuredDataArguments,
+    sourceRef: SourceRefV2
+  ): StatementIrV2 | undefined {
+    const operation = this.operation(entry, sourceRef);
+    if (operation === undefined) return undefined;
+    switch (operation) {
+      case 'structuredData.parseJson': {
+        // The browser decodes TEXT before it checks NAME, so the TEXT diagnostic comes first.
+        const text = args.TEXT;
+        if (text === undefined) return this.missingArgument('TEXT', sourceRef);
+        const value = this.decodeText(text, inputSource(sourceRef, 'TEXT'));
+        const name = this.name(args, sourceRef);
+        if (value === undefined || name === undefined) return undefined;
+        return {kind: 'named-value-set', name, value, schema: 'drop', sourceRef};
+      }
+      case 'structuredData.set': {
+        const name = this.name(args, sourceRef);
+        const path = this.literalPath(args.PATH, inputSource(sourceRef, 'PATH'));
+        const valueArgument = args.VALUE;
+        if (valueArgument === undefined) return this.missingArgument('VALUE', sourceRef);
+        const replacement = this.parseJsonArgument(valueArgument, inputSource(sourceRef, 'VALUE'));
+        if (name === undefined || path === undefined || replacement === undefined) return undefined;
+        return {
+          kind: 'named-value-set',
+          name,
+          value: {
+            kind: 'json-set',
+            valueType: JSON_VALUE_TYPE_V2,
+            root: namedValue(name, sourceRef),
+            path,
+            value: replacement,
+            sourceRef
+          },
+          schema: 'keep',
+          sourceRef
+        };
+      }
+      case 'structuredData.delete': {
+        const name = this.name(args, sourceRef);
+        const path = this.literalPath(args.PATH, inputSource(sourceRef, 'PATH'));
+        if (path !== undefined && path.length === 0) {
+          this.report(
+            'TW2_STRUCTURED_INVALID_PATH',
+            'Structured Data delete cannot target the root path.',
+            'The browser extension rejects deleting the root value.',
+            'Delete a child key/index, or use delete data to remove the whole value.',
+            inputSource(sourceRef, 'PATH')
+          );
+          return undefined;
+        }
+        if (name === undefined || path === undefined) return undefined;
+        return {
+          kind: 'named-value-set',
+          name,
+          value: {kind: 'json-delete', valueType: JSON_VALUE_TYPE_V2, root: namedValue(name, sourceRef), path, sourceRef},
+          schema: 'keep',
+          sourceRef
+        };
+      }
+      case 'structuredData.deleteData': {
+        const name = this.name(args, sourceRef);
+        return name === undefined ? undefined : {kind: 'named-value-delete', name, sourceRef};
+      }
+      default:
+        return this.notLowered(operation, sourceRef);
     }
-    if (operation === 'structuredData.length') {
-      return {kind: 'json-length', valueType: 'number', root, path, sourceRef};
-    }
-    if (operation === 'structuredData.set') {
-      const valueArgument = requireArgument(args, 'VALUE');
-      if (valueArgument === undefined) return this.missingArgument('VALUE', sourceRef);
-      const value = this.parseJsonArgument(valueArgument, inputSource(sourceRef, 'VALUE'));
-      return value === undefined
-        ? undefined
-        : jsonStringify({kind: 'json-set', valueType: JSON_VALUE_TYPE_V2, root, path, value, sourceRef}, sourceRef);
-    }
-    this.unsupported(operation, sourceRef);
   }
 
   public lowerForEach(
@@ -114,26 +210,26 @@ export class StructuredDataLoweringContext {
   ): StatementIrV2 | undefined {
     const operation = this.operation(entry, sourceRef);
     if (operation !== 'structuredData.forEach') {
-      if (operation !== undefined) this.unsupported(operation, sourceRef);
+      if (operation !== undefined) this.notLowered(operation, sourceRef);
       return undefined;
     }
-    const jsonArgument = requireArgument(args, 'JSON');
-    if (jsonArgument === undefined) return this.missingArgument('JSON', sourceRef);
-    const root = this.parseJsonArgument(jsonArgument, inputSource(sourceRef, 'JSON'));
+    const name = this.name(args, sourceRef);
     const path = this.literalPath(args.PATH, inputSource(sourceRef, 'PATH'));
     const maxIterations = this.literalMaximum(args.MAX, inputSource(sourceRef, 'MAX'));
-    if (root === undefined || path === undefined || maxIterations === undefined) return undefined;
+    if (name === undefined || path === undefined || maxIterations === undefined) return undefined;
     const loopId = `structured_${sourceRef.targetIndex}_${sanitizeId(sourceRef.blockId)}`;
     const nested = new StructuredDataLoweringContext(this.diagnostics, [...this.loopIds, loopId]);
     const body = lowerBody(nested);
-    return {kind: 'json-for-each', loopId, root, path, maxIterations, body, sourceRef};
+    // json-for-each evaluates its root once, so the loop walks the value as it was when the loop
+    // started, as the browser does by copying the entries out before the first iteration.
+    return {kind: 'json-for-each', loopId, root: namedValue(name, sourceRef), path, maxIterations, body, sourceRef};
   }
 
   private operation(entry: CompilerOpcodeRegistryEntry, sourceRef: SourceRefV2): string | undefined {
     if (
-      entry.extensionId !== 'kubohiroyastructureddata' ||
+      entry.extensionId !== STRUCTURED_DATA_EXTENSION_ID ||
       entry.packageName !== STRUCTURED_DATA_PACKAGE_NAME ||
-      entry.packageVersion !== STRUCTURED_DATA_PACKAGE_VERSION ||
+      !STRUCTURED_DATA_PACKAGE_VERSIONS.includes(entry.packageVersion) ||
       entry.block.server?.supported !== true ||
       entry.block.server.irOperation === undefined
     ) {
@@ -163,6 +259,48 @@ export class StructuredDataLoweringContext {
     return {kind: 'iteration-value', valueType: JSON_VALUE_TYPE_V2, loopId, sourceRef};
   }
 
+  /** NAME may be any expression; only a literal that is empty after trimming is known to fail. */
+  private name(args: StructuredDataArguments, sourceRef: SourceRefV2): ExpressionIrV2 | undefined {
+    const name = args.NAME;
+    if (name === undefined) return this.missingArgument('NAME', sourceRef);
+    if (isLiteralText(name) && name.value.trim().length === 0) {
+      this.report(
+        'TW2_STRUCTURED_INVALID_NAME',
+        'Structured Data name literal is empty.',
+        'The browser extension trims the name and rejects an empty one with INVALID_NAME.',
+        'Give the value a non-empty name.',
+        inputSource(sourceRef, 'NAME')
+      );
+      return undefined;
+    }
+    return name;
+  }
+
+  /** parse JSON TEXT: a literal is decoded now with the codec limits, anything else at runtime. */
+  private decodeText(expression: ExpressionIrV2, sourceRef: SourceRefV2): ExpressionIrV2 | undefined {
+    if (!isLiteralText(expression)) {
+      return {kind: 'structured-decode', valueType: JSON_VALUE_TYPE_V2, format: 'json', text: expression, sourceRef};
+    }
+    try {
+      const value = decodeStructuredJson(expression.value);
+      return literal(jsonLiteralType(value), value, sourceRef);
+    } catch (error) {
+      if (!(error instanceof IrRuntimeError)) throw error;
+      const overLimit = error.code === 'PARSE_LIMIT_EXCEEDED';
+      this.report(
+        'TW2_STRUCTURED_INVALID_LITERAL',
+        overLimit ? 'Structured Data JSON literal exceeds the parse limits.' : 'Structured Data JSON literal is invalid.',
+        overLimit
+          ? 'The browser codec rejects text over 256 KiB, deeper than 64 levels, or with more than 50,000 values.'
+          : 'Literal JSON is validated during compilation instead of deferring a known failure to runtime.',
+        overLimit ? 'Shrink the literal or read the text from the request.' : 'Provide valid JSON text.',
+        sourceRef
+      );
+      return undefined;
+    }
+  }
+
+  /** set VALUE: the browser only JSON.parses it, so neither literal nor dynamic VALUE has codec limits. */
   private parseJsonArgument(expression: ExpressionIrV2, sourceRef: SourceRefV2): ExpressionIrV2 | undefined {
     if (isLiteralText(expression)) {
       try {
@@ -204,7 +342,7 @@ export class StructuredDataLoweringContext {
       this.report(
         'TW2_STRUCTURED_DYNAMIC_PATH',
         'Structured Data path must be a compile-time string literal.',
-        'The MVP accepts only the locked tw-structured-path grammar and does not evaluate dynamic paths.',
+        'The compiler accepts only the locked tw-structured-path grammar and does not evaluate dynamic paths.',
         'Replace the path input with a literal such as $.items[0].',
         sourceRef
       );
@@ -247,12 +385,25 @@ export class StructuredDataLoweringContext {
     );
   }
 
+  /** An allowlisted operation this phase does not lower, or one used in the wrong block position. */
+  private notLowered(operation: string, sourceRef: SourceRefV2): undefined {
+    const phase = LATER_PHASE_OPERATIONS[operation];
+    if (phase === undefined) return this.unsupported(operation, sourceRef);
+    this.report(
+      'TW2_UNSUPPORTED_OPERATION',
+      `Structured Data operation ${operation} is not lowered for the server until ${phase}.`,
+      `Phase 1 lowers only the JSON operations; ${phase} of the named-values design adds this one, and the compiler never substitutes a similar operation.`,
+      'Run this block in the browser or through the WebSocket bridge, or remove it from the HTTP handler.',
+      sourceRef
+    );
+  }
+
   private unsupported(operation: string, sourceRef: SourceRefV2): undefined {
     this.report(
       'TW2_UNSUPPORTED_OPERATION',
       `Structured Data operation is not supported by this lowering phase: ${operation}`,
-      'Only compiler-allowlisted operations from the locked manifest may be lowered.',
-      'Use a supported manifest version and opcode.',
+      'Only compiler-allowlisted operations from a verified locked manifest version may be lowered.',
+      'Lock a verified Structured Data version and use its blocks.',
       sourceRef
     );
   }
@@ -266,10 +417,6 @@ export class StructuredDataLoweringContext {
   ): void {
     this.diagnostics.push({severity: 'error', code, message, reason, suggestion, sourceRef});
   }
-}
-
-function requireArgument(args: StructuredDataArguments, name: string): ExpressionIrV2 | undefined {
-  return args[name];
 }
 
 function isLiteralText(expression: ExpressionIrV2 | undefined): expression is Extract<ExpressionIrV2, {kind: 'literal'}> & {
@@ -300,8 +447,21 @@ function literal(
   return {kind: 'literal', valueType, value, sourceRef} as ExpressionIrV2;
 }
 
+/** Each read gets its own copy of the name, so no IR node is shared between two parents. */
+function namedValue(name: ExpressionIrV2, sourceRef: SourceRefV2): ExpressionIrV2 {
+  return {kind: 'named-value', valueType: JSON_VALUE_TYPE_V2, name: structuredClone(name), sourceRef};
+}
+
+function jsonGet(root: ExpressionIrV2, path: PathSegmentV2[], sourceRef: SourceRefV2): ExpressionIrV2 {
+  return {kind: 'json-get', valueType: JSON_VALUE_TYPE_V2, root, path, sourceRef};
+}
+
 function jsonStringify(value: ExpressionIrV2, sourceRef: SourceRefV2): ExpressionIrV2 {
   return {kind: 'json-stringify', valueType: 'json-text', value, sourceRef};
+}
+
+function scalarText(value: ExpressionIrV2, sourceRef: SourceRefV2): ExpressionIrV2 {
+  return {kind: 'json-scalar-text', valueType: 'string', value, sourceRef};
 }
 
 function inputSource(sourceRef: SourceRefV2, input: string): SourceRefV2 {

@@ -1,7 +1,13 @@
 import {readFile, readdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {describe, expect, it} from 'vitest';
-import {parseCompilerExtensionManifestJson} from '../src/compiler/manifest/index.js';
+import {
+  buildCompilerOpcodeRegistry,
+  KNOWN_SERVER_OPERATIONS,
+  manifestIntegrity,
+  parseCompilerExtensionManifestJson
+} from '../src/compiler/manifest/index.js';
+import {STRUCTURED_DATA_PACKAGE_VERSIONS} from '../src/compiler/structured-data/index.js';
 
 /**
  * Reads real extension API manifests with the compiler's own reader.
@@ -37,5 +43,48 @@ describe('real extension API manifests', () => {
     }
 
     expect(found.length).toBeGreaterThan(0);
+    expect(found).toContain('turbowarp-structured-data');
+  });
+
+  it('registers the published Structured Data manifest against the compiler allowlist', async () => {
+    const packageDirectory = 'node_modules/@kubohiroya/turbowarp-structured-data';
+    const packageJson = JSON.parse(await readFile(join(packageDirectory, 'package.json'), 'utf8')) as {
+      name: string;
+      version: string;
+    };
+    const text = await readFile(join(packageDirectory, 'dist/extension-manifest.json'), 'utf8');
+    const manifest = parseCompilerExtensionManifestJson(text);
+    const integrity = manifestIntegrity(text);
+
+    // The allowlist compares JSON text, so registering the real file is what proves key order too.
+    const registry = buildCompilerOpcodeRegistry([
+      {
+        manifest,
+        exactIntegrity: integrity,
+        lock: {
+          extensionId: manifest.id,
+          packageName: packageJson.name,
+          packageVersion: packageJson.version,
+          manifestFormatVersion: manifest.formatVersion,
+          integrity,
+          source: {kind: 'bundled', id: `${packageJson.name}@${packageJson.version}`}
+        }
+      }
+    ]);
+
+    expect(STRUCTURED_DATA_PACKAGE_VERSIONS).toContain(packageJson.version);
+    expect(registry.entries).toHaveLength(manifest.blocks.length);
+    const serverOperations = manifest.blocks
+      .filter((block) => block.server?.supported === true)
+      .map((block) => block.server?.irOperation)
+      .sort();
+    expect(serverOperations).toHaveLength(28);
+    expect(serverOperations).toEqual(
+      Object.keys(KNOWN_SERVER_OPERATIONS)
+        .filter((operation) => operation.startsWith('structuredData.'))
+        .sort()
+    );
+    // The committed fixture is the same file, byte for byte, so the lock integrity stays meaningful.
+    expect(await readFile('tests/fixtures/compiler-manifests/structured-data.json', 'utf8')).toBe(text);
   });
 });

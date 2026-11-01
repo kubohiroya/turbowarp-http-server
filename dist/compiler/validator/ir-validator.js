@@ -96,6 +96,14 @@ function analyzeStatement(statement, bindings, context) {
             requireScratchScalar(validateExpression(statement.value, bindings, context), context, statement.sourceRef, 'KVS text values');
         }
     }
+    else if (statement.kind === 'named-value-set') {
+        // The value is evaluated before the name at runtime; the order here only affects diagnostics.
+        requireJsonValue(validateExpression(statement.value, bindings, context), context, statement.value.sourceRef ?? statement.sourceRef, 'Structured Data named value');
+        requireScratchScalar(validateExpression(statement.name, bindings, context), context, statement.sourceRef, 'Structured Data names');
+    }
+    else if (statement.kind === 'named-value-delete') {
+        requireScratchScalar(validateExpression(statement.name, bindings, context), context, statement.sourceRef, 'Structured Data names');
+    }
     else if (statement.kind === 'record-create') {
         requireCapability({ kind: 'record-store' }, context, statement.sourceRef);
         validateExpression(statement.data, bindings, context);
@@ -263,6 +271,15 @@ function validateExpression(expression, bindings, context) {
         requireJsonValue(validateExpression(expression.root, bindings, context), context, expression.sourceRef, 'Structured Data root');
         requireJsonValue(validateExpression(expression.value, bindings, context), context, expression.sourceRef, 'Structured Data replacement');
     }
+    if (expression.kind === 'named-value' || expression.kind === 'named-value-exists') {
+        requireScratchScalar(validateExpression(expression.name, bindings, context), context, expression.sourceRef, 'Structured Data names');
+    }
+    if (expression.kind === 'structured-decode') {
+        requireScratchScalar(validateExpression(expression.text, bindings, context), context, expression.sourceRef, 'Structured Data decode text');
+    }
+    if (expression.kind === 'json-scalar-text') {
+        requireJsonValue(validateExpression(expression.value, bindings, context), context, expression.sourceRef, 'Structured Data text input');
+    }
     if (expression.kind === 'iteration-key' ||
         expression.kind === 'iteration-index' ||
         expression.kind === 'iteration-value') {
@@ -322,9 +339,11 @@ function requireCapability(capability, context, sourceRef) {
     report(context, 'TW2_CAPABILITY_MISSING', `IR operation requires undeclared capability ${key}.`, 'Target-neutral capability requirements must be complete before adapter selection.', 'Add the logical capability to IR.capabilities.', sourceRef);
 }
 function requireScratchScalar(type, context, sourceRef, subject) {
+    // json-text is a string at runtime, so it is Scratch text wherever a scalar is cast to a string.
     const members = valueTypeMembers(type);
-    if (members.every((member) => member === 'string' || member === 'number' || member === 'boolean'))
+    if (members.every((member) => member === 'string' || member === 'json-text' || member === 'number' || member === 'boolean')) {
         return;
+    }
     report(context, 'TW2_HANDLER_VARIABLE_TYPE', `${subject} must use a Scratch-compatible scalar value.`, 'JSON, binary-ref, and resource state belong in typed lexical bindings.', 'Convert to a scalar or use a compiler-generated typed binding.', sourceRef);
 }
 function requireValueType(actual, expected, context, sourceRef, subject) {
@@ -369,6 +388,12 @@ function statementWork(statement, limit) {
         if (statement.kind === 'kvs-set-text')
             work = saturatedAdd(work, expressionWork(statement.value, limit), limit);
     }
+    if (statement.kind === 'named-value-set') {
+        work = saturatedAdd(work, expressionWork(statement.name, limit), limit);
+        work = saturatedAdd(work, expressionWork(statement.value, limit), limit);
+    }
+    if (statement.kind === 'named-value-delete')
+        work = saturatedAdd(work, expressionWork(statement.name, limit), limit);
     if (statement.kind === 'record-create')
         work = saturatedAdd(work, expressionWork(statement.data, limit), limit);
     if (statement.kind === 'record-get' || statement.kind === 'record-delete') {
@@ -410,6 +435,13 @@ function expressionWork(expression, limit) {
     if (expression.kind === 'json-set') {
         return saturatedAdd(saturatedAdd(1, expressionWork(expression.root, limit), limit), expressionWork(expression.value, limit), limit);
     }
+    if (expression.kind === 'named-value' || expression.kind === 'named-value-exists') {
+        return saturatedAdd(1, expressionWork(expression.name, limit), limit);
+    }
+    if (expression.kind === 'structured-decode')
+        return saturatedAdd(1, expressionWork(expression.text, limit), limit);
+    if (expression.kind === 'json-scalar-text')
+        return saturatedAdd(1, expressionWork(expression.value, limit), limit);
     return 1;
 }
 function saturatedAdd(left, right, limit) {
