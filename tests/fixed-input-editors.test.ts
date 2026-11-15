@@ -84,6 +84,32 @@ describe('optional host registration', () => {
     events.get('RUNTIME_DISPOSED')!(); lifecycle.ensure(opcodes); lifecycle.dispose(); expect(events.size).toBe(0);
     expect(cleaned).toHaveLength(fixedInputEditors.length * 3);
   });
+  it('registers the same editors again after the next project loads, and the owner dispose is final', () => {
+    // Every project load disposes the runtime but keeps the extension loaded for the next project.
+    const listeners = new Map<string, Set<() => void>>();
+    const runtime = {
+      on: (event: string, listener: () => void) => {if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event)!.add(listener);},
+      off: (event: string, listener: () => void) => {listeners.get(event)?.delete(listener);},
+      emit: (event: string) => {for (const listener of [...listeners.get(event) ?? []]) listener();},
+      count: () => [...listeners.values()].reduce((sum, set) => sum + set.size, 0)
+    };
+    const removes: ReturnType<typeof vi.fn>[] = [];
+    const register = vi.fn(() => {const remove = vi.fn(); removes.push(remove); return remove;});
+    const lifecycle = fixedInputRegistration({gui: {blockEditors: {apiVersion: 1, registerFixedInputEditor: register}}, vm: {runtime}});
+    const n = fixedInputEditors.length;
+    lifecycle.ensure(opcodes); expect(register).toHaveBeenCalledTimes(n);
+    runtime.emit('RUNTIME_DISPOSED');
+    expect(removes.every(remove => remove.mock.calls.length === 1)).toBe(true);
+    lifecycle.ensure(opcodes); expect(register).toHaveBeenCalledTimes(n);
+    runtime.emit('PROJECT_LOADED'); expect(register).toHaveBeenCalledTimes(2 * n);
+    runtime.emit('PROJECT_LOADED'); lifecycle.ensure(opcodes); expect(register).toHaveBeenCalledTimes(2 * n);
+    expect(removes.slice(n).every(remove => remove.mock.calls.length === 0)).toBe(true);
+    runtime.emit('RUNTIME_DISPOSED'); runtime.emit('PROJECT_LOADED'); expect(register).toHaveBeenCalledTimes(3 * n);
+    lifecycle.dispose(); expect(removes.every(remove => remove.mock.calls.length === 1)).toBe(true);
+    expect(runtime.count()).toBe(0);
+    runtime.emit('RUNTIME_DISPOSED'); runtime.emit('PROJECT_LOADED'); lifecycle.ensure(opcodes);
+    expect(register).toHaveBeenCalledTimes(3 * n);
+  });
   it('partial failure rolls back only this attempt', () => {
     const remove = vi.fn(), count = {value: 0};
     const api = {apiVersion: 1, registerFixedInputEditor: () => {if (++count.value === 2 || fixedInputEditors.length === 1) throw new Error('refused'); return remove;}};
