@@ -327,8 +327,15 @@ describe('Structured Data 0.11 lowering', () => {
     }
   });
 
+  it('lowers the verified 0.11.0 stable release', () => {
+    const context = new StructuredDataLoweringContext();
+    expect(context.lowerReporter({...entry('structuredData.toJson'), packageVersion: '0.11.0'}, {NAME: name}, source))
+      .toMatchObject({kind: 'json-stringify'});
+    expect(context.diagnostics).toEqual([]);
+  });
+
   it('does not fall back for a package version it was not verified against', () => {
-    for (const packageVersion of ['0.4.0', '0.11.0', '0.11.0-rc.0']) {
+    for (const packageVersion of ['0.4.0', '0.11.1', '0.11.0-rc.0']) {
       const context = new StructuredDataLoweringContext();
       expect(
         context.lowerReporter({...entry('structuredData.toJson'), packageVersion}, {NAME: name}, source)

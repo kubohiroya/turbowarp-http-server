@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-http-server",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "A TurboWarp extension for connecting block programs to an HTTP bridge server.",
   "author": {
     "name": "Hiroya Kubo",
@@ -82,7 +82,7 @@
     "@eslint/js": "^9.39.5",
     "@kubohiroya/turbowarp-extension-manifest": "^0.5.0",
     "@kubohiroya/turbowarp-named-data": "^0.8.0",
-    "@kubohiroya/turbowarp-structured-data": "0.11.0-rc.1",
+    "@kubohiroya/turbowarp-structured-data": "0.11.0",
     "@kubohiroya/vite-plugin-turbowarp-extension": "^0.11.0",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",
@@ -97,7 +97,7 @@
     "vite": "^8.2.2",
     "vitest": "^4.1.10",
     "wrangler": "4.135.0",
-    "@kubohiroya/turbowarp-extension-data-editor": "^0.10.0"
+    "@kubohiroya/turbowarp-extension-data-editor": "^0.11.0"
   },
   "gitHead": "a1bf89b8787f9270e591f43512b427ada69f85ef",
   "x-turbowarp-source": {
