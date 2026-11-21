@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-http-server",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A TurboWarp extension for connecting block programs to an HTTP bridge server.",
   "author": {
     "name": "Hiroya Kubo",
@@ -82,7 +82,7 @@
     "@eslint/js": "^9.39.5",
     "@kubohiroya/turbowarp-extension-manifest": "^0.5.0",
     "@kubohiroya/turbowarp-named-data": "^0.8.0",
-    "@kubohiroya/turbowarp-structured-data": "0.11.0",
+    "@kubohiroya/turbowarp-structured-data": "0.11.1",
     "@kubohiroya/vite-plugin-turbowarp-extension": "^0.11.0",
     "@types/node": "^24.13.3",
     "@types/ws": "^8.18.1",
@@ -104,5 +104,27 @@
     "revision": "a1bf89b8787f9270e591f43512b427ada69f85ef",
     "revisionRole": "base-commit",
     "sourceState": "local-release-overlay"
+  },
+  "turbowarpExtension": {
+    "resourceDeclaration": {
+      "schemaVersion": 1,
+      "resources": [
+        {
+          "type": "network",
+          "usage": "required",
+          "purpose": {
+            "en": "Connect to the HTTP bridge over WebSocket",
+            "ja": "HTTPブリッジへWebSocket接続する"
+          },
+          "data": {
+            "direction": "bidirectional",
+            "content": {
+              "en": "HTTP request/response data exchanged with the configured bridge",
+              "ja": "設定したブリッジとやり取りするHTTP要求・応答データ"
+            }
+          }
+        }
+      ]
+    }
   }
 }
