@@ -39,7 +39,7 @@ export const STRUCTURED_DATA_PACKAGE_NAME = '@kubohiroya/turbowarp-structured-da
  * Exact package versions whose manifest signatures and block semantics this lowering was checked
  * against. Any other locked version stops at the first Structured Data block; nothing falls back.
  */
-export const STRUCTURED_DATA_PACKAGE_VERSIONS: readonly string[] = ['0.11.0-rc.1', '0.11.0', '0.11.1'];
+export const STRUCTURED_DATA_PACKAGE_VERSIONS: readonly string[] = ['0.11.0-rc.1', '0.11.0', '0.11.1', '0.12.0'];
 
 /** Server-supported operations of the manifest that later phases of the named-values design lower. */
 const LATER_PHASE_OPERATIONS: Readonly<Record<string, string>> = {
