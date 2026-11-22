@@ -25,17 +25,17 @@ importers:
         specifier: ^9.39.5
         version: 9.39.5
       '@kubohiroya/turbowarp-extension-data-editor':
-        specifier: ^0.11.0
-        version: 0.11.0(react@18.3.1)
+        specifier: ^0.11.2
+        version: 0.11.2(react@18.3.1)
       '@kubohiroya/turbowarp-extension-manifest':
-        specifier: ^0.5.0
-        version: 0.5.0
+        specifier: ^0.6.0
+        version: 0.6.0
       '@kubohiroya/turbowarp-named-data':
-        specifier: ^0.8.0
-        version: 0.8.0
+        specifier: ^0.9.0
+        version: 0.9.0
       '@kubohiroya/turbowarp-structured-data':
-        specifier: 0.11.1
-        version: 0.11.1(@kubohiroya/turbowarp-named-data@0.8.0)(supports-color@10.2.2)
+        specifier: 0.12.0
+        version: 0.12.0(@kubohiroya/turbowarp-named-data@0.9.0)(supports-color@10.2.2)
       '@kubohiroya/vite-plugin-turbowarp-extension':
         specifier: ^0.11.0
         version: 0.11.0(vite@8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(tsx@4.23.13)(yaml@2.9.1))
@@ -970,18 +970,18 @@ packages:
   '@jsdevtools/ono@7.1.3':
     resolution: {integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg==}
 
-  '@kubohiroya/turbowarp-document-data@0.7.1':
-    resolution: {integrity: sha512-3nOrlf7AMMT5Smh71TTj7gI85Wz3dfslPMIx1ir522LS3o5u5ruvWgCJ106SUVlhYbjrXVNzGiwG5Mbj5sYqsQ==}
+  '@kubohiroya/turbowarp-document-data@0.8.0':
+    resolution: {integrity: sha512-gU7aBBNn4ufmqkOIB9k08d7DkPXUhFZ7qUunOt42xKSrKSjjZa0efpiZCSb0s/TuTKzkNHSdO14DysMCHX6c4w==}
     engines: {node: '>=24'}
     peerDependencies:
-      '@kubohiroya/turbowarp-named-data': 0.8.1
+      '@kubohiroya/turbowarp-named-data': 0.9.0
 
   '@kubohiroya/turbowarp-document-source@0.4.0':
     resolution: {integrity: sha512-rHcgB6YLMPsXTp39wrEkZboRtYMfjCeJ4qcOSJu5Ns2PblUxHPXcOGnMdV9SM/cCKRSg/7FlJg3XsXlNKH27aQ==}
     engines: {node: '>=22'}
 
-  '@kubohiroya/turbowarp-extension-data-editor@0.11.0':
-    resolution: {integrity: sha512-x1ttE4cvsKfKJz7RNDt4/hK/9pk+GEHDm4oR9Y6t0qY6nRDXatAl3ybPJhU7Y702tCYhmtn9Fo46hjYM6OS9dA==}
+  '@kubohiroya/turbowarp-extension-data-editor@0.11.2':
+    resolution: {integrity: sha512-uTOZJSNVzvpJIMGyOUTaQt2LOXXf5kru8mUyRD2Y/rsYUNJoGM4S8dhEI5UeyDFaXR7rCRVzkFR5pAcqjmSycQ==}
     engines: {node: '>=24'}
     peerDependencies:
       react: ^16.14.0 || ^17 || ^18
@@ -992,26 +992,26 @@ packages:
       react-dom:
         optional: true
 
-  '@kubohiroya/turbowarp-extension-manifest@0.5.0':
-    resolution: {integrity: sha512-YD8fwGTwTC6oMinmVLRp5+x/6piKLTYNraKnsc+oEi/w6NFdePm1ocV8eHnBBMcqEO2usr2mI/0qnV66Ex35YA==}
+  '@kubohiroya/turbowarp-extension-manifest@0.6.0':
+    resolution: {integrity: sha512-GnNFESu2EeyrFkuxOQoFsEta3HwnNjen0PJm7DOOy2wPuqItqaogEUq80ccnJ/GwfVwfMS9V5Eddsga5CbF+Mw==}
     engines: {node: '>=24'}
 
-  '@kubohiroya/turbowarp-named-data@0.8.0':
-    resolution: {integrity: sha512-Y73wcm9V6ldihtMME9lJic3eambqHWlLhTXQ78jfzS2EpeECZe1aXnOQeKXkOV2OKIdnowKGGdIdEiAc/Ss3vg==}
+  '@kubohiroya/turbowarp-named-data@0.9.0':
+    resolution: {integrity: sha512-Kk9wWQd8DORKXAwGNcDcdlvPQNtFKJQFv/ltM9l4CTFUkEXfVrGgrTz+pJuSwLhE3QDXDi8ox+jvMKS+3qCS7w==}
     engines: {node: '>=24'}
 
-  '@kubohiroya/turbowarp-named-functions@0.5.1':
-    resolution: {integrity: sha512-kbzXcw4/HC8u65F1O2wpftAoK41/RUsiyPzlqzHuwItK4KK97AAFfAs/SubWqS54eu+aK/M30SLZQqyJX33lzA==}
+  '@kubohiroya/turbowarp-named-functions@0.6.0':
+    resolution: {integrity: sha512-uimtuvKnoQV4YPQO6tRTw2EDXvFoQ3HShKMSrYu8UOj/SCdUJbBHDTo+IrceywEZu+Oksl6XLApry6yStRh8sw==}
     engines: {node: '>=24'}
 
-  '@kubohiroya/turbowarp-structured-data@0.11.1':
-    resolution: {integrity: sha512-lsR/H8iZnrrKvVQQMOdk1x6+eV/cJAFqS67vLBKa2q8exRnnwB66Trqt85PhXZGbefM8Ocm1pd3IXwYqBSYf2Q==}
+  '@kubohiroya/turbowarp-structured-data@0.12.0':
+    resolution: {integrity: sha512-k/AZ9pxSInEC5UVmZ29xHhGqbtcjGH1Phx1jrYdSiU49FjbxtzgIm1u1n809NrPY2GljXPLiVvHzB134Z6OLFQ==}
     engines: {node: '>=24'}
     peerDependencies:
-      '@kubohiroya/turbowarp-named-data': 0.8.0-rc.0 || 0.8.0 || 0.8.1
+      '@kubohiroya/turbowarp-named-data': 0.8.0-rc.0 || 0.8.0 || 0.8.1 || 0.9.0
 
-  '@kubohiroya/turbowarp-yaml-json@0.11.1':
-    resolution: {integrity: sha512-E55lFuxOrPpsGsrL5guiVwUW2Pu8qoqu+2J04+HIYpByMHNrJUZYu70d6YbQ7IiPs0NS/juOhh/AtTACr1nUoQ==}
+  '@kubohiroya/turbowarp-yaml-json@0.12.0':
+    resolution: {integrity: sha512-b6P738qftuibtV61fPQBr2abjtlfIlKSlKyIPHnKotT8ZAimTspuaxkM1NFoiBBivI0EHMsrkh2p+/LU5UVeow==}
     engines: {node: '>=24'}
 
   '@kubohiroya/vite-plugin-turbowarp-extension@0.11.0':
@@ -2192,8 +2192,8 @@ packages:
   fast-uri@3.1.8:
     resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
 
-  fast-uri@3.1.9:
-    resolution: {integrity: sha512-hS/0Wt3Ya043oKXs0sIxrMpKQITXhMLIrVAKKXi4gozGC9v7YRWVnXIZzjNPTO02M9BdxLCWqK1yRXgNziVyJQ==}
+  fast-uri@4.2.3:
+    resolution: {integrity: sha512-I1PXwP5eAhlNlcdpjt9CgB59op2ZvZfxw+BkqGFVIUOgNpCVTcTqp3HhTX7brxj5vsip+nSY4nTvff+eIA76hg==}
 
   fast-xml-builder@1.3.1:
     resolution: {integrity: sha512-pIM/1n3ntFXKYrUZwW7QCK0gAW7XY+wzj1YMIV3tLDvPj/V+zTGJK5e3/4WJfwj0qWw2ElNXiTixda/R+3YSug==}
@@ -4995,11 +4995,11 @@ snapshots:
 
   '@jsdevtools/ono@7.1.3': {}
 
-  '@kubohiroya/turbowarp-document-data@0.7.1(@kubohiroya/turbowarp-named-data@0.8.0)(supports-color@10.2.2)':
+  '@kubohiroya/turbowarp-document-data@0.8.0(@kubohiroya/turbowarp-named-data@0.9.0)(supports-color@10.2.2)':
     dependencies:
       '@kubohiroya/turbowarp-document-source': 0.4.0
-      '@kubohiroya/turbowarp-named-data': 0.8.0
-      '@kubohiroya/turbowarp-yaml-json': 0.11.1
+      '@kubohiroya/turbowarp-named-data': 0.9.0
+      '@kubohiroya/turbowarp-yaml-json': 0.12.0
       mdast-util-from-markdown: 2.1.0(supports-color@10.2.2)
       mdast-util-to-markdown: 2.2.1
       parse5: 8.0.1
@@ -5008,34 +5008,34 @@ snapshots:
 
   '@kubohiroya/turbowarp-document-source@0.4.0': {}
 
-  '@kubohiroya/turbowarp-extension-data-editor@0.11.0(react@18.3.1)':
+  '@kubohiroya/turbowarp-extension-data-editor@0.11.2(react@18.3.1)':
     dependencies:
       '@rjsf/core': 5.24.13(@rjsf/utils@5.24.13(react@18.3.1))(react@18.3.1)
       '@rjsf/utils': 5.24.13(react@18.3.1)
       '@rjsf/validator-ajv8': 5.24.13(@rjsf/utils@5.24.13(react@18.3.1))
       ajv: 8.20.0
-      ajv-formats: 2.1.1
-      fast-uri: 3.1.9
+      ajv-formats: 3.0.1
+      fast-uri: 4.2.3
       yaml: 2.9.1
     optionalDependencies:
       react: 18.3.1
 
-  '@kubohiroya/turbowarp-extension-manifest@0.5.0': {}
+  '@kubohiroya/turbowarp-extension-manifest@0.6.0': {}
 
-  '@kubohiroya/turbowarp-named-data@0.8.0': {}
+  '@kubohiroya/turbowarp-named-data@0.9.0': {}
 
-  '@kubohiroya/turbowarp-named-functions@0.5.1': {}
+  '@kubohiroya/turbowarp-named-functions@0.6.0': {}
 
-  '@kubohiroya/turbowarp-structured-data@0.11.1(@kubohiroya/turbowarp-named-data@0.8.0)(supports-color@10.2.2)':
+  '@kubohiroya/turbowarp-structured-data@0.12.0(@kubohiroya/turbowarp-named-data@0.9.0)(supports-color@10.2.2)':
     dependencies:
-      '@kubohiroya/turbowarp-document-data': 0.7.1(@kubohiroya/turbowarp-named-data@0.8.0)(supports-color@10.2.2)
-      '@kubohiroya/turbowarp-named-data': 0.8.0
-      '@kubohiroya/turbowarp-named-functions': 0.5.1
-      '@kubohiroya/turbowarp-yaml-json': 0.11.1
+      '@kubohiroya/turbowarp-document-data': 0.8.0(@kubohiroya/turbowarp-named-data@0.9.0)(supports-color@10.2.2)
+      '@kubohiroya/turbowarp-named-data': 0.9.0
+      '@kubohiroya/turbowarp-named-functions': 0.6.0
+      '@kubohiroya/turbowarp-yaml-json': 0.12.0
     transitivePeerDependencies:
       - supports-color
 
-  '@kubohiroya/turbowarp-yaml-json@0.11.1':
+  '@kubohiroya/turbowarp-yaml-json@0.12.0':
     dependencies:
       '@kubohiroya/turbowarp-document-source': 0.4.0
       ajv: 8.20.0
@@ -5154,7 +5154,7 @@ snapshots:
     dependencies:
       '@rjsf/utils': 5.24.13(react@18.3.1)
       ajv: 8.20.0
-      ajv-formats: 2.1.1
+      ajv-formats: 2.1.1(ajv@8.20.0)
       lodash: 4.18.1
       lodash-es: 4.18.1
 
@@ -5456,8 +5456,8 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ajv-formats@2.1.1:
-    dependencies:
+  ajv-formats@2.1.1(ajv@8.20.0):
+    optionalDependencies:
       ajv: 8.20.0
 
   ajv-formats@3.0.1:
@@ -6226,7 +6226,7 @@ snapshots:
     dependencies:
       '@apidevtools/json-schema-ref-parser': 9.1.2
       ajv: 8.20.0
-      ajv-formats: 2.1.1
+      ajv-formats: 2.1.1(ajv@8.20.0)
       body-parser: 1.20.8(supports-color@10.2.2)
       content-type: 1.0.5
       deep-freeze: 0.0.1
@@ -6337,7 +6337,7 @@ snapshots:
 
   fast-uri@3.1.8: {}
 
-  fast-uri@3.1.9: {}
+  fast-uri@4.2.3: {}
 
   fast-xml-builder@1.3.1:
     dependencies:
